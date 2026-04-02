@@ -86,10 +86,10 @@ Item {
         }
 
         Rectangle {
-            width: 30
+            width: 28
             height: 2
-            x: avgMarkerRail.x
-            y: avgMarkerRail.y - (height / 2) + 4
+            x: avgMarkerRail.x - 4
+            y: avgMarkerRail.y - (height / 2) + 5
             transformOrigin: Item.Left
 
             gradient: Gradient {

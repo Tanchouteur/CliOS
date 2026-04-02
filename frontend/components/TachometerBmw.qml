@@ -225,4 +225,14 @@ Item {
         anchors.horizontalCenterOffset: -40
         anchors.verticalCenterOffset: 10
     }
+
+    EngineTempGaugeBmw {
+        anchors.fill: parent
+
+        p0X: root.p0X
+        p0Y: root.p0Y
+        vanishingPointX: root.vanishingPointX
+        vanishingPointY: root.vanishingPointY
+    }
+
 }

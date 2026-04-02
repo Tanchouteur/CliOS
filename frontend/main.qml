@@ -3,27 +3,16 @@ import QtQuick.Controls
 import "views"
 
 ApplicationWindow {
+    property int version: 1
     visible: true
     width: 1920
-    height: 1080
-    title: "Clio 3 - OS"
+    height: 720
+    title: "ClioOS v" + version
     color: "#0a0a0c"
 
-    BMW_1 {
+    Dash {
         id: dashboardView
         anchors.fill: parent
-    }
-
-
-    // --- Indicateur de Pagination ---
-    PageIndicator {
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 10
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        // Synchronisation avec le gestionnaire de vues
-        currentIndex: viewPager.currentIndex
-        count: viewPager.count
     }
 
     // --- Bannière d'Alerte Télémétrique ---
