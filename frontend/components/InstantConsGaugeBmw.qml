@@ -1,4 +1,5 @@
 import QtQuick
+import "../style"
 
 Item {
     id: gaugeRoot
@@ -45,7 +46,7 @@ Item {
             visible: segmentVal >= Math.min(gaugeRoot.smoothInstCons, gaugeRoot.avgCons) && segmentVal <= Math.max(gaugeRoot.smoothInstCons, gaugeRoot.avgCons)
 
             // Code couleur : Bleu (inférieur à la moyenne), Orange (supérieur à la moyenne)
-            property color fillColor: gaugeRoot.smoothInstCons <= gaugeRoot.avgCons ? "#00aaff" : "#ff4400"
+            property color fillColor: gaugeRoot.smoothInstCons <= gaugeRoot.avgCons ? Theme.secondary : Theme.main
 
             PathInterpolator {
                 id: consRail;
@@ -95,8 +96,8 @@ Item {
             gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop { position: 0.0; color: "#FFFFFF" }
-                    GradientStop { position: 0.1; color: "#2792c3" }
-                    GradientStop { position: 0.8; color: "#2792c3" }
+                    GradientStop { position: 0.1; color: Theme.secondary }
+                    GradientStop { position: 0.8; color: Theme.secondary }
                     GradientStop { position: 1.0; color: "transparent" }
                 }
 
@@ -125,7 +126,7 @@ Item {
             Rectangle {
                 width: 15
                 height: 2
-                x: tickInstRail.x
+                x: tickInstRail.x -4
                 y: tickInstRail.y - (height / 2) + 4
                 transformOrigin: Item.Left
 
@@ -144,7 +145,7 @@ Item {
             Text {
                 text: tickInstDelegate.tickVal
                 visible: tickInstDelegate.tickVal !== 0
-                color: "#aaFFFFFF"
+                color: Theme.textDimmed
                 font.pixelSize: 18
                 font.bold: true
                 font.family: "Arial"
@@ -162,7 +163,7 @@ Item {
 
         Text {
             text: Math.min(gaugeRoot.smoothInstCons, 99.9).toFixed(1)
-            color: "#ffffff"
+            color: Theme.textMain
             font.pixelSize: 18
             font.bold: true
             font.family: "Arial"
@@ -171,7 +172,7 @@ Item {
 
         Text {
             text: "L/100"
-            color: "#aaFFFFFF"
+            color: Theme.textDimmed
             font.pixelSize: 10
             font.family: "Arial"
         }

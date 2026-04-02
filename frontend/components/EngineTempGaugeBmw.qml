@@ -1,5 +1,5 @@
 import QtQuick
-
+import "../style"
 Item {
     id: gaugeRoot
 
@@ -44,8 +44,8 @@ Item {
             visible: segmentVal <= Math.max(gaugeRoot.smoothTemp, gaugeRoot.minTemp)
 
             property color fillColor: {
-                if (segmentVal >= 110.0) return "#e85627"
-                if (segmentVal <= 70.0) return "#3e9fdd"
+                if (segmentVal >= 100.0) return Theme.mainDark
+                if (segmentVal <= 70.0) return Theme.secondary
                 return "#d1caca"
             }
 
@@ -120,7 +120,7 @@ Item {
 
                 visible: index !== 0
 
-                color: "#aaFFFFFF"
+                color: Theme.textDimmed
                 font.pixelSize: 18
                 font.bold: true
                 font.family: "Arial"
@@ -138,7 +138,7 @@ Item {
 
         Text {
             text: Math.min(Math.max(gaugeRoot.smoothTemp, gaugeRoot.minTemp), 150.0).toFixed(0)
-            color: "#ffffff"
+            color: Theme.textMain
             font.pixelSize: 18
             font.bold: true
             font.family: "Arial"
@@ -147,7 +147,7 @@ Item {
 
         Text {
             text: "°C"
-            color: "#aaFFFFFF"
+            color: Theme.textDimmed
             font.pixelSize: 10
             font.family: "Arial"
         }

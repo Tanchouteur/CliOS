@@ -1,4 +1,5 @@
 import QtQuick
+import "../style"
 
 Item {
     id: root
@@ -106,7 +107,7 @@ Item {
 
                 Rectangle {
                     width: 5; height: 3
-                    color: "#ff4400"; opacity: 0.7
+                    color: Theme.mainLight; opacity: 0.7
                     property real offsetInward: 12
 
                     x: trailRail.x + offsetInward * Math.cos(parent.angleToVPRad) - width
@@ -147,9 +148,9 @@ Item {
 
                 // Coloration selon l'état du régulateur
                 color: {
-                    if (safeMode === 2 && safeStatut === 4) return "#ff0101"; // Régulateur Actif
+                    if (safeMode === 2 && safeStatut === 4) return Theme.redLine; // Régulateur Actif
                     if (safeMode === 3 && safeStatut === 4) return "#ffa500"; // Limiteur Actif
-                    return "#888888"; // En attente
+                    return Theme.unselected; // En attente
                 }
                 border.color: "white"
                 border.width: (safeMode > 0 && safeStatut === 4) ? 1 : 0
@@ -175,8 +176,8 @@ Item {
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                 onPaint: {
                     var ctx = getContext("2d"); ctx.clearRect(0, 0, width, height);
-                    ctx.shadowColor = "#ff6600"; ctx.shadowBlur = 8;
-                    ctx.fillStyle = "#ff6600";
+                    ctx.shadowColor = Theme.main ; ctx.shadowBlur = 8;
+                    ctx.fillStyle = Theme.main;
                     ctx.beginPath();
                     ctx.moveTo(width, height / 2);
                     ctx.lineTo(0, height / 2 - 3);

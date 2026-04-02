@@ -1,4 +1,5 @@
 import QtQuick
+import "../style"
 
 Item {
     id: widgetRoot
@@ -56,8 +57,8 @@ Item {
         property real openAngle: 45
 
         width: 6; height: 35
-        color: isOpen ? "#ff0033" : "#333333"
-        border.color: isOpen ? "#ff0033" : "#555555"
+        color: isOpen ? Theme.danger : "#333333"
+        border.color: isOpen ? Theme.danger : "#555555"
 
         rotation: isOpen ? openAngle : 0
         Behavior on rotation { SpringAnimation { spring: 5.0; damping: 0.7 } }
@@ -70,8 +71,8 @@ Item {
 
         width: 40; height: 10
         anchors.horizontalCenter: parent.horizontalCenter
-        color: isOpen ? "#ff0033" : "#333333"
-        border.color: isOpen ? "#ff0033" : "#555555"
+        color: isOpen ? Theme.danger : "#333333"
+        border.color: isOpen ? Theme.danger : "#555555"
         radius: 3
 
         transform: Translate { y: isOpen ? openYOffset : 0 }
@@ -126,8 +127,8 @@ Item {
         anchors.horizontalCenterOffset: -15
 
         isActive: widgetRoot.seatbelt === true
-        activeColor: "#e74c3c" // voyantRouge
-        inactiveColor: "#090909" // bgNoir
+        activeColor: Theme.danger // voyantRouge
+        inactiveColor: Theme.bgDimmed
 
         iconSource: "../assets/icons/seatbelt.svg"
         label: "C"

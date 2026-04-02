@@ -1,14 +1,18 @@
 import QtQuick
 import QtQuick.Controls
 import "views"
+import "style"
 
 ApplicationWindow {
+    id: appWindow
     property int version: 1
     visible: true
     width: 1920
     height: 720
-    title: "ClioOS v" + version
-    color: "#0a0a0c"
+    title: "CliOS v" + version
+
+    // Application de la couleur de fond via le Thème
+    color: Theme.bgMain
 
     Dash {
         id: dashboardView
@@ -18,7 +22,7 @@ ApplicationWindow {
     // --- Bannière d'Alerte Télémétrique ---
     Rectangle {
         id: obdAlertBanner
-        z: 999 // Maintien au premier plan absolu
+        z: 999
 
         width: 400
         height: 60
@@ -27,15 +31,14 @@ ApplicationWindow {
         anchors.horizontalCenter: parent.horizontalCenter
 
         radius: 10
-        color: "#e74c3c"
+        color: Theme.danger
 
-        // Affichage conditionnel : Uniquement si la rupture de liaison est confirmée par le backend
         visible: bridge.data.connexion_obd_moteur === false
 
         Text {
             anchors.centerIn: parent
             text: "CONNEXION OBD PERDUE"
-            color: "#ffffff"
+            color: Theme.textMain
             font.pixelSize: 22
             font.bold: true
             font.family: "Arial"

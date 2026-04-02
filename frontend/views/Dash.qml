@@ -1,23 +1,17 @@
 import QtQuick
 import QtQuick.Shapes
 import "../components"
-import "../.."
+import "../style"
 
 Item {
     id: root
 
-    // --- Palette de Couleurs Globale ---
-    readonly property color bgNoir: "#090909"
-    readonly property color texteBlanc: "#f3f3f3"
-
-    readonly property color voyantVert: "#2ecc71"
-    readonly property color voyantRouge: "#e74c3c"
-    readonly property color voyantBleu: "#3498db"
-    readonly property color voyantOrange: "#e67e22"
+    // Variable qui contrôle l'état de l'interface (Vrai = Arrêt, Faux = Conduite)
+    property bool isParked: true
 
     Rectangle {
         anchors.fill: parent
-        color: root.bgNoir
+        color: Theme.bgMain
         z: -100
     }
 
@@ -38,15 +32,11 @@ Item {
             width: parent.width * 0.25
         }
 
-        // ==========================================
-        // APPEL DU NOUVEAU COMPOSANT ICI
-        // ==========================================
         CarStatusWidget {
             anchors.centerIn: parent
             scale: 1.4
         }
 
-        // Indicateur de frein de stationnement
         VoyantIcon {
             id: handbrakeVoyant
             width: 45; height: 45
@@ -55,35 +45,74 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
 
             isActive: bridge.data.handbrake === true
-            activeColor: root.voyantRouge
+            activeColor: Theme.danger
             iconSource: "../assets/icons/handbrake.svg"
             label: "(P)"
         }
     }
 
-    // --- Instrumentation Principale ---
-    SpeedometerBmw {
-        id: speedo
+    // ==========================================
+    // INSTRUMENTATION GAUCHE (Vitesse / Essence)
+    // ==========================================
+    Item {
+        id: leftGauges
+        width: 500
+        height: 400
         anchors.verticalCenter: root.verticalCenter
         anchors.left: root.left
         anchors.leftMargin: root.width * -0.03
+
+        SpeedometerBmw {
+            id: speedo
+            width: 500; height: 400
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+        }
+
+        BigFuelGauge {
+            id: bigFuel
+            width: 500; height: 400
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            // Initialement hors écran (sera géré par les States)
+        }
     }
 
-    TachometerBmw {
-        id: tacho
+    // ==========================================
+    // INSTRUMENTATION DROITE (Tours / Température)
+    // ==========================================
+    Item {
+        id: rightGauges
+        width: 500
+        height: 400
         anchors.verticalCenter: root.verticalCenter
         anchors.right: root.right
         anchors.rightMargin: root.width * -0.03
+
+        TachometerBmw {
+            id: tacho
+            width: 500; height: 400
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+        }
+
+        BigTempGauge {
+            id: bigTemp
+            width: 500; height: 400
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+        }
     }
 
     // --- Lien Visuel Central ---
     Rectangle {
+        id: centerLink
         z: -2
-        anchors.bottom: speedo.bottom
+        anchors.bottom: leftGauges.bottom
         anchors.bottomMargin: 6
-        anchors.left: speedo.right
+        anchors.left: leftGauges.right
         anchors.leftMargin: -120
-        anchors.right: tacho.left
+        anchors.right: rightGauges.left
         anchors.rightMargin: -120
         height: 5
 
@@ -99,7 +128,7 @@ Item {
     // --- Bandeau d'Informations Inférieur ---
     Item {
         id: bottomBar
-        anchors.top: speedo.bottom
+        anchors.top: leftGauges.bottom
         anchors.topMargin: 0
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width * 0.9
@@ -145,7 +174,7 @@ Item {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             text: "→ " + bottomBar.autonomy.toFixed(0) + " km"
-            color: root.texteBlanc
+            color: Theme.textMain
             font.pixelSize: 24
             font.family: "Arial"
             opacity: 0.8
@@ -157,7 +186,7 @@ Item {
             anchors.leftMargin: 40
             anchors.verticalCenter: parent.verticalCenter
             text: bridge.data.avg_cons_b !== undefined ? "Avg " + bridge.data.avg_cons_b.toFixed(1) : "0.0"
-            color: root.texteBlanc
+            color: Theme.textMain
             font.pixelSize: 24
             font.family: "Arial"
             opacity: 0.8
@@ -175,7 +204,7 @@ Item {
                 spacing: 40
                 Text {
                     text: bridge.data.trip_b !== undefined ? "B : " + bridge.data.trip_b.toFixed(1) + " km" : "Trip B 0.0 km"
-                    color: root.texteBlanc
+                    color: Theme.textMain
                     font.pixelSize: 22
                     font.family: "Arial"
                     opacity: 0.8
@@ -187,7 +216,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 Text {
                     text: bridge.data.trip_a !== undefined ? "A : " + bridge.data.trip_a.toFixed(1) + " km" : "Trip A 0.0 km"
-                    color: root.texteBlanc
+                    color: Theme.textMain
                     font.pixelSize: 22
                     font.family: "Arial"
                     opacity: 0.8
@@ -199,7 +228,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 Text {
                     text: bridge.data.km_before_service !== undefined ? "Service dans : " + bridge.data.km_before_service.toFixed(0) + " km" : "Service : ---"
-                    color: (bridge.data.service_warning === true) ? root.voyantRouge : root.texteBlanc
+                    color: (bridge.data.service_warning === true) ? Theme.danger : Theme.textMain
                     font.pixelSize: 22
                     font.bold: (bridge.data.service_warning === true)
                     font.family: "Arial"
@@ -216,7 +245,7 @@ Item {
 
             Text {
                 text: bottomBar.timeString
-                color: root.texteBlanc
+                color: Theme.textMain
                 font.pixelSize: 24
                 font.family: "Arial"
                 opacity: 0.9
@@ -224,7 +253,7 @@ Item {
 
             Text {
                 text: bridge.data.odometer !== undefined ? bridge.data.odometer.toFixed(0) + " km" : "0 km"
-                color: root.texteBlanc
+                color: Theme.textMain
                 font.pixelSize: 24
                 font.family: "Arial"
                 opacity: 0.9
@@ -235,10 +264,67 @@ Item {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             text: bottomBar.outsideTemp.toFixed(1) + " °C"
-            color: root.texteBlanc
+            color: Theme.textMain
             font.pixelSize: 24
             font.family: "Arial"
             opacity: 0.8
         }
+    }
+
+    // ==========================================
+    // MOTEUR D'ANIMATION (GLISSEMENT HORIZONTAL)
+    // ==========================================
+    states: [
+        State {
+            name: "PARK"
+            when: root.isParked
+
+            // Les compteurs principaux sortent complètement (-600px) et s'effacent
+            PropertyChanges { target: speedo; anchors.leftMargin: -600; opacity: 0.0 }
+            PropertyChanges { target: tacho; anchors.rightMargin: -600; opacity: 0.0 }
+
+            // Les jauges géantes rentrent, on les laisse à -100px pour dégager un grand espace central
+            PropertyChanges { target: bigFuel; anchors.leftMargin: -100; opacity: 1.0 }
+            PropertyChanges { target: bigTemp; anchors.rightMargin: -100; opacity: 1.0 }
+
+            PropertyChanges { target: bottomBar; anchors.topMargin: 30 }
+            PropertyChanges { target: centerLink; anchors.topMargin: 60; opacity: 0.0 }
+            PropertyChanges { target: handbrakeVoyant; anchors.bottomMargin: -30; opacity: 1.0 }
+        },
+        State {
+            name: "DRIVE"
+            when: !root.isParked
+
+            // Les compteurs principaux reviennent à leur position d'origine (0)
+            PropertyChanges { target: speedo; anchors.leftMargin: 0; opacity: 1.0 }
+            PropertyChanges { target: tacho; anchors.rightMargin: 0; opacity: 1.0 }
+
+            // Les jauges géantes sortent de l'écran (-600px)
+            PropertyChanges { target: bigFuel; anchors.leftMargin: -600; opacity: 0.0 }
+            PropertyChanges { target: bigTemp; anchors.rightMargin: -600; opacity: 0.0 }
+
+            PropertyChanges { target: bottomBar; anchors.topMargin: 0 }
+            PropertyChanges { target: centerLink; anchors.topMargin: 0; opacity: 1.0 }
+            PropertyChanges { target: handbrakeVoyant; anchors.bottomMargin: 30; opacity: 1.0 }
+        }
+    ]
+
+    transitions: [
+        Transition {
+            // Easing.InOutCubic donne un effet d'accélération/décélération très naturel
+            NumberAnimation {
+                properties: "opacity, anchors.leftMargin, anchors.rightMargin, anchors.topMargin, anchors.bottomMargin"
+                duration: 700
+                easing.type: Easing.InOutCubic
+            }
+        }
+    ]
+
+    // ==========================================
+    // BOUTON DE TEST TEMPORAIRE
+    // ==========================================
+    MouseArea {
+        anchors.fill: parent
+        onClicked: root.isParked = !root.isParked
     }
 }

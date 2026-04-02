@@ -10,132 +10,106 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 from src.dispatcher import CanDispatcher
 from src.parser import DbcParser
+from src.services.can_service import CanService
+from src.services.orchestrator import SystemOrchestrator
 from src.signal_processor import SignalProcessor
 from src.vehicle import VehicleAPI
 from src.driver import Slcan
 from src.qt_bridge import DashboardBridge
 from src.mock_driver import MockProvider
 
-
-# --- Routines d'Exécution Asynchrones ---
-
-def can_listener_loop(provider, dispatcher, api, stop_event):
-    """Machine à états gérant l'acquisition, la reconnexion automatique et l'arrêt propre."""
-
-    while not stop_event.is_set():
-        # Etat 1 : Tentative de connexion matérielle
-        if not provider.is_connected:
-            api.set_connection_status(False)
-            success = provider.connect()
-
-            if not success:
-                # Temporisation non-bloquante avant la prochaine tentative (2 secondes)
-                stop_event.wait(2.0)
-                continue
-            else:
-                api.set_connection_status(True)
-
-        # Etat 2 : Acquisition des trames télémétriques
-        try:
-            frame = provider.read_frame(timeout=0.2)
-            if frame:
-                if getattr(api, 'is_starting_up', False):
-                    continue
-                dispatcher.dispatch(frame)
-        except Exception:
-            # Etat 3 : Rupture de la liaison détectée
-            print("[ATTENTION] Rupture de la liaison serie. Reconnexion planifiee.")
-            api.set_connection_status(False)
-            provider.close()
-            stop_event.wait(1.0)
-
-
+# --- Console de Débogage ---
 def ui_loop(api, stop_event):
     """Interface de débogage en ligne de commande (CLI)."""
     while not stop_event.is_set():
         os.system('cls' if os.name == 'nt' else 'clear')
 
         print("\033[H\033[2J", end="")
-        print("=" * 40)
-        print("   CONSOLE DE DEBUG TELEMETRIQUE")
-        print("=" * 40)
+        print("=" * 45)
+        print("   CONSOLE DE DEBUG TELEMETRIQUE (CLIOS)")
+        print("=" * 45)
 
-        data_dict = api._data
+        # On utilise .copy() pour éviter une erreur si un service modifie la donnée pendant l'affichage
+        data_dict = api._data.copy()
+
         if not data_dict:
-            print("\nEn attente du flux de donnees CAN...")
+            print("\nEn attente du flux de donnees...")
         else:
             for key in sorted(data_dict.keys()):
                 val = data_dict[key]
                 if isinstance(val, bool):
-                    status = "ON" if val else "OFF"
-                    print(f" {key:<20} : {status}")
+                    status = "\033[92mON\033[0m" if val else "\033[91mOFF\033[0m"  # Vert pour ON, Rouge pour OFF
+                    print(f" {key:<25} : {status}")
                 elif isinstance(val, float):
-                    print(f" {key:<20} : {val:.1f}")
+                    print(f" {key:<25} : {val:.1f}")
                 else:
-                    print(f" {key:<20} : {val}")
+                    print(f" {key:<25} : {val}")
+
         print("\n[Ctrl+C pour interrompre le processus]")
         stop_event.wait(0.1)
 
-
 def main():
-    # Déclaration de l'événement de signalisation inter-threads
-    stop_event = threading.Event()
-
-    # --- Traitement des Arguments d'Exécution ---
-    cmd_parser = argparse.ArgumentParser(description="Serveur de Telemetrie et Tableau de Bord OBD")
+    # --- Traitement des Arguments ---
+    cmd_parser = argparse.ArgumentParser()
     cmd_parser.add_argument('--ui', choices=['cli', 'gui'], default='gui')
     cmd_parser.add_argument('--mock', action='store_true')
-    cmd_parser.add_argument('--conf', type=str, default='clio3diesel_config.json')
-
+    cmd_parser.add_argument('--conf', type=str, default='config_clio3diesel.json')
     args = cmd_parser.parse_args()
 
-    # --- Configuration de l'Environnement ---
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    # --- Environnement ---
+    BASE_DIR =  os.path.dirname(os.path.abspath(__file__))
     CAN_DIR = os.path.join(BASE_DIR, "can")
     CONFIG_DIR = os.path.join(BASE_DIR, "config")
 
-    config_path = os.path.join(CONFIG_DIR, args.conf)
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            vehicle_config = json.load(f)
-    except Exception as e:
-        print(f"[ERREUR] Impossible de charger la configuration : {e}")
-        return
+    with open(os.path.join(CONFIG_DIR, args.conf), 'r', encoding='utf-8') as f:
+        vehicle_config = json.load(f)
 
-    # --- Initialisation de l'Architecture Core ---
-    dbc_parser = DbcParser(os.path.join(CAN_DIR, "can_clio3.json"))
-    processor = SignalProcessor()
+    # --- 1. Initialisation du Disque Dur Central ---
     api = VehicleAPI(vehicle_config)
     api.run_startup_sequence(duration_sec=1.5)
-    dispatcher = CanDispatcher(dbc_parser, processor, api)
 
-    # --- Configuration du Périphérique d'Acquisition ---
-    if args.mock:
-        provider = MockProvider(os.path.join(CAN_DIR, "can_clio3.json"))
-    else:
-        port_mac = "/dev/cu.usbmodem207B3949534B1"
-        provider = Slcan(channel=port_mac, baudrate=500000)
+    # --- 2. Initialisation de l'Orchestrateur ---
+    orchestrator = SystemOrchestrator()
 
-    # Note : L'appel initial à connect() est supprimé ici car la machine à états
-    # du can_listener_loop va s'en charger automatiquement.
+    # --- 3. Branchement des Périphériques ---
+    # Service CAN Moteur (Haute Vitesse)
+    orchestrator.add_service(CanService(
+        name="CAN_Moteur",
+        api=api,
+        dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),
+        port="/dev/ttyUSB0", # Remplacer par le bon port sur le Pi
+        baudrate=500000,
+        is_mock=args.mock,
+        status_key="connexion_obd_moteur"
+    ))
 
-    # --- Déploiement du Thread Télémétrique ---
-    can_thread = threading.Thread(target=can_listener_loop, args=(provider, dispatcher, api, stop_event), daemon=True)
-    can_thread.start()
+    # Service CAN Habitacle (Basse Vitesse)
+    orchestrator.add_service(CanService(
+        name="CAN_Habitacle",
+        api=api,
+        dbc_path=os.path.join(CAN_DIR, "can_habitacle_clio3.json"),
+        port="/dev/ttyUSB1", # Remplacer par le deuxième port
+        baudrate=250000,
+        is_mock=args.mock,
+        status_key="connexion_obd_habitacle"
+    ))
 
-    # --- Lancement du Moteur de Rendu (Frontend) ---
+    # --- 4. Démarrage de tous les threads ---
+    orchestrator.start_all()
+
+    # --- 5. Lancement de l'IHM ---
     try:
         if args.ui == 'cli':
-            ui_loop(api, stop_event)
+            ui_loop(api, orchestrator.stop_event)
+            pass
         elif args.ui == 'gui':
             app = QGuiApplication(sys.argv)
             engine = QQmlApplicationEngine()
 
-            bridge = DashboardBridge(api, os.path.join(CONFIG_DIR, "clio3diesel_config.json"))
+            bridge = DashboardBridge(api, os.path.join(CONFIG_DIR, args.conf))
             engine.rootContext().setContextProperty("bridge", bridge)
 
-            qml_file = os.path.join(BASE_DIR, "frontend", "main.qml")
-            engine.load(qml_file)
+            engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
 
             if not engine.rootObjects():
                 sys.exit(-1)
@@ -145,15 +119,10 @@ def main():
             del bridge
 
     except KeyboardInterrupt:
-        print("\n[INFO] Interruption manuelle detectee.")
+        print("\n[INFO] Interruption manuelle détectée.")
     finally:
-        # Séquence de nettoyage (Clean teardown)
-        print("[INFO] Initiation de la sequence d'arret materiel...")
-        stop_event.set()  # 1. Signale aux threads de s'arrêter
-        provider.close()  # 2. Ferme le port série pour débloquer les lectures en attente
-        can_thread.join(timeout=2)  # 3. Attend la fin confirmée du thread
-        print("[INFO] Arret termine avec succes.")
-
+        # --- 6. Arrêt propre ---
+        orchestrator.stop_all()
 
 if __name__ == "__main__":
     main()
