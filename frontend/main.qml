@@ -8,7 +8,7 @@ ApplicationWindow {
     property int version: 1
     visible: true
     width: 1920
-    height: 720
+    height: 700
     title: "CliOS v" + version
 
     // Application de la couleur de fond via le Thème

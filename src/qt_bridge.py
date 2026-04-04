@@ -1,4 +1,6 @@
 import json
+import threading
+
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot
 
 
@@ -13,6 +15,7 @@ class DashboardBridge(QObject):
         super().__init__()
         self.api = api
         self._data = {}
+        self._config_path = config_path
 
         # Chargement et mise en cache des paramètres de configuration de l'interface
         with open(config_path, 'r') as f:
@@ -48,3 +51,33 @@ class DashboardBridge(QObject):
         """
         print("[INFO] Signal IHM reçu : Réinitialisation du Trip B et des accumulateurs de consommation.")
         self.api.reset_trip_b()
+
+    Slot(str, str)
+
+    @Slot(str, str)
+    def save_setting(self, key_path, value):
+        """
+        Met à jour la configuration en RAM (supporte les clés imbriquées ex: 'theme.main')
+        et l'écrit sur le disque en arrière-plan.
+        """
+        keys = key_path.split('.')
+        current_dict = self._config
+
+        for k in keys[:-1]:
+            if k not in current_dict:
+                current_dict[k] = {}
+            current_dict = current_dict[k]
+
+        current_dict[keys[-1]] = value
+
+        self.configChanged.emit(self._config)
+
+        def write_worker():
+            try:
+                with open(self._config_path, "w") as f:
+                    json.dump(self._config, f, indent=4)
+                print(f"[INFO] Paramètre sauvegardé : {key_path} = {value}")
+            except Exception as e:
+                print(f"[ERREUR] Échec de la sauvegarde de {key_path} : {e}")
+
+        threading.Thread(target=write_worker, daemon=True).start()

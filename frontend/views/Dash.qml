@@ -7,7 +7,7 @@ Item {
     id: root
 
     // Variable qui contrôle l'état de l'interface (Vrai = Arrêt, Faux = Conduite)
-    property bool isParked: true
+    property bool isParked: false
 
     Rectangle {
         anchors.fill: parent
@@ -23,6 +23,11 @@ Item {
         height: 400
         z: -1
 
+        CenterHub{
+            anchors.centerIn: parent
+            width: parent.width; height: parent.height
+        }
+
         Image {
             id: renaultLogo
             source: "../assets/Renault-Logo-w.png"
@@ -36,19 +41,6 @@ Item {
             anchors.centerIn: parent
             scale: 1.4
         }
-
-        VoyantIcon {
-            id: handbrakeVoyant
-            width: 45; height: 45
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 30
-            anchors.horizontalCenter: parent.horizontalCenter
-
-            isActive: bridge.data.handbrake === true
-            activeColor: Theme.danger
-            iconSource: "../assets/icons/handbrake.svg"
-            label: "(P)"
-        }
     }
 
     // ==========================================
@@ -59,6 +51,8 @@ Item {
         width: 500
         height: 400
         anchors.verticalCenter: root.verticalCenter
+        anchors.verticalCenterOffset: 50
+
         anchors.left: root.left
         anchors.leftMargin: root.width * -0.03
 
@@ -86,6 +80,7 @@ Item {
         width: 500
         height: 400
         anchors.verticalCenter: root.verticalCenter
+        anchors.verticalCenterOffset: 50
         anchors.right: root.right
         anchors.rightMargin: root.width * -0.03
 
@@ -289,7 +284,6 @@ Item {
 
             PropertyChanges { target: bottomBar; anchors.topMargin: 30 }
             PropertyChanges { target: centerLink; anchors.topMargin: 60; opacity: 0.0 }
-            PropertyChanges { target: handbrakeVoyant; anchors.bottomMargin: -30; opacity: 1.0 }
         },
         State {
             name: "DRIVE"
@@ -305,7 +299,6 @@ Item {
 
             PropertyChanges { target: bottomBar; anchors.topMargin: 0 }
             PropertyChanges { target: centerLink; anchors.topMargin: 0; opacity: 1.0 }
-            PropertyChanges { target: handbrakeVoyant; anchors.bottomMargin: 30; opacity: 1.0 }
         }
     ]
 
@@ -323,8 +316,17 @@ Item {
     // ==========================================
     // BOUTON DE TEST TEMPORAIRE
     // ==========================================
-    MouseArea {
-        anchors.fill: parent
-        onClicked: root.isParked = !root.isParked
+    // APRÈS — zone de test restreinte (ex: coin bas-droit)
+    Rectangle {
+        width: 60; height: 60
+        anchors.bottom: parent.bottom
+        anchors.right:  parent.right
+        color: Qt.rgba(1, 1, 1, 0.05)
+        radius: 8
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.isParked = !root.isParked
+        }
     }
 }
