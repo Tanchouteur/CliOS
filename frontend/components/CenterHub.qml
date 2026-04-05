@@ -15,7 +15,7 @@ Item {
         { name: "Diag"     },
         { name: "Settings" }
     ]
-    property int  currentIndex: 4
+    property int  currentIndex: 2
     readonly property real borderW:     1.5
     readonly property int  tabRadius:   10
     readonly property int  panelRadius: 14
@@ -31,8 +31,6 @@ Item {
             topMargin: -borderW
         }
         color:        T.Theme.bgMain
-
-        // LA CORRECTION EST ICI : On remet le radius qui avait sauté
         radius:       panelRadius
 
         border.color: T.Theme.main

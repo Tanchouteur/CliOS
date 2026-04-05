@@ -15,6 +15,11 @@ Item {
         z: -100
     }
 
+    StatusBar {
+        anchors.top: parent.top
+        anchors.left: parent.left
+    }
+
     // --- Conteneur Central (Sécurité et Informations) ---
     Item {
         id: centerGroup

@@ -89,8 +89,7 @@ Item {
                     Layout.leftMargin: 20
                     Text { text: "CARBURANT CONSOMMÉ"; color: T.Theme.unselected; font.pixelSize: 14 }
                     Row {
-                        //align: Qt.AlignBottom //sa pose probleme
-                        Text { text: trip.fuel_used_l !== undefined ? trip.fuel_used_l.toFixed(2) : "0.00"; color: T.Theme.textMain; font.pixelSize: 36; font.bold: true }
+                        Text { text: bridge.data.fuel_used !== undefined ? bridge.data.fuel_used.toFixed(2) : "0.00"; color: T.Theme.textMain; font.pixelSize: 36; font.bold: true }
                         Text { text: " L"; color: T.Theme.main; font.pixelSize: 20; anchors.bottom: parent.bottom; anchors.bottomMargin: 4 }
                     }
                 }

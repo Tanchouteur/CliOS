@@ -27,3 +27,11 @@ class SystemOrchestrator:
 
         for service in self.services:
             service.stop()
+
+    def get_system_health(self) -> dict:
+        """Récupère l'état de tous les services (Pour le Bridge)."""
+        health_report = {}
+        for service in self.services:
+            # Grâce à l'interface, on sait que TOUS les services ont .get_health()
+            health_report[service.service_name] = service.get_health()
+        return health_report

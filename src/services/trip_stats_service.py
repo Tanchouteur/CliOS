@@ -1,13 +1,16 @@
 import time
 import threading
 from collections import deque
+
+from src.services.base_service import BaseService
 from src.storage import PersistentStorage
 
 
-class TripStatsService:
+class TripStatsService(BaseService):
     """Ordinateur de bord complet : Calcule les statistiques instantanées et persistantes."""
 
     def __init__(self, api, config):
+        super().__init__("TripStats")
         self.api = api
         self._thread = None
         self.storage = PersistentStorage()
@@ -48,18 +51,25 @@ class TripStatsService:
             "avg_rpm": 0, "coasting_km": 0.0, "aggressivity_pct": 0.0, "shift_time_sec": 0.0,
 
             # Global & Persistant
-            "trip_a": 0.0, "trip_b": 0.0,
-            "inst_cons": 0.0, "avg_cons_b": 0.0, "autonomy": 0.0,
+            "trip_a": init_trip_a, "trip_b": init_trip_b,
+            "inst_cons": 0.0, "avg_cons_b": init_avg_cons, "autonomy": 0.0,
             "gear": "N",
-            "km_before_service": self._revision_interval, "service_warning": False
+            "km_before_service": init_km_service, "service_warning": False,
+
+            # Télémétrie
+            "g_force": 0.0
         }
 
-        self._reset_session_accumulators()
+        self._reset_session_accumulators(api._data.get("odometer"))
 
-    def _reset_session_accumulators(self):
+        # Gmetters
+        self._prev_speed = 0.0
+        self._last_g_time = time.time()
+
+    def _reset_session_accumulators(self, last_odo):
         """Remet à zéro uniquement les données du trajet en cours."""
-        self._trip_start_odo = 0.0
-        self._trip_start_fuel = 0.0
+        self._start_odo = last_odo
+        self._session_distance_m = 0.0
         self._rpm_sum = 0.0
         self._rpm_count = 0
         self._accel_sum = 0.0
@@ -71,7 +81,7 @@ class TripStatsService:
         self._shift_start = 0.0
 
     # ==========================================
-    # COMMANDES UTILISATEUR (Appelées par le QML via le Bridge)
+    # COMMANDES UTILISATEUR
     # ==========================================
     def reset_trip_a(self):
         current_odo = self.api._data.get("odometer", self.last_saved_odo)
@@ -110,47 +120,47 @@ class TripStatsService:
         last_calc_time = time.time()
         last_tick_time = time.time()
 
-        while not stop_event.is_set():
-            current_time = time.time()
-            dt = current_time - last_tick_time
-            last_tick_time = current_time
+        try:
+            while not stop_event.is_set():
+                current_time = time.time()
+                dt = current_time - last_tick_time
+                last_tick_time = current_time
 
-            data = self.api._data.copy()
-            current_odo = data.get('odometer')
-            current_fuel = data.get('fuel_used')
-            current_speed = data.get('speed', 0.0)
-            ignition = data.get('ignition_on', False) or data.get('key_run', False)
+                data = self.api._data.copy()
+                current_odo = data.get('odometer')
+                current_fuel = data.get('fuel_used')
+                current_speed = data.get('speed', 0.0)
+                ignition = data.get('ignition_on', False) or data.get('key_run', False)
 
-            # On attend que le CAN ait envoyé les premières vraies données
-            if current_odo is None:
-                time.sleep(0.1)
-                continue
+                if current_odo is None:
+                    time.sleep(0.1)
+                    continue
 
-            # --- GESTION DE LA SESSION ---
-            if ignition and not self.stats["is_active"]:
-                self._reset_session_accumulators()
-                self._trip_start_odo = current_odo
-                self._trip_start_fuel = current_fuel if current_fuel else 0.0
-                self.stats["is_active"] = True
+                # --- GESTION DE LA SESSION ---
+                if ignition and not self.stats["is_active"]:
+                    self._reset_session_accumulators(data.get('odometer'))
+                    self.stats["is_active"] = True
 
-            elif not ignition and self.stats["is_active"]:
-                self.stats["is_active"] = False
+                elif not ignition and self.stats["is_active"]:
+                    self.stats["is_active"] = False
 
-            # --- BOUCLE RAPIDE (~50Hz) : Calculs instantanés ---
-            self._calc_fast_telemetry(data, dt, current_time, current_speed)
+                # --- BOUCLE RAPIDE (~50Hz) : Calculs instantanés ---
+                self._calc_fast_telemetry(data, dt, current_time, current_speed, current_odo)
 
-            # --- BOUCLE LENTE (1Hz) : Calculs Globaux et Persistance ---
-            if current_time - last_calc_time >= 1.0:
-                self._calc_slow_telemetry(current_odo, current_fuel, current_time)
-                last_calc_time = current_time
+                # --- BOUCLE LENTE (1Hz) : Calculs Globaux ---
+                if current_time - last_calc_time >= 1.0:
+                    self._calc_slow_telemetry(current_odo, current_fuel, current_time)
+                    last_calc_time = current_time
 
-            time.sleep(0.020)
+                time.sleep(0.020)
+        except Exception as e:
+            self.set_error(f"[Trip Stats]Crash inattendu : {str(e)}")
 
     # ==========================================
     # ROUTINES MATHÉMATIQUES
     # ==========================================
-    def _calc_fast_telemetry(self, data, dt, current_time, current_speed):
-        """Calculs nécessitant une haute fréquence (Conso instantanée, Rapport de boîte, Session)."""
+    def _calc_fast_telemetry(self, data, dt, current_time, current_speed, current_odo):
+        """Calculs nécessitant une haute fréquence (Conso instantanée, Rapport, Session)."""
         rpm = data.get('rpm', 0)
         accel = data.get('accel_pos', 0.0)
         clutch = data.get('clutch', False)
@@ -171,7 +181,7 @@ class TripStatsService:
                     smallest_diff, best_gear = diff, gear_name
             self.stats["gear"] = best_gear
 
-        # 2. Conso Instantanée (Moyenne mobile dynamique)
+        # 2. Conso Instantanée
         if current_fuel is not None and self.last_fuel_inst is not None:
             dt_inst = current_time - self.last_time_inst
             refresh_rate = 0.2 if accel > 5.0 else 1.0
@@ -185,13 +195,15 @@ class TripStatsService:
 
                 self.stats["inst_cons"] = round((w_fuel / w_dist) * 100.0,
                                                 1) if w_dist > 0.001 and current_speed > 3.0 else 0.0
-
                 self.last_fuel_inst, self.last_time_inst = current_fuel, current_time
         elif current_fuel is not None:
             self.last_fuel_inst = current_fuel
 
-        # 3. Accumulateurs de Session
+        # 3. Accumulateurs de Session & G-Meter
         if self.stats["is_active"]:
+
+            self._session_distance_m = current_odo - self._start_odo
+
             if rpm > 0:
                 self._rpm_sum += rpm
                 self._rpm_count += 1
@@ -210,18 +222,28 @@ class TripStatsService:
                     self._shift_time_sum += duration
                     self._shift_count += 1
 
+            # --- CORRECTION G-METER : Indentation réparée ---
+            now = time.time()
+            dt_g = now - self._last_g_time
+
+            if dt_g >= 0.1:
+                dv = (current_speed - self._prev_speed) / 3.6
+                raw_g = dv / (dt_g * 9.81)
+                self.stats["g_force"] = round((self.stats["g_force"] * 0.8) + (raw_g * 0.2), 2)
+                self._prev_speed = current_speed
+                self._last_g_time = now
+
     def _calc_slow_telemetry(self, current_odo, current_fuel, current_time):
         """Calculs lents (Trip A/B, Autonomie, Maintenance, Sauvegarde)."""
-        # Initialisation sécurisée de l'Odo au premier boot
         if self.last_saved_odo == 0.0 and current_odo > 0:
             self.last_saved_odo = self.trip_a_marker = self.trip_b_marker = self.last_revision_odo = current_odo
 
-        # --- Trips Globaux ---
+        # Trips Globaux
         self.stats["trip_a"] = max(0.0, current_odo - self.trip_a_marker)
         trip_b_dist = max(0.0, current_odo - self.trip_b_marker)
         self.stats["trip_b"] = trip_b_dist
 
-        # --- Conso Moyenne B ---
+        # Conso Moyenne B
         if current_fuel is not None:
             if self.last_fuel_avg is not None:
                 delta = current_fuel - self.last_fuel_avg if current_fuel >= self.last_fuel_avg else current_fuel
@@ -231,13 +253,13 @@ class TripStatsService:
         self.stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                          1) if trip_b_dist > 0.05 else 0.0
 
-        # --- Autonomie ---
+        # Autonomie
         fuel_level_pct = self.api._data.get("fuel_level", 100.0)
         remaining_l = (fuel_level_pct / 100.0) * self._tank_capacity
         safe_cons = self.stats["avg_cons_b"] if self.stats["avg_cons_b"] > 0.5 else 6.0
         self.stats["autonomy"] = round((remaining_l / safe_cons) * 100.0)
 
-        # --- Maintenance ---
+        # Maintenance
         dist_depuis_rev = current_odo - self.last_revision_odo
         km_restants = max(0.0, self._revision_interval - dist_depuis_rev)
         self.stats["km_before_service"] = km_restants
@@ -245,9 +267,12 @@ class TripStatsService:
 
         # --- Stats de Session ---
         if self.stats["is_active"]:
-            self.stats["distance_km"] = round(max(0.0, current_odo - self._trip_start_odo), 2)
+            # CORRECTION : On utilise l'intégrateur de vitesse pour la distance
+            self.stats["distance_km"] = round(self._session_distance_m / 1000.0, 2)
+
             if current_fuel is not None:
-                self.stats["fuel_used_l"] = round(max(0.0, current_fuel - self._trip_start_fuel), 2)
+                self.stats["fuel_used_l"] = round(current_fuel, 2)
+
             self.stats["avg_rpm"] = int(self._rpm_sum / self._rpm_count) if self._rpm_count > 0 else 0
             self.stats["coasting_km"] = round(self._coasting_dist, 2)
             self.stats["aggressivity_pct"] = round(self._accel_sum / self._accel_count,
@@ -255,7 +280,7 @@ class TripStatsService:
             self.stats["shift_time_sec"] = round(self._shift_time_sum / self._shift_count,
                                                  2) if self._shift_count > 0 else 0.0
 
-        # --- Sauvegarde sur disque (Tous les 1 km) ---
+        # Sauvegarde
         if current_odo - self.last_saved_odo >= 1.0:
             self.storage.set("last_odometer", current_odo)
             self.storage.set("fuel_b_accumulated", self.fuel_b_accumulated)

@@ -2,8 +2,6 @@ import json
 import threading
 
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot
-
-
 class DashboardBridge(QObject):
     """Pont de communication (Context Property) entre le moteur logique (Python) et le moteur de rendu (QML)."""
 
@@ -12,13 +10,16 @@ class DashboardBridge(QObject):
     configChanged = Signal(dict)
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
     statsChanged = Signal(dict)
+    systemHealthChanged = Signal()
 
-    def __init__(self, api, config_path, led_service=None, stats_service=None):
+    def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None):
         super().__init__()
         self.api = api
         self.led_service = led_service
         self.stats_service = stats_service
 
+        self.orchestrator = orchestrator
+        self._system_health = {}
         self._data = {}
         self._config_path = config_path
         self._stats = {}
@@ -44,6 +45,11 @@ class DashboardBridge(QObject):
                 self._stats = new_stats
                 self.statsChanged.emit(self._stats)
 
+        new_health = self.orchestrator.get_system_health()
+        if new_health != self._system_health:
+            self._system_health = new_health
+            self.systemHealthChanged.emit()
+
     @Property('QVariant', notify=dataChanged)
     def data(self):
         """Accesseur de la structure de données télémétriques exposé au moteur QML."""
@@ -58,6 +64,10 @@ class DashboardBridge(QObject):
     def stats(self):
         """Accesseur des statistiques exposé au moteur QML."""
         return self._stats
+
+    @Property('QVariant', notify=systemHealthChanged)
+    def systemHealth(self):
+        return self._system_health
 
     @Slot()
     def resetTripB(self):

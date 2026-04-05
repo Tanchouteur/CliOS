@@ -75,8 +75,7 @@ def main():
         dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),
         port="/dev/cu.usbmodem207B3949534B1", # Remplacer par le bon port sur le Pi
         baudrate=500000,
-        is_mock=args.mock,
-        status_key="connexion_obd_moteur"
+        is_mock=args.mock
     ))
 
     # Service CAN Habitacle (Basse Vitesse)
@@ -105,6 +104,7 @@ def main():
             bridge = DashboardBridge(
                 api,
                 os.path.join(CONFIG_DIR, args.conf),
+                orchestrator=orchestrator,
                 led_service=led_service,
                 stats_service=stats_service
             )

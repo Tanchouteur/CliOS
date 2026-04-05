@@ -2,9 +2,12 @@ import time
 import threading
 import traceback
 
+from src.services.base_service import BaseService
 
-class NotificationService:
+
+class NotificationService(BaseService):
     def __init__(self, bridge):
+        super().__init__("Notification")
         self.bridge = bridge
         self._states = {
             "obd_lost_notified": False,
@@ -27,33 +30,7 @@ class NotificationService:
 
         current_time = time.time()
 
-        # --- LOGIQUE 1 : OBD ---
-        is_obd_connected = data.get('connexion_obd_moteur', False)
-
-        if not is_obd_connected:
-            if not self._states["obd_lost_notified"]:
-                self.bridge.send_notification("CRITICAL", "OBD DÉCONNECTÉ", 0)
-                self._states["obd_lost_notified"] = True
-        else:
-            if self._states["obd_lost_notified"]:
-                self.bridge.send_notification("INFO", "OBD RECONNECTÉ", 3000)
-                self._states["obd_lost_notified"] = False
-
-        # --- LOGIQUE 2 : EMBRAYAGE (> 5 secondes) ---
-        is_clutch_pressed = data.get('clutch', False)
-
-        if is_clutch_pressed:
-            if self._states["clutch_start_time"] is None:
-                self._states["clutch_start_time"] = current_time  # Démarrage du chrono
-
-            # Si le chrono dépasse 5 secondes et qu'on n'a pas encore prévenu
-            elif (current_time - self._states["clutch_start_time"] > 5.0) and not self._states["clutch_warned"]:
-                self.bridge.send_notification("WARNING", "ATTENTION : EMBRAYAGE SOLLICITÉ", 4000)
-                self._states["clutch_warned"] = True
-        else:
-            # Réinitialisation si la pédale est relâchée
-            self._states["clutch_start_time"] = None
-            self._states["clutch_warned"] = False
+        self._check_clutch_pressed(data.get('clutch', False), current_time)
 
     def _run(self, stop_event):
         print("[NOTIF] Boucle interne lancée et active.")
@@ -69,5 +46,22 @@ class NotificationService:
             except Exception as e:
                 print(f"\n[ERREUR FATALE NOTIF] Le service a planté : {e}")
                 traceback.print_exc()  # Affiche la ligne exacte de l'erreur
+                self.set_error(f"[Notif] Crash inattendu : {str(e)}")
 
             time.sleep(1.0)
+
+    def _check_clutch_pressed(self, clutch_pressed: bool, current_time):
+        is_clutch_pressed = clutch_pressed
+
+        if is_clutch_pressed:
+            if self._states["clutch_start_time"] is None:
+                self._states["clutch_start_time"] = current_time  # Démarrage du chrono
+
+            # Si le chrono dépasse 5 secondes et qu'on n'a pas encore prévenu
+            elif (current_time - self._states["clutch_start_time"] > 5.0) and not self._states["clutch_warned"]:
+                self.bridge.send_notification("WARNING", "ATTENTION : EMBRAYAGE SOLLICITÉ", 4000)
+                self._states["clutch_warned"] = True
+        else:
+            # Réinitialisation si la pédale est relâchée
+            self._states["clutch_start_time"] = None
+            self._states["clutch_warned"] = False

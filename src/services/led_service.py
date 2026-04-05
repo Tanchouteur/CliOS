@@ -3,6 +3,8 @@ import threading
 from bleak import BleakClient
 from bleak.exc import BleakError
 
+from src.services.base_service import BaseService
+
 # Adresses MAC de tes bandeaux LEDs
 MAC_DASHBOARD = "A060C742-6A5E-53EB-4196-099CF978EB2E" # Fonctionne en GRB
 MAC_FOOTWELL = "1ED496B4-A08D-40AD-5D1F-01C1DEC86072"
@@ -11,10 +13,11 @@ MAC_FOOTWELL = "1ED496B4-A08D-40AD-5D1F-01C1DEC86072"
 CHAR_UUID = "0000fff3-0000-1000-8000-00805f9b34fb"
 
 
-class BleLedController:
+class BleLedController(BaseService):
     """Gestionnaire BLE asynchrone isolé dans un Thread pour ne pas bloquer PySide6."""
 
     def __init__(self):
+        super().__init__("Leds")
         self._loop = None
         self._thread = None
         self._queue = None
@@ -98,6 +101,7 @@ class BleLedController:
                 print(f"[BLE] Connecté au bandeau {mac}")
             except BleakError as e:
                 print(f"[BLE] Erreur connexion à {mac} : {e}")
+                self.set_error(f"[BLE] Erreur connexion à {mac} : {str(e)}")
                 return
 
         # Écriture du payload (sans réponse pour plus de rapidité)
@@ -105,7 +109,7 @@ class BleLedController:
             await client.write_gatt_char(CHAR_UUID, payload, response=False)
         except Exception as e:
             print(f"[BLE] Erreur d'écriture sur {mac} : {e}")
-            # En cas d'erreur fatale, on purge le cache pour forcer une reconnexion
+            self.set_error(f"[BLE] Erreur d'écriture sur {mac} : {str(e)}")
             self._clients.pop(mac, None)
 
     async def _ble_worker(self):
