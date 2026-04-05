@@ -1,0 +1,73 @@
+import time
+import threading
+import traceback
+
+
+class NotificationService:
+    def __init__(self, bridge):
+        self.bridge = bridge
+        self._states = {
+            "obd_lost_notified": False,
+            "clutch_start_time": None,
+            "clutch_warned": False
+        }
+        self._thread = None
+
+    def start(self, stop_event):
+        #print("[INFO] Démarrage du thread demandé par l'orchestrateur...")
+        self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="NotifWorker")
+        self._thread.start()
+
+    def stop(self):
+        pass
+
+    def check_data(self, data: dict):
+        if not data:
+            return
+
+        current_time = time.time()
+
+        # --- LOGIQUE 1 : OBD ---
+        is_obd_connected = data.get('connexion_obd_moteur', False)
+
+        if not is_obd_connected:
+            if not self._states["obd_lost_notified"]:
+                self.bridge.send_notification("CRITICAL", "OBD DÉCONNECTÉ", 0)
+                self._states["obd_lost_notified"] = True
+        else:
+            if self._states["obd_lost_notified"]:
+                self.bridge.send_notification("INFO", "OBD RECONNECTÉ", 3000)
+                self._states["obd_lost_notified"] = False
+
+        # --- LOGIQUE 2 : EMBRAYAGE (> 5 secondes) ---
+        is_clutch_pressed = data.get('clutch', False)
+
+        if is_clutch_pressed:
+            if self._states["clutch_start_time"] is None:
+                self._states["clutch_start_time"] = current_time  # Démarrage du chrono
+
+            # Si le chrono dépasse 5 secondes et qu'on n'a pas encore prévenu
+            elif (current_time - self._states["clutch_start_time"] > 5.0) and not self._states["clutch_warned"]:
+                self.bridge.send_notification("WARNING", "ATTENTION : EMBRAYAGE SOLLICITÉ", 4000)
+                self._states["clutch_warned"] = True
+        else:
+            # Réinitialisation si la pédale est relâchée
+            self._states["clutch_start_time"] = None
+            self._states["clutch_warned"] = False
+
+    def _run(self, stop_event):
+        print("[NOTIF] Boucle interne lancée et active.")
+
+        time.sleep(1.0)
+
+        while not stop_event.is_set():
+            try:
+                if self.bridge and hasattr(self.bridge, 'api'):
+                    self.check_data(self.bridge.api._data)
+                else:
+                    print("[ERREUR NOTIF] Le bridge ou l'API n'est pas accessible.")
+            except Exception as e:
+                print(f"\n[ERREUR FATALE NOTIF] Le service a planté : {e}")
+                traceback.print_exc()  # Affiche la ligne exacte de l'erreur
+
+            time.sleep(1.0)

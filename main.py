@@ -1,22 +1,17 @@
 import json
 import os
-import time
-import threading
 import sys
 import argparse
 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from src.dispatcher import CanDispatcher
-from src.parser import DbcParser
 from src.services.can_service import CanService
+from src.services.led_service import BleLedController
+from src.services.notification_service import NotificationService
 from src.services.orchestrator import SystemOrchestrator
-from src.signal_processor import SignalProcessor
 from src.vehicle import VehicleAPI
-from src.driver import Slcan
 from src.qt_bridge import DashboardBridge
-from src.mock_driver import MockProvider
 
 # --- Console de Débogage ---
 def ui_loop(api, stop_event):
@@ -77,25 +72,25 @@ def main():
         name="CAN_Moteur",
         api=api,
         dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),
-        port="/dev/ttyUSB0", # Remplacer par le bon port sur le Pi
+        port="/dev/cu.usbmodem207B3949534B1", # Remplacer par le bon port sur le Pi
         baudrate=500000,
         is_mock=args.mock,
         status_key="connexion_obd_moteur"
     ))
 
     # Service CAN Habitacle (Basse Vitesse)
-    orchestrator.add_service(CanService(
-        name="CAN_Habitacle",
-        api=api,
-        dbc_path=os.path.join(CAN_DIR, "can_habitacle_clio3.json"),
-        port="/dev/ttyUSB1", # Remplacer par le deuxième port
-        baudrate=250000,
-        is_mock=args.mock,
-        status_key="connexion_obd_habitacle"
-    ))
+    #orchestrator.add_service(CanService(
+     #   name="CAN_Habitacle",
+      #  api=api,
+       # dbc_path=os.path.join(CAN_DIR, "can_habitacle_clio3.json"),
+        #port="/dev/ttyUSB1", # Remplacer par le deuxième port
+        #baudrate=250000,
+        #is_mock=args.mock,
+        #status_key="connexion_obd_habitacle"
+    #))
 
-    # --- 4. Démarrage de tous les threads ---
-    orchestrator.start_all()
+    led_service = BleLedController()
+    orchestrator.add_service(led_service)
 
     # --- 5. Lancement de l'IHM ---
     try:
@@ -106,8 +101,14 @@ def main():
             app = QGuiApplication(sys.argv)
             engine = QQmlApplicationEngine()
 
-            bridge = DashboardBridge(api, os.path.join(CONFIG_DIR, args.conf))
+            bridge = DashboardBridge(api, os.path.join(CONFIG_DIR, args.conf), led_service=led_service)
             engine.rootContext().setContextProperty("bridge", bridge)
+
+            notif_service = NotificationService(bridge)
+            orchestrator.add_service(notif_service)
+
+            # ---Démarrage de tous les threads ---
+            orchestrator.start_all()
 
             engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
 

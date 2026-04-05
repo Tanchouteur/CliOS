@@ -19,8 +19,10 @@ Item {
     Item {
         id: centerGroup
         anchors.centerIn: root
-        width: parent.width * 0.4
-        height: 400
+        width: parent.width * 0.5
+        height: 600
+        anchors.verticalCenterOffset: -40
+
         z: -1
 
         CenterHub{
@@ -52,7 +54,6 @@ Item {
         height: 400
         anchors.verticalCenter: root.verticalCenter
         anchors.verticalCenterOffset: 50
-
         anchors.left: root.left
         anchors.leftMargin: root.width * -0.03
 
@@ -60,6 +61,7 @@ Item {
             id: speedo
             width: 500; height: 400
             anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: 0 // Position de base
             anchors.left: parent.left
         }
 
@@ -67,8 +69,8 @@ Item {
             id: bigFuel
             width: 500; height: 400
             anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: 600 // Caché en bas par défaut
             anchors.left: parent.left
-            // Initialement hors écran (sera géré par les States)
         }
     }
 
@@ -88,6 +90,7 @@ Item {
             id: tacho
             width: 500; height: 400
             anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: 0
             anchors.right: parent.right
         }
 
@@ -95,6 +98,7 @@ Item {
             id: bigTemp
             width: 500; height: 400
             anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: 600 // Caché en bas par défaut
             anchors.right: parent.right
         }
     }
@@ -120,11 +124,15 @@ Item {
         }
     }
 
-    // --- Bandeau d'Informations Inférieur ---
+    // ==========================================
+    // BANDEAU D'INFORMATIONS INFÉRIEUR
+    // ==========================================
     Item {
         id: bottomBar
-        anchors.top: leftGauges.bottom
-        anchors.topMargin: 0
+
+        // MODIFICATION : Ancrage absolu en bas de l'écran
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 20
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width * 0.9
         height: 40

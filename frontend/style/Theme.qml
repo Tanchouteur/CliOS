@@ -17,10 +17,9 @@ QtObject {
     readonly property color warning: "#e67e22"
 
     // --- Thème Dynamique (Couleur d'accentuation pour les LEDs) ---
-    // property color accent: bridge.data.theme_color !== undefined ? bridge.data.theme_color : "#00aaff"
-    property color main: "#ff4400"
-    property color mainLight: "#ff6600"
-    property color mainDark: "#cc3700"
+    property color main: bridge.config.theme.main !== undefined ? bridge.config.theme.main : "#00aaff"
+    property color mainLight: Qt.lighter(main, 1.3)
+    property color mainDark: Qt.darker(main, 1.4)
 
     property color secondary: "#00aaff"
     property color secondaryLight: "#33bbff"

@@ -2,10 +2,11 @@ import QtQuick
 import QtQuick.Controls
 import "views"
 import "style"
+import "components"
 
 ApplicationWindow {
     id: appWindow
-    property int version: 1
+    property string version: "1.1.2"
     visible: true
     width: 1920
     height: 700
@@ -20,28 +21,8 @@ ApplicationWindow {
     }
 
     // --- Bannière d'Alerte Télémétrique ---
-    Rectangle {
-        id: obdAlertBanner
-        z: 999
-
-        width: 400
-        height: 60
-        anchors.top: parent.top
-        anchors.topMargin: 30
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        radius: 10
-        color: Theme.danger
-
-        visible: bridge.data.connexion_obd_moteur === false
-
-        Text {
-            anchors.centerIn: parent
-            text: "CONNEXION OBD PERDUE"
-            color: Theme.textMain
-            font.pixelSize: 22
-            font.bold: true
-            font.family: "Arial"
-        }
+    NotificationCenter {
+        id: notifCenter
+        z: 9999 // Toujours au premier plan
     }
 }

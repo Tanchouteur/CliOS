@@ -10,13 +10,14 @@ class DashboardBridge(QObject):
     # Signaux d'état pour la notification asynchrone de l'interface graphique
     dataChanged = Signal(dict)
     configChanged = Signal(dict)
+    notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
 
-    def __init__(self, api, config_path):
+    def __init__(self, api, config_path, led_service=None):
         super().__init__()
         self.api = api
+        self.led_service = led_service
         self._data = {}
         self._config_path = config_path
-
         # Chargement et mise en cache des paramètres de configuration de l'interface
         with open(config_path, 'r') as f:
             self._config = json.load(f)
@@ -52,14 +53,15 @@ class DashboardBridge(QObject):
         print("[INFO] Signal IHM reçu : Réinitialisation du Trip B et des accumulateurs de consommation.")
         self.api.reset_trip_b()
 
-    Slot(str, str)
-
     @Slot(str, str)
     def save_setting(self, key_path, value):
         """
         Met à jour la configuration en RAM (supporte les clés imbriquées ex: 'theme.main')
         et l'écrit sur le disque en arrière-plan.
         """
+        if key_path == "theme.main" and self.led_service:
+            self.led_service.set_color(value)
+
         keys = key_path.split('.')
         current_dict = self._config
 
@@ -81,3 +83,7 @@ class DashboardBridge(QObject):
                 print(f"[ERREUR] Échec de la sauvegarde de {key_path} : {e}")
 
         threading.Thread(target=write_worker, daemon=True).start()
+
+    def send_notification(self, level: str, message: str, duration: int = 3000):
+        """Méthode appelée par l'orchestrateur quand une alerte se déclenche"""
+        self.notificationEvent.emit(level, message, duration)
