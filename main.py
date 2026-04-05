@@ -10,6 +10,7 @@ from src.services.can_service import CanService
 from src.services.led_service import BleLedController
 from src.services.notification_service import NotificationService
 from src.services.orchestrator import SystemOrchestrator
+from src.services.trip_stats_service import TripStatsService
 from src.vehicle import VehicleAPI
 from src.qt_bridge import DashboardBridge
 
@@ -60,7 +61,7 @@ def main():
         vehicle_config = json.load(f)
 
     # --- 1. Initialisation du Disque Dur Central ---
-    api = VehicleAPI(vehicle_config)
+    api = VehicleAPI()
     api.run_startup_sequence(duration_sec=1.5)
 
     # --- 2. Initialisation de l'Orchestrateur ---
@@ -90,7 +91,7 @@ def main():
     #))
 
     led_service = BleLedController()
-    orchestrator.add_service(led_service)
+    stats_service = TripStatsService(api, vehicle_config)
 
     # --- 5. Lancement de l'IHM ---
     try:
@@ -101,11 +102,19 @@ def main():
             app = QGuiApplication(sys.argv)
             engine = QQmlApplicationEngine()
 
-            bridge = DashboardBridge(api, os.path.join(CONFIG_DIR, args.conf), led_service=led_service)
+            bridge = DashboardBridge(
+                api,
+                os.path.join(CONFIG_DIR, args.conf),
+                led_service=led_service,
+                stats_service=stats_service
+            )
             engine.rootContext().setContextProperty("bridge", bridge)
 
             notif_service = NotificationService(bridge)
             orchestrator.add_service(notif_service)
+
+            orchestrator.add_service(stats_service)
+            orchestrator.add_service(led_service)
 
             # ---Démarrage de tous les threads ---
             orchestrator.start_all()

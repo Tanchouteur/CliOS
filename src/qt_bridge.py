@@ -11,14 +11,18 @@ class DashboardBridge(QObject):
     dataChanged = Signal(dict)
     configChanged = Signal(dict)
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
+    statsChanged = Signal(dict)
 
-    def __init__(self, api, config_path, led_service=None):
+    def __init__(self, api, config_path, led_service=None, stats_service=None):
         super().__init__()
         self.api = api
         self.led_service = led_service
+        self.stats_service = stats_service
+
         self._data = {}
         self._config_path = config_path
-        # Chargement et mise en cache des paramètres de configuration de l'interface
+        self._stats = {}
+
         with open(config_path, 'r') as f:
             self._config = json.load(f)
 
@@ -34,6 +38,12 @@ class DashboardBridge(QObject):
             self._data = new_data
             self.dataChanged.emit(self._data)
 
+        if self.stats_service:
+            new_stats = self.stats_service.stats.copy()
+            if new_stats != self._stats:
+                self._stats = new_stats
+                self.statsChanged.emit(self._stats)
+
     @Property('QVariant', notify=dataChanged)
     def data(self):
         """Accesseur de la structure de données télémétriques exposé au moteur QML."""
@@ -44,14 +54,20 @@ class DashboardBridge(QObject):
         """Accesseur de la configuration statique exposé au moteur QML."""
         return self._config
 
+    @Property('QVariant', notify=statsChanged)
+    def stats(self):
+        """Accesseur des statistiques exposé au moteur QML."""
+        return self._stats
+
     @Slot()
     def resetTripB(self):
         """
         Point d'entrée QML (Slot) permettant à l'IHM d'invoquer une méthode métier.
         Déclenche la réinitialisation matérielle de l'odomètre partiel B et des accumulateurs associés.
         """
-        print("[INFO] Signal IHM reçu : Réinitialisation du Trip B et des accumulateurs de consommation.")
-        self.api.reset_trip_b()
+        print("[INFO] Signal IHM reçu : Réinitialisation du Trip B.")
+        if self.stats_service:
+            self.stats_service.reset_trip_b()
 
     @Slot(str, str)
     def save_setting(self, key_path, value):

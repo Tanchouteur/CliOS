@@ -137,7 +137,7 @@ Item {
         width: parent.width * 0.9
         height: 40
 
-        property real autonomy: bridge.data.autonomy !== undefined ? bridge.data.autonomy : 450
+        property real autonomy: bridge.stats.autonomy !== undefined ? bridge.stats.autonomy : 450
         property real outsideTemp: bridge.data.outside_temp !== undefined ? bridge.data.outside_temp : 21.5
         property string timeString: Qt.formatTime(new Date(), "hh:mm")
 
@@ -188,7 +188,7 @@ Item {
             anchors.left : autonomyText.right
             anchors.leftMargin: 40
             anchors.verticalCenter: parent.verticalCenter
-            text: bridge.data.avg_cons_b !== undefined ? "Avg " + bridge.data.avg_cons_b.toFixed(1) : "0.0"
+            text: bridge.stats.avg_cons_b !== undefined ? "Avg " + bridge.stats.avg_cons_b.toFixed(1) : "0.0"
             color: Theme.textMain
             font.pixelSize: 24
             font.family: "Arial"
@@ -206,7 +206,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 40
                 Text {
-                    text: bridge.data.trip_b !== undefined ? "B : " + bridge.data.trip_b.toFixed(1) + " km" : "Trip B 0.0 km"
+                    text: bridge.stats.trip_b !== undefined ? "B : " + bridge.stats.trip_b.toFixed(1) + " km" : "Trip B 0.0 km"
                     color: Theme.textMain
                     font.pixelSize: 22
                     font.family: "Arial"
@@ -218,7 +218,7 @@ Item {
                 visible: bottomBar.currentScreenIndex === 1
                 anchors.verticalCenter: parent.verticalCenter
                 Text {
-                    text: bridge.data.trip_a !== undefined ? "A : " + bridge.data.trip_a.toFixed(1) + " km" : "Trip A 0.0 km"
+                    text: bridge.stats.trip_a !== undefined ? "A : " + bridge.stats.trip_a.toFixed(1) + " km" : "Trip A 0.0 km"
                     color: Theme.textMain
                     font.pixelSize: 22
                     font.family: "Arial"
@@ -230,8 +230,8 @@ Item {
                 visible: bottomBar.currentScreenIndex === 2
                 anchors.verticalCenter: parent.verticalCenter
                 Text {
-                    text: bridge.data.km_before_service !== undefined ? "Service dans : " + bridge.data.km_before_service.toFixed(0) + " km" : "Service : ---"
-                    color: (bridge.data.service_warning === true) ? Theme.danger : Theme.textMain
+                    text: bridge.stats.km_before_service !== undefined ? "Service dans : " + bridge.stats.km_before_service.toFixed(0) + " km" : "Service : ---"
+                    color: (bridge.stats.service_warning === true) ? Theme.danger : Theme.textMain
                     font.pixelSize: 22
                     font.bold: (bridge.data.service_warning === true)
                     font.family: "Arial"

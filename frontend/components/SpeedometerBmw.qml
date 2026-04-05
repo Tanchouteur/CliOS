@@ -14,7 +14,7 @@ Item {
     property int regMode: bridge.data.regulateur_mode !== undefined ? bridge.data.regulateur_mode : 0
     property int regStatut: bridge.data.regulateur_statut !== undefined ? bridge.data.regulateur_statut : 0
 
-    property real inst_cons: bridge.data.inst_cons !== undefined ? bridge.data.inst_cons : 0.0
+    property real inst_cons: bridge.stats.inst_cons !== undefined ? bridge.stats.inst_cons : 0.0
     property real max_inst_cons: bridge.config.instant_fuel_consumption.max_display !== undefined ? bridge.config.instant_fuel_consumption.max_display : 20.0
 
     // --- Variables d'Animation ---
