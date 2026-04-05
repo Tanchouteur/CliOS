@@ -6,7 +6,10 @@ import argparse
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
+from src.driver import Slcan
+from src.mock_driver import MockProvider
 from src.services.can_service import CanService
+from src.services.diagnostic_service import DiagnosticService
 from src.services.led_service import BleLedController
 from src.services.notification_service import NotificationService
 from src.services.orchestrator import SystemOrchestrator
@@ -69,24 +72,30 @@ def main():
 
     # --- 3. Branchement des Périphériques ---
     # Service CAN Moteur (Haute Vitesse)
+    if args.mock:
+        can_provider = MockProvider(os.path.join(CAN_DIR, "can_moteur_clio3.json"))
+    else:
+        can_provider = Slcan(channel="/dev/cu.usbmodem207B3949534B1", baudrate=500000,)
+
+    diag_service = DiagnosticService(api, can_provider)
+
     orchestrator.add_service(CanService(
         name="CAN_Moteur",
         api=api,
-        dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),
-        port="/dev/cu.usbmodem207B3949534B1", # Remplacer par le bon port sur le Pi
-        baudrate=500000,
-        is_mock=args.mock
+        dbc_path=os.path.join(CONFIG_DIR, args.conf),
+        provider=can_provider,
+        obd_callback=diag_service.receive_obd_frame
     ))
 
     # Service CAN Habitacle (Basse Vitesse)
     #orchestrator.add_service(CanService(
-     #   name="CAN_Habitacle",
-      #  api=api,
-       # dbc_path=os.path.join(CAN_DIR, "can_habitacle_clio3.json"),
-        #port="/dev/ttyUSB1", # Remplacer par le deuxième port
-        #baudrate=250000,
-        #is_mock=args.mock,
-        #status_key="connexion_obd_habitacle"
+    #   name="CAN_Habitacle",
+    #  api=api,
+    # dbc_path=os.path.join(CAN_DIR, "can_habitacle_clio3.json"),
+    #port="/dev/ttyUSB1", # Remplacer par le deuxième port
+    #baudrate=250000,
+    #is_mock=args.mock,
+    #status_key="connexion_obd_habitacle"
     #))
 
     led_service = BleLedController()
@@ -115,6 +124,7 @@ def main():
 
             orchestrator.add_service(stats_service)
             orchestrator.add_service(led_service)
+            orchestrator.add_service(diag_service)
 
             # ---Démarrage de tous les threads ---
             orchestrator.start_all()

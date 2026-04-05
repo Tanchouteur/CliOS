@@ -12,11 +12,12 @@ class DashboardBridge(QObject):
     statsChanged = Signal(dict)
     systemHealthChanged = Signal()
 
-    def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None):
+    def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None):
         super().__init__()
         self.api = api
         self.led_service = led_service
         self.stats_service = stats_service
+        self.diag_service = diag_service
 
         self.orchestrator = orchestrator
         self._system_health = {}
@@ -68,6 +69,23 @@ class DashboardBridge(QObject):
     @Property('QVariant', notify=systemHealthChanged)
     def systemHealth(self):
         return self._system_health
+
+    @Slot()
+    def requestDiagnosticScan(self):
+        if self.diag_service:
+            self.diag_service.request_scan()
+
+    @Property(bool, notify=dataChanged)
+    def isScanning(self):
+        return self.api._data.get("diag_scanning", False)
+
+    @Property(bool, notify=dataChanged)
+    def hasScanned(self):
+        return self.api._data.get("diag_has_scanned", False)
+
+    @Property('QVariantList', notify=dataChanged)
+    def diagnosticCodes(self):
+        return self.api._data.get("diag_codes", [])
 
     @Slot()
     def resetTripB(self):

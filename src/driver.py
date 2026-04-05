@@ -30,6 +30,7 @@ class Slcan:
         except Exception as e:
             self.is_connected = False
             self.bus = None
+            print(f"[ERREUR] Echec de la connexion sur {self.channel} : {e}")
             return False
 
     def read_frame(self, timeout: float = 0.1) -> can.Message | None:
@@ -40,7 +41,6 @@ class Slcan:
         try:
             return self.bus.recv(timeout)
         except Exception:
-            # Interception des erreurs de descripteur (ex: câble USB débranché)
             self.close()
             raise RuntimeError("Perte de communication avec le périphérique série.")
 
@@ -50,7 +50,26 @@ class Slcan:
             try:
                 self.bus.shutdown()
             except Exception:
-                pass  # Ignorer les erreurs si le périphérique a déjà disparu
+                pass
 
         self.bus = None
         self.is_connected = False
+
+    def send_frame(self, can_id: int, data: list) -> bool:
+        """Envoie une trame CAN active (Ex: Requête OBD2)."""
+        if not self.is_connected or not self.bus:
+            return False
+
+        try:
+            # Création du message avec l'ID (ex: 0x7DF) et les octets de données
+            msg = can.Message(
+                arbitration_id=can_id,
+                data=data,
+                is_extended_id=False
+            )
+            self.bus.send(msg)
+            return True
+        except Exception as e:
+            print(f"[ERREUR] Échec de l'envoi CAN : {e}")
+            self.close()
+            return False

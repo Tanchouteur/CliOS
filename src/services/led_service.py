@@ -99,6 +99,7 @@ class BleLedController(BaseService):
                 await client.connect(timeout=5.0)
                 self._clients[mac] = client
                 print(f"[BLE] Connecté au bandeau {mac}")
+                self.set_ok(f"[BLE] Connecte au bandeau {mac}")
             except BleakError as e:
                 print(f"[BLE] Erreur connexion à {mac} : {e}")
                 self.set_error(f"[BLE] Erreur connexion à {mac} : {str(e)}")

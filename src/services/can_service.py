@@ -7,23 +7,21 @@ from src.services.base_service import BaseService
 from src.signal_processor import SignalProcessor
 from src.dispatcher import CanDispatcher
 
+
 class CanService(BaseService):
     """Service autonome gérant un bus CAN spécifique (lecture, décodage, mise à jour API)."""
 
-    def __init__(self, name: str, api, dbc_path: str, port: str, baudrate: int, is_mock: bool):
+    def __init__(self, name: str, api, dbc_path: str, provider, obd_callback=None):
         super().__init__(service_name="CAN")
         self.name = name
         self.api = api
         self.thread = None
+        self.obd_callback = obd_callback
 
         self.parser = DbcParser(dbc_path)
         self.processor = SignalProcessor()
         self.dispatcher = CanDispatcher(self.parser, self.processor, self.api)
-
-        if is_mock:
-            self.provider = MockProvider(dbc_path)
-        else:
-            self.provider = Slcan(channel=port, baudrate=baudrate)
+        self.provider = provider
 
     def start(self, stop_event: threading.Event):
         self.thread = threading.Thread(
@@ -37,7 +35,6 @@ class CanService(BaseService):
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
             if not self.provider.is_connected:
-                # Utilisation du nouveau standard de santé
                 self.set_error("Déconnecté. Tentative de connexion...")
                 success = self.provider.connect()
 
@@ -52,7 +49,12 @@ class CanService(BaseService):
                 if frame:
                     if getattr(self.api, 'is_starting_up', False):
                         continue
-                    self.dispatcher.dispatch(frame)
+
+                    if 0x7E8 <= frame.arbitration_id <= 0x7EF and self.obd_callback:
+                        self.obd_callback(frame)
+                    else:
+                        self.dispatcher.dispatch(frame)
+
             except Exception as e:
                 print(f"[ATTENTION] {self.name} : Rupture de la liaison série.")
                 self.set_error(f"Rupture de la liaison série : {str(e)}")
