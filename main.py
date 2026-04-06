@@ -17,6 +17,7 @@ from src.services.trip_stats_service import TripStatsService
 from src.vehicle import VehicleAPI
 from src.qt_bridge import DashboardBridge
 
+
 # --- Console de Débogage ---
 def ui_loop(api, stop_event):
     """Interface de débogage en ligne de commande (CLI)."""
@@ -28,7 +29,6 @@ def ui_loop(api, stop_event):
         print("   CONSOLE DE DEBUG TELEMETRIQUE (CLIOS)")
         print("=" * 45)
 
-        # On utilise .copy() pour éviter une erreur si un service modifie la donnée pendant l'affichage
         data_dict = api._data.copy()
 
         if not data_dict:
@@ -37,7 +37,7 @@ def ui_loop(api, stop_event):
             for key in sorted(data_dict.keys()):
                 val = data_dict[key]
                 if isinstance(val, bool):
-                    status = "\033[92mON\033[0m" if val else "\033[91mOFF\033[0m"  # Vert pour ON, Rouge pour OFF
+                    status = "\033[92mON\033[0m" if val else "\033[91mOFF\033[0m"
                     print(f" {key:<25} : {status}")
                 elif isinstance(val, float):
                     print(f" {key:<25} : {val:.1f}")
@@ -46,6 +46,7 @@ def ui_loop(api, stop_event):
 
         print("\n[Ctrl+C pour interrompre le processus]")
         stop_event.wait(0.1)
+
 
 def main():
     # --- Traitement des Arguments ---
@@ -56,7 +57,7 @@ def main():
     args = cmd_parser.parse_args()
 
     # --- Environnement ---
-    BASE_DIR =  os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CAN_DIR = os.path.join(BASE_DIR, "can")
     CONFIG_DIR = os.path.join(BASE_DIR, "config")
 
@@ -71,41 +72,36 @@ def main():
     orchestrator = SystemOrchestrator()
 
     # --- 3. Branchement des Périphériques ---
-    # Service CAN Moteur (Haute Vitesse)
     if args.mock:
         can_provider = MockProvider(os.path.join(CAN_DIR, "can_moteur_clio3.json"))
     else:
-        can_provider = Slcan(channel="/dev/cu.usbmodem207B3949534B1", baudrate=500000,)
+        can_provider = Slcan(channel="/dev/cu.usbmodem207B3949534B1", baudrate=500000)
 
+    # --- 4. Création et Ajout de TOUS les services de base ---
     diag_service = DiagnosticService(api, can_provider)
-
-    orchestrator.add_service(CanService(
-        name="CAN_Moteur",
-        api=api,
-        dbc_path=os.path.join(CONFIG_DIR, args.conf),
-        provider=can_provider,
-        obd_callback=diag_service.receive_obd_frame
-    ))
-
-    # Service CAN Habitacle (Basse Vitesse)
-    #orchestrator.add_service(CanService(
-    #   name="CAN_Habitacle",
-    #  api=api,
-    # dbc_path=os.path.join(CAN_DIR, "can_habitacle_clio3.json"),
-    #port="/dev/ttyUSB1", # Remplacer par le deuxième port
-    #baudrate=250000,
-    #is_mock=args.mock,
-    #status_key="connexion_obd_habitacle"
-    #))
-
     led_service = BleLedController()
     stats_service = TripStatsService(api, vehicle_config)
+
+    can_service = CanService(
+        name="CAN_Moteur",
+        api=api,
+        dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),  # Ton bon chemin JSON
+        provider=can_provider,
+        obd_callback=diag_service.receive_obd_frame
+    )
+
+    orchestrator.add_service(can_service)
+    orchestrator.add_service(diag_service)
+    orchestrator.add_service(led_service)
+    orchestrator.add_service(stats_service)
 
     # --- 5. Lancement de l'IHM ---
     try:
         if args.ui == 'cli':
+            # Il faut impérativement démarrer les threads avant la boucle CLI infinie !
+            orchestrator.start_all()
             ui_loop(api, orchestrator.stop_event)
-            pass
+
         elif args.ui == 'gui':
             app = QGuiApplication(sys.argv)
             engine = QQmlApplicationEngine()
@@ -115,18 +111,16 @@ def main():
                 os.path.join(CONFIG_DIR, args.conf),
                 orchestrator=orchestrator,
                 led_service=led_service,
-                stats_service=stats_service
+                stats_service=stats_service,
+                diag_service=diag_service
             )
             engine.rootContext().setContextProperty("bridge", bridge)
 
+            # Le NotifService a besoin du bridge, on l'ajoute que si on est en GUI
             notif_service = NotificationService(bridge)
             orchestrator.add_service(notif_service)
 
-            orchestrator.add_service(stats_service)
-            orchestrator.add_service(led_service)
-            orchestrator.add_service(diag_service)
-
-            # ---Démarrage de tous les threads ---
+            # Démarrage de tous les threads juste avant de charger le QML
             orchestrator.start_all()
 
             engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
@@ -143,6 +137,7 @@ def main():
     finally:
         # --- 6. Arrêt propre ---
         orchestrator.stop_all()
+
 
 if __name__ == "__main__":
     main()
