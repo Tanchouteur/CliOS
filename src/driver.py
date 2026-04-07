@@ -1,6 +1,5 @@
 import can
 
-
 class Slcan:
     """Interface de communication matérielle pour adaptateurs CAN basés sur le protocole SLCAN.
     Gère l'initialisation non-bloquante et la détection de perte de liaison matérielle.

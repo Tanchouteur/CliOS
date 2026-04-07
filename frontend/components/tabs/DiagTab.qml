@@ -12,22 +12,24 @@ Item {
     property bool hasScanned: bridge.hasScanned !== undefined ? bridge.hasScanned : false
     property bool hasErrors: codes.length > 0
 
-    // On vérifie que le service de Diag est en bonne santé
+    property bool isIgnitionOn: bridge.data !== undefined && bridge.data["key_run"] === true
     property bool isServiceReady: bridge.systemHealth !== undefined &&
                                   bridge.systemHealth["DIAG"] !== undefined &&
-                                  bridge.systemHealth["DIAG"].status === "OK"
+                                  bridge.systemHealth["DIAG"].status !== "ERROR"
 
     // --- Fonctions de style dynamiques ---
     function getStatusColor() {
-        if (!isServiceReady) return "#555555" // Gris (Désactivé)
-        if (isScanning) return T.Theme.main    // Bleu/Couleur thème
-        if (!hasScanned) return "white"        // Blanc neutre
-        if (hasErrors) return "#ff4444"        // Rouge
-        return "#00cc66"                       // Vert
+        if (!isServiceReady) return "#555555"          // Gris (Désactivé)
+        if (!isIgnitionOn) return "#ffaa00"            // Orange (En attente du contact)
+        if (isScanning) return T.Theme.main            // Bleu/Couleur thème
+        if (!hasScanned) return "white"                // Blanc neutre
+        if (hasErrors) return "#ff4444"                // Rouge
+        return "#00cc66"                               // Vert
     }
 
     function getStatusText() {
         if (!isServiceReady) return "OFFLINE"
+        if (!isIgnitionOn) return "CONTACT\nREQUIS"
         if (isScanning) return "SCAN..."
         if (!hasScanned) return "PRÊT"
         if (hasErrors) return codes.length + "\nDÉFAUT(S)"
@@ -74,7 +76,8 @@ Item {
                         color: "transparent"
                         border.width: 4
                         border.color: getStatusColor()
-                        opacity: isScanning ? 0.3 : (isServiceReady ? 1.0 : 0.3)
+                        // Opacité réduite si offline ou pas de contact
+                        opacity: isScanning ? 0.3 : ((isServiceReady && isIgnitionOn) ? 1.0 : 0.3)
 
                         SequentialAnimation on scale {
                             running: isScanning
@@ -95,7 +98,7 @@ Item {
                             anchors.centerIn: parent
                             text: getStatusText()
                             color: getStatusColor()
-                            font.pixelSize: (!hasScanned || isScanning || !hasErrors) ? 24 : 20
+                            font.pixelSize: (!hasScanned || isScanning || !hasErrors || !isIgnitionOn) ? 20 : 24
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                         }
@@ -106,6 +109,7 @@ Item {
                 Text {
                     text: {
                         if (!isServiceReady) return "Interface CAN non disponible."
+                        if (!isIgnitionOn) return "Tournez la clé (Cran 2) pour scanner."
                         if (isScanning) return "Interrogation de l'ECU..."
                         if (!hasScanned) return "En attente de diagnostic."
                         if (hasErrors) return "Anomalies détectées."
@@ -123,24 +127,26 @@ Item {
                     Layout.fillWidth: true
                     spacing: 15
 
-                    // Bouton SCAN (Désactivé si pas prêt ou déjà en cours)
+                    // Bouton SCAN
                     Rectangle {
                         Layout.fillWidth: true; Layout.preferredHeight: 50
                         radius: 8
-                        color: (!isServiceReady || isScanning) ? T.Theme.bgMain : T.Theme.main
-                        opacity: (!isServiceReady || isScanning) ? 0.5 : (btnScanArea.pressed ? 0.8 : 1.0)
+                        // Couleur grise si pas de contact
+                        color: (!isServiceReady || !isIgnitionOn || isScanning) ? T.Theme.bgMain : T.Theme.main
+                        opacity: (!isServiceReady || !isIgnitionOn || isScanning) ? 0.5 : (btnScanArea.pressed ? 0.8 : 1.0)
 
                         Text {
                             anchors.centerIn: parent
                             text: isScanning ? "ANALYSE EN COURS..." : "LANCER LE DIAGNOSTIC"
-                            color: isServiceReady ? "white" : T.Theme.unselected
+                            color: (isServiceReady && isIgnitionOn) ? "white" : T.Theme.unselected
                             font.bold: true
                         }
 
                         MouseArea {
                             id: btnScanArea
                             anchors.fill: parent
-                            enabled: isServiceReady && !isScanning
+                            // Désactivé si pas de contact
+                            enabled: isServiceReady && isIgnitionOn && !isScanning
                             cursorShape: Qt.PointingHandCursor
                             onClicked: bridge.requestDiagnosticScan()
                         }
@@ -151,21 +157,21 @@ Item {
                         Layout.fillWidth: true; Layout.preferredHeight: 50
                         radius: 8
                         color: "transparent"
-                        border.color: (isServiceReady && hasErrors) ? "#ff4444" : Qt.rgba(1,1,1,0.1)
+                        border.color: (isServiceReady && isIgnitionOn && hasErrors) ? "#ff4444" : Qt.rgba(1,1,1,0.1)
                         border.width: 2
-                        opacity: (isServiceReady && hasErrors) ? (btnClearArea.pressed ? 0.5 : 1.0) : 0.3
+                        opacity: (isServiceReady && isIgnitionOn && hasErrors) ? (btnClearArea.pressed ? 0.5 : 1.0) : 0.3
 
                         Text {
                             anchors.centerIn: parent
                             text: "EFFACER LES DÉFAUTS"
-                            color: (isServiceReady && hasErrors) ? "#ff4444" : T.Theme.unselected
+                            color: (isServiceReady && isIgnitionOn && hasErrors) ? "#ff4444" : T.Theme.unselected
                             font.bold: true
                         }
 
                         MouseArea {
                             id: btnClearArea
                             anchors.fill: parent
-                            enabled: isServiceReady && hasErrors && !isScanning
+                            enabled: isServiceReady && isIgnitionOn && hasErrors && !isScanning
                             cursorShape: Qt.PointingHandCursor
                             onClicked: console.log("Demande d'effacement")
                         }
@@ -195,7 +201,7 @@ Item {
                     color: "white"; font.pixelSize: 20; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter
                 }
                 Text {
-                    text: "Appuyez sur 'Lancer le diagnostic' pour interroger\nle calculateur moteur de votre véhicule."
+                    text: "Mettez le contact et lancez l'analyse pour interroger\nle calculateur moteur de votre véhicule."
                     color: T.Theme.unselected; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; anchors.horizontalCenter: parent.horizontalCenter
                 }
             }

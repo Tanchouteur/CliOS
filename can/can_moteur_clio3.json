@@ -11,7 +11,7 @@
     "name": "ENGINE_TORQUE",
     "signals": {
       "driver_torque_request": { "start_byte": 0, "size": 1, "factor": 2.0, "offset": -100.0 },
-      "torque_ecu": { "start_byte": 2, "size": 1 }
+      "torque_available": { "start_byte": 2, "size": 1 }
     }
   },
 
@@ -19,8 +19,8 @@
     "name": "ENGINE_DATA",
     "signals": {
       "rpm": { "start_byte": 0, "size": 2, "endian": "big", "factor": 0.125 },
-      "accel_pos": { "start_byte": 3, "size": 1, "offset": -16 },
-      "accel_2": { "start_byte": 4, "size": 1 },
+      "accel_pos": { "start_byte": 3, "size": 1, "offset": -16, "factor": 0.4201 },
+      "accel_computed": { "start_byte": 4, "size": 1 },
       "pedals": {
         "start_byte": 5,
         "bits": {
@@ -46,17 +46,21 @@
   },
 
   "0x284": {
-    "name": "WHEEL_SPEED1",
+    "name": "WHEEL_SPEED_FRONT",
     "signals": {
-        "wheel1": { "start_byte": 0, "size": 3, "endian": "big"},
-        "wheel2": { "start_byte": 3, "size": 3, "endian": "big"}
+      "wheel_fl_speed": { "start_byte": 0, "size": 2, "endian": "big", "factor": 0.005 },
+      "wheel_fr_speed": { "start_byte": 2, "size": 2, "endian": "big", "factor": 0.005 },
+      "wheel_fl_status": { "start_byte": 4, "size": 1 },
+      "wheel_fr_status": { "start_byte": 5, "size": 1 }
     }
   },
   "0x285": {
-    "name": "WHEEL_SPEED1",
+    "name": "WHEEL_SPEED_REAR",
     "signals": {
-        "wheel3": { "start_byte": 0, "size": 3, "endian": "big"},
-        "wheel4": { "start_byte": 3, "size": 3, "endian": "big"}
+      "wheel_rl_speed": { "start_byte": 0, "size": 2, "endian": "big", "factor": 0.005 },
+      "wheel_rr_speed": { "start_byte": 2, "size": 2, "endian": "big", "factor": 0.005 },
+      "wheel_rl_status": { "start_byte": 4, "size": 1 },
+      "wheel_rr_status": { "start_byte": 5, "size": 1 }
     }
   },
 
@@ -73,7 +77,8 @@
     "name": "ENGINE_ENV",
     "signals": {
       "engine_temp": { "start_byte": 0, "size": 1, "offset": -40.0 },
-      "fuel_used": { "start_byte": 1, "size": 1, "endian": "little", "factor": 0.00008 },
+      "fuel_used": { "start_byte": 1, "size": 1, "endian": "big", "factor": 0.00008 },
+      "gear": {"start_byte": 2, "size": 1 },
       "glow_plug_status": { "start_byte": 3, "size": 1 },
       "vitesse_regulateur": { "start_byte": 4, "size": 1 },
       "regulateur_mode": { "start_byte": 5, "size": 1, "mask": "0x0F" },

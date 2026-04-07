@@ -1,6 +1,6 @@
 {
     "theme": {
-        "main": "#ff0068"
+        "main": "#ff00bc"
     },
     "tachometer": {
         "max_rpm": 6000,
@@ -17,10 +17,10 @@
         "reserve_percentage": 0.15
     },
     "engine_temp": {
-        "min_display": 45,
-        "optimal": 90,
+        "min_display": 40,
+        "optimal": 80,
         "warning": 105,
-        "max_display": 130
+        "max_display": 120
     },
     "transmission": {
         "tolerance": 5.0,

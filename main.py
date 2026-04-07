@@ -10,12 +10,14 @@ from src.driver import Slcan
 from src.mock_driver import MockProvider
 from src.services.can_service import CanService
 from src.services.diagnostic_service import DiagnosticService
+from src.services.engine_sound_service import EngineSoundService
 from src.services.led_service import BleLedController
 from src.services.notification_service import NotificationService
 from src.services.orchestrator import SystemOrchestrator
 from src.services.trip_stats_service import TripStatsService
 from src.vehicle import VehicleAPI
 from src.qt_bridge import DashboardBridge
+from src.services.dynamics_service import DynamicsService
 
 
 # --- Console de Débogage ---
@@ -40,7 +42,7 @@ def ui_loop(api, stop_event):
                     status = "\033[92mON\033[0m" if val else "\033[91mOFF\033[0m"
                     print(f" {key:<25} : {status}")
                 elif isinstance(val, float):
-                    print(f" {key:<25} : {val:.1f}")
+                    print(f" {key:<25} : {val:.3f}")
                 else:
                     print(f" {key:<25} : {val}")
 
@@ -60,6 +62,7 @@ def main():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CAN_DIR = os.path.join(BASE_DIR, "can")
     CONFIG_DIR = os.path.join(BASE_DIR, "config")
+    SOUNDS_DIR = os.path.join(BASE_DIR, "assets", "sounds")
 
     with open(os.path.join(CONFIG_DIR, args.conf), 'r', encoding='utf-8') as f:
         vehicle_config = json.load(f)
@@ -81,11 +84,14 @@ def main():
     diag_service = DiagnosticService(api, can_provider)
     led_service = BleLedController()
     stats_service = TripStatsService(api, vehicle_config)
+    dynamics_service = DynamicsService(api)
+    sound_file_path = os.path.join(SOUNDS_DIR, "gtr.wav")
+    sound_service = EngineSoundService(api, audio_path=sound_file_path)
 
     can_service = CanService(
         name="CAN_Moteur",
         api=api,
-        dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),  # Ton bon chemin JSON
+        dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),
         provider=can_provider,
         obd_callback=diag_service.receive_obd_frame
     )
@@ -94,11 +100,12 @@ def main():
     orchestrator.add_service(diag_service)
     orchestrator.add_service(led_service)
     orchestrator.add_service(stats_service)
+    orchestrator.add_service(dynamics_service)
+    #orchestrator.add_service(sound_service)
 
     # --- 5. Lancement de l'IHM ---
     try:
         if args.ui == 'cli':
-            # Il faut impérativement démarrer les threads avant la boucle CLI infinie !
             orchestrator.start_all()
             ui_loop(api, orchestrator.stop_event)
 
@@ -116,11 +123,9 @@ def main():
             )
             engine.rootContext().setContextProperty("bridge", bridge)
 
-            # Le NotifService a besoin du bridge, on l'ajoute que si on est en GUI
             notif_service = NotificationService(bridge)
             orchestrator.add_service(notif_service)
 
-            # Démarrage de tous les threads juste avant de charger le QML
             orchestrator.start_all()
 
             engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))

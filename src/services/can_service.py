@@ -1,7 +1,4 @@
-import os
 import threading
-from src.driver import Slcan
-from src.mock_driver import MockProvider
 from src.parser import DbcParser
 from src.services.base_service import BaseService
 from src.signal_processor import SignalProcessor

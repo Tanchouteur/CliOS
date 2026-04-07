@@ -32,6 +32,9 @@ class TripStatsService(BaseService):
         self.last_saved_odo = self.storage.get("last_odometer", 0.0)
         self.last_revision_odo = self.storage.get("last_revision_odo", 0.0)
 
+        # NOUVEAU : Chargement du prix
+        self.fuel_price = self.storage.get("last_fuel_price", 1.70)
+
         init_trip_a = max(0.0, self.last_saved_odo - self.trip_a_marker)
         init_trip_b = max(0.0, self.last_saved_odo - self.trip_b_marker)
         init_avg_cons = (self.fuel_b_accumulated / init_trip_b * 100.0) if init_trip_b > 0.05 else 0.0
@@ -40,14 +43,23 @@ class TripStatsService(BaseService):
         # --- Variables de calcul (Conso) ---
         self.last_fuel_avg = None
         self.last_time_avg = time.time()
-        self.inst_window = deque(maxlen=10)
+
+        # Fenêtre glissante ultra-courte (1 seconde) pour éviter le bruit
+        self.inst_window = deque(maxlen=5)
         self.last_fuel_inst = None
         self.last_time_inst = time.time()
+
+        # Bouclier Absolu de Carburant (Anti Wrap-around)
+        self._last_raw_fuel = None
+        self._absolute_fuel_session = 0.0
 
         # --- Le Dictionnaire Public (Lu par le Bridge) ---
         self.stats = {
             # Session de conduite (Moteur Allumé)
-            "is_active": False, "distance_km": 0.0, "fuel_used_l": 0.0,
+            "is_active": False, "distance_km": 0.0,
+            "session_fuel_l": 0.0,
+            "session_cost": 0.0,  # NOUVEAU : Coût en euros
+            "fuel_price": self.fuel_price,  # NOUVEAU : Prix au litre
             "avg_rpm": 0, "coasting_km": 0.0, "aggressivity_pct": 0.0, "shift_time_sec": 0.0,
 
             # Global & Persistant
@@ -68,8 +80,8 @@ class TripStatsService(BaseService):
 
     def _reset_session_accumulators(self, last_odo):
         """Remet à zéro uniquement les données du trajet en cours."""
-        self._start_odo = last_odo
-        self._session_distance_m = 0.0
+        self._start_odo = last_odo if last_odo is not None else 0.0
+        self._session_distance_km = 0.0
         self._rpm_sum = 0.0
         self._rpm_count = 0
         self._accel_sum = 0.0
@@ -79,6 +91,11 @@ class TripStatsService(BaseService):
         self._shift_count = 0
         self._is_shifting = False
         self._shift_start = 0.0
+
+        # Remise à zéro du carburant absolu pour ce trajet
+        self._absolute_fuel_session = 0.0
+        self.stats["session_fuel_l"] = 0.0
+        self.stats["session_cost"] = 0.0  # NOUVEAU : On remet le prix à zéro au démarrage
 
     # ==========================================
     # COMMANDES UTILISATEUR
@@ -105,6 +122,13 @@ class TripStatsService(BaseService):
         self.stats["km_before_service"] = self._revision_interval
         self.stats["service_warning"] = False
 
+    # NOUVEAU : Modifier le prix du carburant
+    def set_fuel_price(self, new_price: float):
+        """Met à jour le prix au litre après un passage à la pompe."""
+        self.fuel_price = new_price
+        self.storage.set("last_fuel_price", new_price)
+        self.stats["fuel_price"] = new_price
+
     # ==========================================
     # CYCLE DE VIE DU THREAD
     # ==========================================
@@ -128,7 +152,7 @@ class TripStatsService(BaseService):
 
                 data = self.api._data.copy()
                 current_odo = data.get('odometer')
-                current_fuel = data.get('fuel_used')
+                raw_fuel = data.get('fuel_used')
                 current_speed = data.get('speed', 0.0)
                 ignition = data.get('ignition_on', False) or data.get('key_run', False)
 
@@ -138,18 +162,39 @@ class TripStatsService(BaseService):
 
                 # --- GESTION DE LA SESSION ---
                 if ignition and not self.stats["is_active"]:
-                    self._reset_session_accumulators(data.get('odometer'))
+                    self._reset_session_accumulators(current_odo)
                     self.stats["is_active"] = True
 
                 elif not ignition and self.stats["is_active"]:
                     self.stats["is_active"] = False
 
+                # --- MAGIE : Accumulateur Absolu de Carburant ---
+                if raw_fuel is not None:
+                    if self._last_raw_fuel is not None:
+                        delta_f = raw_fuel - self._last_raw_fuel
+
+                        if delta_f < 0:
+                            delta_f += 0.02048
+                    else:
+                        delta_f = 0.0
+
+                    self._last_raw_fuel = raw_fuel
+
+                    if self.stats["is_active"]:
+                        self._absolute_fuel_session += delta_f
+                        self.stats["session_fuel_l"] = round(self._absolute_fuel_session, 2)
+
+                        # NOUVEAU : Calcul du prix en temps réel
+                        self.stats["session_cost"] = round(self._absolute_fuel_session * self.fuel_price, 2)
+
+                perfect_fuel_stream = self._absolute_fuel_session if self.stats["is_active"] else None
+
                 # --- BOUCLE RAPIDE (~50Hz) : Calculs instantanés ---
-                self._calc_fast_telemetry(data, dt, current_time, current_speed, current_odo)
+                self._calc_fast_telemetry(data, dt, current_time, current_speed, current_odo, perfect_fuel_stream)
 
                 # --- BOUCLE LENTE (1Hz) : Calculs Globaux ---
                 if current_time - last_calc_time >= 1.0:
-                    self._calc_slow_telemetry(current_odo, current_fuel, current_time)
+                    self._calc_slow_telemetry(current_odo, perfect_fuel_stream, current_time)
                     last_calc_time = current_time
 
                 time.sleep(0.020)
@@ -159,13 +204,13 @@ class TripStatsService(BaseService):
     # ==========================================
     # ROUTINES MATHÉMATIQUES
     # ==========================================
-    def _calc_fast_telemetry(self, data, dt, current_time, current_speed, current_odo):
+    def _calc_fast_telemetry(self, data, dt, current_time, current_speed, current_odo, perfect_fuel):
         """Calculs nécessitant une haute fréquence (Conso instantanée, Rapport, Session)."""
         rpm = data.get('rpm', 0)
         accel = data.get('accel_pos', 0.0)
+        brake = data.get('brake', False)
         clutch = data.get('clutch', False)
         reverse = data.get('reverse_engaged', False)
-        current_fuel = data.get('fuel_used')
 
         # 1. Calcul du rapport de boîte
         if reverse:
@@ -182,35 +227,40 @@ class TripStatsService(BaseService):
             self.stats["gear"] = best_gear
 
         # 2. Conso Instantanée
-        if current_fuel is not None and self.last_fuel_inst is not None:
+        if perfect_fuel is not None and self.last_fuel_inst is not None:
             dt_inst = current_time - self.last_time_inst
-            refresh_rate = 0.2 if accel > 5.0 else 1.0
 
-            if dt_inst >= refresh_rate:
-                delta_fuel = current_fuel - self.last_fuel_inst if current_fuel >= self.last_fuel_inst else current_fuel
+            if dt_inst >= 0.2:
+                delta_fuel = perfect_fuel - self.last_fuel_inst
                 delta_dist = current_speed * (dt_inst / 3600.0)
 
                 self.inst_window.append((delta_fuel, delta_dist))
-                w_fuel, w_dist = sum(i[0] for i in self.inst_window), sum(i[1] for i in self.inst_window)
+                w_fuel = sum(i[0] for i in self.inst_window)
+                w_dist = sum(i[1] for i in self.inst_window)
 
-                self.stats["inst_cons"] = round((w_fuel / w_dist) * 100.0,
-                                                1) if w_dist > 0.001 and current_speed > 3.0 else 0.0
-                self.last_fuel_inst, self.last_time_inst = current_fuel, current_time
-        elif current_fuel is not None:
-            self.last_fuel_inst = current_fuel
+                if w_dist > 0.001 and current_speed > 3.0:
+                    raw_inst = (w_fuel / w_dist) * 100.0
+                    self.stats["inst_cons"] = min(99.9, round(raw_inst, 1))
+                else:
+                    self.stats["inst_cons"] = 0.0
+
+                self.last_fuel_inst = perfect_fuel
+                self.last_time_inst = current_time
+        elif perfect_fuel is not None:
+            self.last_fuel_inst = perfect_fuel
 
         # 3. Accumulateurs de Session & G-Meter
         if self.stats["is_active"]:
-
-            self._session_distance_m = current_odo - self._start_odo
+            self._session_distance_km += current_speed * (dt / 3600.0)
 
             if rpm > 0:
                 self._rpm_sum += rpm
                 self._rpm_count += 1
-            if accel > 0:
+
+            if accel > 2.0:
                 self._accel_sum += accel
                 self._accel_count += 1
-            elif current_speed > 5.0:
+            elif current_speed > 5.0 and not brake:
                 self._coasting_dist += current_speed * (dt / 3600.0)
 
             if clutch and not self._is_shifting:
@@ -222,7 +272,6 @@ class TripStatsService(BaseService):
                     self._shift_time_sum += duration
                     self._shift_count += 1
 
-            # --- CORRECTION G-METER : Indentation réparée ---
             now = time.time()
             dt_g = now - self._last_g_time
 
@@ -233,7 +282,7 @@ class TripStatsService(BaseService):
                 self._prev_speed = current_speed
                 self._last_g_time = now
 
-    def _calc_slow_telemetry(self, current_odo, current_fuel, current_time):
+    def _calc_slow_telemetry(self, current_odo, perfect_fuel, current_time):
         """Calculs lents (Trip A/B, Autonomie, Maintenance, Sauvegarde)."""
         if self.last_saved_odo == 0.0 and current_odo > 0:
             self.last_saved_odo = self.trip_a_marker = self.trip_b_marker = self.last_revision_odo = current_odo
@@ -244,11 +293,12 @@ class TripStatsService(BaseService):
         self.stats["trip_b"] = trip_b_dist
 
         # Conso Moyenne B
-        if current_fuel is not None:
+        if perfect_fuel is not None:
             if self.last_fuel_avg is not None:
-                delta = current_fuel - self.last_fuel_avg if current_fuel >= self.last_fuel_avg else current_fuel
-                self.fuel_b_accumulated += delta
-            self.last_fuel_avg = current_fuel
+                delta = perfect_fuel - self.last_fuel_avg
+                if delta > 0:
+                    self.fuel_b_accumulated += delta
+            self.last_fuel_avg = perfect_fuel
 
         self.stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                          1) if trip_b_dist > 0.05 else 0.0
@@ -267,14 +317,9 @@ class TripStatsService(BaseService):
 
         # --- Stats de Session ---
         if self.stats["is_active"]:
-            # CORRECTION : On utilise l'intégrateur de vitesse pour la distance
-            self.stats["distance_km"] = round(self._session_distance_m / 1000.0, 2)
-
-            if current_fuel is not None:
-                self.stats["fuel_used_l"] = round(current_fuel, 2)
-
+            self.stats["distance_km"] = round(self._session_distance_km, 1)
             self.stats["avg_rpm"] = int(self._rpm_sum / self._rpm_count) if self._rpm_count > 0 else 0
-            self.stats["coasting_km"] = round(self._coasting_dist, 2)
+            self.stats["coasting_km"] = round(self._coasting_dist, 1)
             self.stats["aggressivity_pct"] = round(self._accel_sum / self._accel_count,
                                                    1) if self._accel_count > 0 else 0.0
             self.stats["shift_time_sec"] = round(self._shift_time_sum / self._shift_count,

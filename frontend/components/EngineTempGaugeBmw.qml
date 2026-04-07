@@ -13,9 +13,9 @@ Item {
     property real smoothTemp: engineTemp
     Behavior on smoothTemp { SpringAnimation { spring: 10.0; damping: 0.8 } }
 
-    property real minTemp: 50.0
-    property real maxTemp: 130.0
-    property int intervalG: 40 // Pour avoir les traits 50, 90, 130
+    property real minTemp: bridge.config.engine_temp.min_display !== undefined ? bridge.config.engine_temp.min_display : 50.0
+    property real maxTemp: bridge.config.engine_temp.max_display !== undefined ? bridge.config.engine_temp.max_display : 130.0
+    property int intervalG: 40
 
     // --- Géométrie Interne ---
     // Pas de miroir ici, on prend directement les coordonnées du Tacho
@@ -137,7 +137,7 @@ Item {
         spacing: 0
 
         Text {
-            text: Math.min(Math.max(gaugeRoot.smoothTemp, gaugeRoot.minTemp), 150.0).toFixed(0)
+            text: gaugeRoot.smoothTemp.toFixed(0)
             color: Theme.textMain
             font.pixelSize: 18
             font.bold: true
