@@ -6,7 +6,7 @@ QtObject {
     readonly property color bgMain: "#0e0e10"
     readonly property color bgDimmed: "#1a1a1c"
 
-    readonly property color textMain: "#f1eeee"
+    readonly property color textMain: "#f4f4f4"
     readonly property color textDimmed: "#aaFFFFFF"
     readonly property color unselected: "#888888"
 
