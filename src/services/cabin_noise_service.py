@@ -25,7 +25,7 @@ class CabinNoiseService(BaseService):
 
         if rms > 0:
             raw_db = 20 * np.log10(rms)
-            db_spl = raw_db + 95.0 # calibrage
+            db_spl = raw_db + 98.0 # calibrage
 
             db_text = f"{db_spl:.1f}"
             self.api._data["audio_db_text"] = db_text
