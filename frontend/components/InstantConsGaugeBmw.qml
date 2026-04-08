@@ -5,15 +5,15 @@ Item {
     id: gaugeRoot
 
     // --- Propriétés Publiques ---
-    property real referenceWidth: 500 // Base de calcul pour l'inversion horizontale (effet miroir)
+    property real referenceWidth: 500
     property real p0X: 0
     property real p0Y: 0
     property real vanishingPointX: 0
     property real vanishingPointY: 0
 
-    property real smoothInstCons: 0.0
     property real maxInstCons: 20.0
-    property real avgCons: 6.0
+    property real smoothInstCons: bridge.stats.inst_cons ?? -1.0
+    property real avgCons: bridge.stats.avg_cons_b ?? -1.0
     property int intervalG: 5
 
     // --- Géométrie Interne ---

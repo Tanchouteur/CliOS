@@ -4,8 +4,6 @@ import "../../style" as T
 
 Item {
     id: root
-
-    // Raccourci sécurisé pour lire les stats sans erreur au lancement
     property var trip: bridge.stats !== undefined ? bridge.stats : {}
 
     // Sécurité anti-division par zéro pour la jauge de roue libre

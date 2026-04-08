@@ -14,11 +14,15 @@ Item {
         z: -100
     }
 
+    // CPU avec tout : 34%
+
+    // CPU : 7%
     StatusBar {
         anchors.top: parent.top
         anchors.left: parent.left
     }
 
+    //  CPU : 2%
     SplMeterWidget {
         anchors.top: parent.top
         anchors.right: parent.right
@@ -26,7 +30,8 @@ Item {
         anchors.rightMargin: 20
         z: 100
     }
-    // --- Conteneur Central (Sécurité et Informations) ---
+
+    // --- Conteneur Central (Sécurité et Informations) ---   CPU : 29%
     Item {
         id: centerGroup
         anchors.centerIn: root
@@ -46,18 +51,16 @@ Item {
             source: "../assets/Renault-Logo-w.png"
             anchors.centerIn: parent
             fillMode: Image.PreserveAspectFit
-            opacity: 0.1
             width: parent.width * 0.25
         }
 
         CarStatusWidget {
             anchors.centerIn: parent
-            scale: 1.4
         }
     }
 
     // ==========================================
-    // INSTRUMENTATION GAUCHE (Vitesse / Essence)
+    // INSTRUMENTATION GAUCHE (Vitesse / Essence)   CPU : 7%
     // ==========================================
     Item {
         id: leftGauges
@@ -80,13 +83,13 @@ Item {
             id: bigFuel
             width: 500; height: 400
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: 600 // Caché en bas par défaut
+            anchors.verticalCenterOffset: 600
             anchors.left: parent.left
         }
     }
 
     // ==========================================
-    // INSTRUMENTATION DROITE (Tours / Température)
+    // INSTRUMENTATION DROITE (Tours / Température) CPU : 5%
     // ==========================================
     Item {
         id: rightGauges
@@ -109,7 +112,7 @@ Item {
             id: bigTemp
             width: 500; height: 400
             anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: 600 // Caché en bas par défaut
+            anchors.verticalCenterOffset: 600
             anchors.right: parent.right
         }
     }
@@ -136,7 +139,7 @@ Item {
     }
 
     // ==========================================
-    // BANDEAU D'INFORMATIONS INFÉRIEUR
+    // BANDEAU D'INFORMATIONS INFÉRIEUR             CPU : 6%
     // ==========================================
     Item {
         id: bottomBar
@@ -286,7 +289,7 @@ Item {
     }
 
     // ==========================================
-    // MOTEUR D'ANIMATION (GLISSEMENT HORIZONTAL)
+    // MOTEUR D'ANIMATION (GLISSEMENT HORIZONTAL) CPU : 0.5%
     // ==========================================
     states: [
         State {

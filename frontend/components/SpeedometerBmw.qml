@@ -294,6 +294,5 @@ Item {
 
         smoothInstCons: root.smoothInstCons
         maxInstCons: root.max_inst_cons
-        avgCons: bridge.data.avg_cons_b !== undefined ? bridge.data.avg_cons_b : 6.0
     }
 }

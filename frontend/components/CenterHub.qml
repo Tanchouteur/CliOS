@@ -9,11 +9,11 @@ Item {
     height: 530
 
     readonly property var tabs: [
-        { name: "Race"     },
-        { name: "Stats"    },
-        { name: "Diag"     },
-        { name: "Settings" },
-        { name: "Debug"  }
+        { name: "Race"      },
+        { name: "Stats"     },
+        { name: "Diag"      },
+        { name: "Settings"  },
+        { name: "Debug"     }
     ]
     property int  currentIndex: 1
     readonly property real borderW:     1.5
@@ -22,6 +22,7 @@ Item {
 
     // Panneau de Contenu
     Rectangle {
+        z:20
         id: panel
         anchors {
             top:    tabRow.bottom
@@ -54,16 +55,17 @@ Item {
             clip: true
 
 
-            RaceTab     { visible: root.currentIndex === 0; anchors.fill: parent }
-            StatsTab    { visible: root.currentIndex === 1; anchors.fill: parent }
-            DiagTab     { visible: root.currentIndex === 2; anchors.fill: parent }
-            SettingsTab { visible: root.currentIndex === 3; anchors.fill: parent }
-            DebugTab    { visible: root.currentIndex === 4; anchors.fill: parent }
+            RaceTab     { visible: root.currentIndex === 0; anchors.fill: parent; enabled: visible}
+            StatsTab    { visible: root.currentIndex === 1; anchors.fill: parent; enabled: visible }
+            DiagTab     { visible: root.currentIndex === 2; anchors.fill: parent; enabled: visible }
+            SettingsTab { visible: root.currentIndex === 3; anchors.fill: parent; enabled: visible }
+            DebugTab    { visible: root.currentIndex === 4; anchors.fill: parent; enabled: visible }
         }
     }
 
     // Barre d'onglets
     RowLayout {
+        z: 2
         id: tabRow
         anchors {
             top:   parent.top
