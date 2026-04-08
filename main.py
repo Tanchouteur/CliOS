@@ -15,6 +15,7 @@ from src.services.engine_sound_service import EngineSoundService
 from src.services.led_service import BleLedController
 from src.services.notification_service import NotificationService
 from src.services.orchestrator import SystemOrchestrator
+from src.services.system_monitor_service import SystemMonitorService
 from src.services.trip_stats_service import TripStatsService
 from src.vehicle import VehicleAPI
 from src.qt_bridge import DashboardBridge
@@ -89,6 +90,7 @@ def main():
     sound_file_path = os.path.join(SOUNDS_DIR, "gtr.wav")
     engine_sound_service = EngineSoundService(api, audio_path=sound_file_path)
     cabin_sound_service = CabinNoiseService(api)
+    monitor_service = SystemMonitorService(api)
 
     can_service = CanService(
         name="CAN_Moteur",
@@ -105,6 +107,7 @@ def main():
     orchestrator.add_service(dynamics_service)
     #orchestrator.add_service(engine_sound_service)
     orchestrator.add_service(cabin_sound_service)
+    orchestrator.add_service(monitor_service)
 
     # --- 5. Lancement de l'IHM ---
     try:
