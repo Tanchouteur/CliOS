@@ -7,7 +7,6 @@ Item {
     property var vData: bridge.data !== undefined ? bridge.data : {}
     property var vStats: bridge.stats !== undefined ? bridge.stats : {}
 
-    // ---> ON DÉPLACE LA FONCTION ICI (AU NIVEAU ROOT) <---
     function getTireColor(isSlipping, isLocked) {
         if (isLocked) return "#ff0000"    // Rouge = Blocage
         if (isSlipping) return "#0088ff"  // Bleu = Patinage
@@ -63,7 +62,7 @@ Item {
                     id: pedalBar
                     anchors.bottom: parent.bottom
                     width: parent.width
-                    height: parent.height * ((vData.accel_pos !== undefined ? vData.accel_pos : 0) / 100)
+                    height: parent.height * ((vData.accel_pos !== undefined ? vData.accel_pos : 0) / 238)
                     color: T.Theme.main
                     opacity: 0.4
 
@@ -100,7 +99,7 @@ Item {
                     }
 
                     Text {
-                        text: Math.round(vData.accel_pos || 0) + " / " + Math.round(vData.accel_real || 0) + "%"
+                        text: Math.round(vData.accel_pos || 0) + " / " + Math.round(vData.accel_computed || 0) + "%"
                         color: "white"
                         font.pixelSize: 18
                         font.bold: true
@@ -110,7 +109,7 @@ Item {
             }
         }
 
-        // ─── CENTRE : G-METER & DYNAMIQUES ROUES (GT3 STYLE) ───
+        // ─── CENTRE : G-METER & DYNAMIQUES ROUES ───
         Rectangle {
             Layout.fillWidth: true; Layout.fillHeight: true
             color: "transparent"
@@ -222,7 +221,7 @@ Item {
                     anchors.bottom: parent.bottom
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: parent.width * 0.5
-                    height: parent.height * (Math.min(vData.torque_ecu !== undefined ? vData.torque_ecu : (vData.driver_torque_request || 0), 300) / 300)
+                    height: parent.height * (vData.driver_torque_request / 300)
                     color: T.Theme.mainLight
                     opacity: 0.9
                     radius: 4
@@ -238,13 +237,13 @@ Item {
                     spacing: 2
                     z: 2
                     Text { text: "TORQUE"; color: "white"; font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                    Text { text: Math.round(vData.torque_ecu !== undefined ? vData.torque_ecu : (vData.driver_torque_request || 0)); color: "white"; font.pixelSize: 34; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: Math.round(vData.driver_torque_request !== undefined ? vData.driver_torque_request : -100); color: "white"; font.pixelSize: 34; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                     Text { text: "MAX: " + Math.round(vData.torque_available || 0) + " Nm"; color: Qt.rgba(1,1,1,0.7); font.pixelSize: 14; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
             // Engine Load
-            Rectangle {
+            /*Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 120
                 radius: 12; color: T.Theme.bgDimmed
                 clip: true
@@ -263,7 +262,7 @@ Item {
                     Text { text: "LOAD"; color: T.Theme.unselected; font.bold: true; font.pixelSize: 12; anchors.horizontalCenter: parent.horizontalCenter }
                     Text { text: Math.round(vData.engine_load || 0) + "%"; color: "white"; font.bold: true; font.pixelSize: 24; anchors.horizontalCenter: parent.horizontalCenter }
                 }
-            }
+            }*/
         }
     }
 }

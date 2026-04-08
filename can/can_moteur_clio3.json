@@ -19,7 +19,7 @@
     "name": "ENGINE_DATA",
     "signals": {
       "rpm": { "start_byte": 0, "size": 2, "endian": "big", "factor": 0.125 },
-      "accel_pos": { "start_byte": 3, "size": 1, "offset": -16, "factor": 0.4201 },
+      "accel_pos": { "start_byte": 3, "size": 1, "offset": -8, "factor": 0.4201 },
       "accel_computed": { "start_byte": 4, "size": 1 },
       "pedals": {
         "start_byte": 5,
