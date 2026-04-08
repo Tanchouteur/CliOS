@@ -62,7 +62,7 @@ Item {
                     id: pedalBar
                     anchors.bottom: parent.bottom
                     width: parent.width
-                    height: parent.height * ((vData.accel_pos !== undefined ? vData.accel_pos : 0) / 238)
+                    height: parent.height * ((vData.accel_pos !== undefined ? vData.accel_pos : 0) / 100)
                     color: T.Theme.main
                     opacity: 0.4
 

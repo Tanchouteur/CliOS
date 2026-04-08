@@ -78,7 +78,7 @@
     "signals": {
       "engine_temp": { "start_byte": 0, "size": 1, "offset": -40.0 },
       "fuel_used": { "start_byte": 1, "size": 1, "endian": "big", "factor": 0.00008 },
-      "gear_ratio": {"start_byte": 2, "size": 1 },
+      "gear_raw": {"start_byte": 2, "size": 1 },
       "glow_plug_status": { "start_byte": 3, "size": 1 },
       "vitesse_regulateur": { "start_byte": 4, "size": 1 },
       "regulateur_mode": { "start_byte": 5, "size": 1, "mask": "0x0F" },

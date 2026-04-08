@@ -17,17 +17,23 @@ class TripStatsService(BaseService):
 
         # --- Configuration Véhicule ---
         self._tank_capacity = config.get("tank_capacity", 50.0)
-        trans_config = config.get("transmission", {})
-        self._gear_ratios = trans_config.get("ratios", {})
-        self._gear_tolerance = trans_config.get("tolerance", 5.0)
-        self._last_gear_rpm = -100
-        self._last_gear_speed = -100
+
+        # Clés = Valeurs décimales (issues des hexadécimaux du bus CAN)
+        self._gear_map = {
+            100: "N",  # 0x64
+            106: "1",  # 0x6A
+            107: "1",  # 0x6B
+            109: "2",  # 0x6D
+            112: "3",  # 0x70
+            113: "4",  # 0x71
+            115: "5"  # 0x73
+        }
 
         revision_config = config.get("maintenance", {}).get("revision", {})
         self._revision_interval = revision_config.get("interval_km", 20000)
         self._revision_warning = revision_config.get("warning_threshold_km", 2000)
 
-        # --- Chargement de la Persistance (Disque Dur) ---
+        # --- Chargement de la Persistance ---
         self.trip_a_marker = self.storage.get("trip_a_marker", 0.0)
         self.trip_b_marker = self.storage.get("trip_b_marker", 0.0)
         self.fuel_b_accumulated = self.storage.get("fuel_b_accumulated", 0.0)
@@ -191,7 +197,7 @@ class TripStatsService(BaseService):
                 perfect_fuel_stream = self._absolute_fuel_session if self.stats["is_active"] else None
 
                 # --- BOUCLE RAPIDE (~50Hz) : Calculs instantanés ---
-                self._calc_fast_telemetry(self.api._data, dt, current_time, current_speed, current_odo, perfect_fuel_stream)
+                self._calc_fast_telemetry(self.api._data, dt, current_time, current_speed, perfect_fuel_stream)
 
                 # --- BOUCLE LENTE (1Hz) : Calculs Globaux ---
                 if current_time - last_calc_time >= 1.0:
@@ -205,30 +211,24 @@ class TripStatsService(BaseService):
     # ==========================================
     # ROUTINES MATHÉMATIQUES
     # ==========================================
-    def _calc_fast_telemetry(self, data, dt, current_time, current_speed, current_odo, perfect_fuel):
+    def _calc_fast_telemetry(self, data, dt, current_time, current_speed, perfect_fuel):
         rpm = data.get('rpm', 0)
         accel = data.get('accel_pos', 0.0)
         brake = data.get('brake', False)
         clutch = data.get('clutch', False)
         reverse = data.get('reverse_engaged', False)
 
-        # 1. Calcul du rapport de boîte
+        # Le signal brut venant du CAN (assure-toi de l'appeler 'gear_raw' dans ton JSON)
+        raw_gear = data.get('gear_raw')
+
+        # 1. Lecture directe du rapport de boîte (Ultra-rapide)
         if reverse:
             self.stats["gear"] = "R"
+        elif raw_gear is not None and raw_gear in self._gear_map:
+            # On utilise le dictionnaire pour traduire le nombre en texte
+            self.stats["gear"] = self._gear_map[raw_gear]
         elif clutch or current_speed < 3.0:
             self.stats["gear"] = "N"
-        else:
-            if abs(rpm - self._last_gear_rpm) > 50 or abs(current_speed - self._last_gear_speed) > 1.0:
-                current_ratio = rpm / current_speed if current_speed > 0 else 0
-                best_gear, smallest_diff = "N", float('inf')
-                for gear_name, target_ratio in self._gear_ratios.items():
-                    diff = abs(current_ratio - target_ratio)
-                    if diff <= self._gear_tolerance and diff < smallest_diff:
-                        smallest_diff, best_gear = diff, gear_name
-
-                self.stats["gear"] = best_gear
-                self._last_gear_rpm = rpm
-                self._last_gear_speed = current_speed
 
         # 2. Conso Instantanée
         if perfect_fuel is not None and self.last_fuel_inst is not None:
