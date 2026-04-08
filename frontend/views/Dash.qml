@@ -20,6 +20,13 @@ Item {
         anchors.left: parent.left
     }
 
+    SplMeterWidget {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 20
+        anchors.rightMargin: 20
+        z: 100
+    }
     // --- Conteneur Central (Sécurité et Informations) ---
     Item {
         id: centerGroup

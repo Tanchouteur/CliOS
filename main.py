@@ -8,6 +8,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 from src.driver import Slcan
 from src.mock_driver import MockProvider
+from src.services.cabin_noise_service import CabinNoiseService
 from src.services.can_service import CanService
 from src.services.diagnostic_service import DiagnosticService
 from src.services.engine_sound_service import EngineSoundService
@@ -86,7 +87,8 @@ def main():
     stats_service = TripStatsService(api, vehicle_config)
     dynamics_service = DynamicsService(api)
     sound_file_path = os.path.join(SOUNDS_DIR, "gtr.wav")
-    sound_service = EngineSoundService(api, audio_path=sound_file_path)
+    engine_sound_service = EngineSoundService(api, audio_path=sound_file_path)
+    cabin_sound_service = CabinNoiseService(api)
 
     can_service = CanService(
         name="CAN_Moteur",
@@ -101,7 +103,8 @@ def main():
     orchestrator.add_service(led_service)
     orchestrator.add_service(stats_service)
     orchestrator.add_service(dynamics_service)
-    #orchestrator.add_service(sound_service)
+    #orchestrator.add_service(engine_sound_service)
+    orchestrator.add_service(cabin_sound_service)
 
     # --- 5. Lancement de l'IHM ---
     try:

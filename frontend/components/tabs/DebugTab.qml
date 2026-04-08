@@ -1,18 +1,17 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
-import "../../style" as T // Ajuste le chemin vers ton thème si besoin
+import "../../style" as T
 
 Item {
     id: root
     anchors.fill: parent
 
-    // --- MODÈLE DE DONNÉES ---
     ListModel {
         id: debugModel
     }
 
-    // --- LE MOTEUR DE RAFRAÎCHISSEMENT (5 Hz) ---
+    // --- LE MOTEUR DE RAFRAICHISSEMENT---
     Timer {
         interval: 200
         running: true
@@ -22,7 +21,6 @@ Item {
 
             let currentKeys = Object.keys(bridge.data).sort();
 
-            // Si le backend a découvert de NOUVELLES variables, on reconstruit la liste
             if (currentKeys.length !== debugModel.count) {
                 debugModel.clear();
                 for (let i = 0; i < currentKeys.length; i++) {
@@ -32,14 +30,13 @@ Item {
                     debugModel.append({ "keyName": k, "keyValue": displayVal });
                 }
             }
-            // Sinon (régime de croisière), on met juste à jour les chiffres
+
             else {
                 for (let i = 0; i < currentKeys.length; i++) {
                     let k = currentKeys[i];
                     let val = bridge.data[k];
                     let displayVal = typeof val === "number" ? Number(val).toFixed(3) : String(val);
 
-                    // Comme les clés sont triées alphabétiquement des deux côtés, l'index i correspond parfaitement
                     debugModel.setProperty(i, "keyValue", displayVal);
                 }
             }

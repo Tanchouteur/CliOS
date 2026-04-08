@@ -20,7 +20,7 @@ Item {
     readonly property int  tabRadius:   10
     readonly property int  panelRadius: 14
 
-    // ─── PANEL PRINCIPAL ──────────────────────────────────────────────────────
+    // Panneau de Contenu
     Rectangle {
         id: panel
         anchors {
@@ -62,7 +62,7 @@ Item {
         }
     }
 
-    // ─── BARRE D'ONGLETS ──────────────────────────────────────────────────────
+    // Barre d'onglets
     RowLayout {
         id: tabRow
         anchors {

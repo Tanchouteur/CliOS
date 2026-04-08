@@ -19,12 +19,12 @@ Item {
 
     // --- Fonctions de style dynamiques ---
     function getStatusColor() {
-        if (!isServiceReady) return "#555555"          // Gris (Désactivé)
-        if (!isIgnitionOn) return "#ffaa00"            // Orange (En attente du contact)
-        if (isScanning) return T.Theme.main            // Bleu/Couleur thème
-        if (!hasScanned) return "white"                // Blanc neutre
-        if (hasErrors) return "#ff4444"                // Rouge
-        return "#00cc66"                               // Vert
+        if (!isServiceReady) return "#555555"
+        if (!isIgnitionOn) return "#ffaa00"
+        if (isScanning) return T.Theme.main
+        if (!hasScanned) return "white"
+        if (hasErrors) return "#ff4444"
+        return "#00cc66"
     }
 
     function getStatusText() {
@@ -41,7 +41,7 @@ Item {
         anchors.margins: 30
         spacing: 30
 
-        // ─── GAUCHE : PANNEAU DE CONTRÔLE ───
+        // panneau de contrôle
         Rectangle {
             Layout.preferredWidth: 350
             Layout.fillHeight: true
@@ -64,7 +64,7 @@ Item {
 
                 Item { Layout.fillHeight: true }
 
-                // -- Indicateur Visuel --
+                // Indicateur
                 Item {
                     Layout.preferredWidth: 160
                     Layout.preferredHeight: 160
@@ -76,7 +76,7 @@ Item {
                         color: "transparent"
                         border.width: 4
                         border.color: getStatusColor()
-                        // Opacité réduite si offline ou pas de contact
+
                         opacity: isScanning ? 0.3 : ((isServiceReady && isIgnitionOn) ? 1.0 : 0.3)
 
                         SequentialAnimation on scale {
@@ -105,7 +105,7 @@ Item {
                     }
                 }
 
-                // Texte de sous-titre dynamique
+                // Texte de status dynamique
                 Text {
                     text: {
                         if (!isServiceReady) return "Interface CAN non disponible."
@@ -122,16 +122,16 @@ Item {
 
                 Item { Layout.fillHeight: true }
 
-                // -- Boutons d'action --
+                // Boutons d'action
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 15
 
-                    // Bouton SCAN
+                    // Bouton
                     Rectangle {
                         Layout.fillWidth: true; Layout.preferredHeight: 50
                         radius: 8
-                        // Couleur grise si pas de contact
+
                         color: (!isServiceReady || !isIgnitionOn || isScanning) ? T.Theme.bgMain : T.Theme.main
                         opacity: (!isServiceReady || !isIgnitionOn || isScanning) ? 0.5 : (btnScanArea.pressed ? 0.8 : 1.0)
 
@@ -145,7 +145,6 @@ Item {
                         MouseArea {
                             id: btnScanArea
                             anchors.fill: parent
-                            // Désactivé si pas de contact
                             enabled: isServiceReady && isIgnitionOn && !isScanning
                             cursorShape: Qt.PointingHandCursor
                             onClicked: bridge.requestDiagnosticScan()
@@ -180,7 +179,7 @@ Item {
             }
         }
 
-        // ─── DROITE : RAPPORTS ET CODES DTC ───
+        // rapport
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -189,7 +188,7 @@ Item {
             border.color: Qt.rgba(1, 1, 1, 0.05)
             clip: true
 
-            // ÉTAT 1 : En attente du premier scan
+            // etat 1
             Column {
                 anchors.centerIn: parent
                 visible: !hasScanned && !isScanning
@@ -206,7 +205,7 @@ Item {
                 }
             }
 
-            // ÉTAT 2 : Scan terminé sans erreur
+            // etat 2
             Column {
                 anchors.centerIn: parent
                 visible: hasScanned && !hasErrors && !isScanning
@@ -219,7 +218,7 @@ Item {
                 }
             }
 
-            // ÉTAT 3 : La Liste des défauts
+            // etat 3
             ListView {
                 id: dtcList
                 anchors.fill: parent
@@ -238,7 +237,7 @@ Item {
                         anchors.fill: parent; anchors.margins: 15; spacing: 20
                         Text {
                             text: modelData
-                            color: "#ff4444"; font.pixelSize: 28; font.bold: true; Layout.alignment: Qt.AlignVCenter
+                            color: T.theme.danger; font.pixelSize: 28; font.bold: true; Layout.alignment: Qt.AlignVCenter
                         }
                         ColumnLayout {
                             Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter; spacing: 4

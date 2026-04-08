@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 
 QtObject {
-    // --- Couleurs de Base (Fonds et Textes) ---
+    // --- Couleurs de Base  ---
     readonly property color bgMain: "#0e0e10"
     readonly property color bgDimmed: "#1a1a1c"
 
@@ -11,7 +11,7 @@ QtObject {
     readonly property color unselected: "#888888"
 
     // --- Couleurs d'Alerte (Voyants) ---
-    readonly property color danger: "#e74c3c"
+    readonly property color danger: "#e73c3c"
     readonly property color success: "#2ecc71"
     readonly property color info: "#3498db"
     readonly property color warning: "#e67e22"
@@ -26,4 +26,6 @@ QtObject {
     property color secondaryDark: "#0088cc"
 
     property color redLine: "#ff1e00"
+
+    property string standardFont: "Arial"
 }

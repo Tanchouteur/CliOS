@@ -45,7 +45,7 @@ class NotificationService(BaseService):
                     print("[ERREUR NOTIF] Le bridge ou l'API n'est pas accessible.")
             except Exception as e:
                 print(f"\n[ERREUR FATALE NOTIF] Le service a planté : {e}")
-                traceback.print_exc()  # Affiche la ligne exacte de l'erreur
+                traceback.print_exc()
                 self.set_error(f"[Notif] Crash inattendu : {str(e)}")
 
             time.sleep(1.0)
@@ -55,10 +55,9 @@ class NotificationService(BaseService):
 
         if is_clutch_pressed:
             if self._states["clutch_start_time"] is None:
-                self._states["clutch_start_time"] = current_time  # Démarrage du chrono
+                self._states["clutch_start_time"] = current_time
 
-            # Si le chrono dépasse 5 secondes et qu'on n'a pas encore prévenu
-            elif (current_time - self._states["clutch_start_time"] > 5.0) and not self._states["clutch_warned"]:
+            elif (current_time - self._states["clutch_start_time"] > 5.0) and not self._states["clutch_warned"] and self.bridge._data["speed"] > 15:
                 self.bridge.send_notification("WARNING", "ATTENTION : EMBRAYAGE SOLLICITÉ", 4000)
                 self._states["clutch_warned"] = True
         else:
