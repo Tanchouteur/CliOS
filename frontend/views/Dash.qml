@@ -6,7 +6,6 @@ import "../style"
 Item {
     id: root
 
-    // Variable qui contrôle l'état de l'interface (Vrai = Arrêt, Faux = Conduite)
     property bool isParked: false
 
     Rectangle {

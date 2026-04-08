@@ -27,5 +27,7 @@ QtObject {
 
     property color redLine: "#ff1e00"
 
-    property string standardFont: "Arial"
+    readonly property string fontMain: "sans-serif"
+
+    readonly property string fontMono: "Courier"
 }

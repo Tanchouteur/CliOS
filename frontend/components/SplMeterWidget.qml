@@ -52,7 +52,7 @@ Rectangle {
             text: root.displayDb + " dB"
             font.pixelSize: 18
             font.bold: true
-            font.family: "Monospace"
+            //font.family: "Monospace"
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
 
             color: {

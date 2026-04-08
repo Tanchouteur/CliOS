@@ -85,7 +85,7 @@ Item {
                         text: keyName
                         color: T.Theme.textDimmed
                         font.pixelSize: 18
-                        font.family: "Monospace"
+                        //font.family: "Monospace"
                         Layout.fillWidth: true
                     }
 
@@ -94,7 +94,7 @@ Item {
                         color: T.Theme.mainLight
                         font.pixelSize: 20
                         font.bold: true
-                        font.family: "Monospace"
+                        //font.family: "Monospace"
                         Layout.alignment: Qt.AlignRight
                     }
                 }
