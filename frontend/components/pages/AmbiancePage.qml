@@ -54,7 +54,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 12
                 Text {
-                    text: "〈"
+                    text: "〈 "
                     color: backBtn.pressed ? T.Theme.unselected : T.Theme.textMain
                     font.pixelSize: 26
                     font.bold: true
@@ -207,7 +207,7 @@ Item {
                             if (!pressed) bridge.save_setting("theme.main", root.selectedColor.toString())
                         }
 
-                        background: Rectangle {
+                        Rectangle {
                             x: brightnessSlider.leftPadding
                             y: brightnessSlider.topPadding + brightnessSlider.availableHeight / 2 - height / 2
 
@@ -225,7 +225,7 @@ Item {
                             }
                         }
 
-                        handle: Rectangle {
+                        Rectangle {
                             x: brightnessSlider.leftPadding + brightnessSlider.visualPosition * (brightnessSlider.availableWidth - width)
                             y: brightnessSlider.topPadding + brightnessSlider.availableHeight / 2 - height / 2
 

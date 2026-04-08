@@ -10,9 +10,9 @@ StackView {
     // 1. LE MODÈLE ENRICHI (Titre + Description)
     readonly property var tiles: [
         { label: "Ambiance", desc: "Éclairage LED, couleurs et thèmes visuels", source: "../pages/AmbiancePage.qml" },
-        { label: "Audio",    desc: "Volumes, égaliseur et sources multimédias", source: "AudioPage.qml"    },
-        { label: "Véhicule", desc: "Aides à la conduite, portières et alertes", source: "VehiclePage.qml"  },
-        { label: "Système",  desc: "Connectivité, mises à jour et stockage",    source: "SystemPage.qml"   }
+        { label: "Audio",    desc: "Volumes, égaliseur et sources multimédias", source: "../pages/NonBuildPage.qml"    },
+        { label: "Véhicule", desc: "Etat vehicule, config et alertes",          source: "../pages/VehiclePage.qml"  },
+        { label: "Système",  desc: "Services, ",                                source: "../pages/NonBuildPage.qml"   }
     ]
 
     // 2. LA PAGE PRINCIPALE (Grille)
