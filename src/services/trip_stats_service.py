@@ -20,6 +20,8 @@ class TripStatsService(BaseService):
         trans_config = config.get("transmission", {})
         self._gear_ratios = trans_config.get("ratios", {})
         self._gear_tolerance = trans_config.get("tolerance", 5.0)
+        self._last_gear_rpm = -100
+        self._last_gear_speed = -100
 
         revision_config = config.get("maintenance", {}).get("revision", {})
         self._revision_interval = revision_config.get("interval_km", 20000)
@@ -31,8 +33,6 @@ class TripStatsService(BaseService):
         self.fuel_b_accumulated = self.storage.get("fuel_b_accumulated", 0.0)
         self.last_saved_odo = self.storage.get("last_odometer", 0.0)
         self.last_revision_odo = self.storage.get("last_revision_odo", 0.0)
-
-        # NOUVEAU : Chargement du prix
         self.fuel_price = self.storage.get("last_fuel_price", 1.70)
 
         init_trip_a = max(0.0, self.last_saved_odo - self.trip_a_marker)
@@ -55,11 +55,10 @@ class TripStatsService(BaseService):
 
         # --- Le Dictionnaire Public (Lu par le Bridge) ---
         self.stats = {
-            # Session de conduite (Moteur Allumé)
             "is_active": False, "distance_km": 0.0,
             "session_fuel_l": 0.0,
-            "session_cost": 0.0,  # NOUVEAU : Coût en euros
-            "fuel_price": self.fuel_price,  # NOUVEAU : Prix au litre
+            "session_cost": 0.0,
+            "fuel_price": self.fuel_price,
             "avg_rpm": 0, "coasting_km": 0.0, "aggressivity_pct": 0.0, "shift_time_sec": 0.0,
 
             # Global & Persistant
@@ -122,12 +121,15 @@ class TripStatsService(BaseService):
         self.stats["km_before_service"] = self._revision_interval
         self.stats["service_warning"] = False
 
-    # NOUVEAU : Modifier le prix du carburant
     def set_fuel_price(self, new_price: float):
         """Met à jour le prix au litre après un passage à la pompe."""
         self.fuel_price = new_price
         self.storage.set("last_fuel_price", new_price)
         self.stats["fuel_price"] = new_price
+
+    def get_fuel_price(self):
+        """Accesseur du prix du carburant pour les autres services (ex: DynamicsService) qui voudraient calculer le coût de leurs actions."""
+        return self.fuel_price
 
     # ==========================================
     # CYCLE DE VIE DU THREAD
@@ -150,11 +152,10 @@ class TripStatsService(BaseService):
                 dt = current_time - last_tick_time
                 last_tick_time = current_time
 
-                data = self.api._data.copy()
-                current_odo = data.get('odometer')
-                raw_fuel = data.get('fuel_used')
-                current_speed = data.get('speed', 0.0)
-                ignition = data.get('ignition_on', False) or data.get('key_run', False)
+                current_odo = self.api._data.get('odometer')
+                raw_fuel = self.api._data.get('fuel_used')
+                current_speed = self.api._data.get('speed', 0.0)
+                ignition = self.api._data.get('ignition_on', False) or self.api._data.get('key_run', False)
 
                 if current_odo is None:
                     time.sleep(0.1)
@@ -190,7 +191,7 @@ class TripStatsService(BaseService):
                 perfect_fuel_stream = self._absolute_fuel_session if self.stats["is_active"] else None
 
                 # --- BOUCLE RAPIDE (~50Hz) : Calculs instantanés ---
-                self._calc_fast_telemetry(data, dt, current_time, current_speed, current_odo, perfect_fuel_stream)
+                self._calc_fast_telemetry(self.api._data, dt, current_time, current_speed, current_odo, perfect_fuel_stream)
 
                 # --- BOUCLE LENTE (1Hz) : Calculs Globaux ---
                 if current_time - last_calc_time >= 1.0:
@@ -205,7 +206,6 @@ class TripStatsService(BaseService):
     # ROUTINES MATHÉMATIQUES
     # ==========================================
     def _calc_fast_telemetry(self, data, dt, current_time, current_speed, current_odo, perfect_fuel):
-        """Calculs nécessitant une haute fréquence (Conso instantanée, Rapport, Session)."""
         rpm = data.get('rpm', 0)
         accel = data.get('accel_pos', 0.0)
         brake = data.get('brake', False)
@@ -218,13 +218,17 @@ class TripStatsService(BaseService):
         elif clutch or current_speed < 3.0:
             self.stats["gear"] = "N"
         else:
-            current_ratio = rpm / current_speed if current_speed > 0 else 0
-            best_gear, smallest_diff = "N", float('inf')
-            for gear_name, target_ratio in self._gear_ratios.items():
-                diff = abs(current_ratio - target_ratio)
-                if diff <= self._gear_tolerance and diff < smallest_diff:
-                    smallest_diff, best_gear = diff, gear_name
-            self.stats["gear"] = best_gear
+            if abs(rpm - self._last_gear_rpm) > 50 or abs(current_speed - self._last_gear_speed) > 1.0:
+                current_ratio = rpm / current_speed if current_speed > 0 else 0
+                best_gear, smallest_diff = "N", float('inf')
+                for gear_name, target_ratio in self._gear_ratios.items():
+                    diff = abs(current_ratio - target_ratio)
+                    if diff <= self._gear_tolerance and diff < smallest_diff:
+                        smallest_diff, best_gear = diff, gear_name
+
+                self.stats["gear"] = best_gear
+                self._last_gear_rpm = rpm
+                self._last_gear_speed = current_speed
 
         # 2. Conso Instantanée
         if perfect_fuel is not None and self.last_fuel_inst is not None:

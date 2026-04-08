@@ -2,10 +2,11 @@ import json
 import threading
 
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot
-class DashboardBridge(QObject):
-    """Pont de communication (Context Property) entre le moteur logique (Python) et le moteur de rendu (QML)."""
 
-    # Signaux d'état pour la notification asynchrone de l'interface graphique
+
+class DashboardBridge(QObject):
+    """Pont de communication optimisé par Polling Asymétrique."""
+
     dataChanged = Signal(dict)
     configChanged = Signal(dict)
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
@@ -18,34 +19,47 @@ class DashboardBridge(QObject):
         self.led_service = led_service
         self.stats_service = stats_service
         self.diag_service = diag_service
-
         self.orchestrator = orchestrator
-        self._system_health = {}
-        self._data = {}
+
         self._config_path = config_path
+        self._data = {}
         self._stats = {}
+        self._system_health = {}
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
 
-        # Initialisation du temporisateur de rafraîchissement (Polling à ~60Hz / 16ms)
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_data)
-        self.timer.start(16)
+        # 1. Voie Ultra-Rapide (60 Hz / 16ms) : Uniquement la télémétrie (Vitesse, RPM)
+        self.timer_fast = QTimer()
+        self.timer_fast.timeout.connect(self._update_fast_data)
+        self.timer_fast.start(16)
 
-    def update_data(self):
-        """Routine de vérification d'état. Émet un signal uniquement si une mutation de données est détectée."""
+        # 2. Voie Moyenne (2 Hz / 500ms) : Les calculs de l'ordinateur de bord
+        self.timer_medium = QTimer()
+        self.timer_medium.timeout.connect(self._update_stats)
+        self.timer_medium.start(500)
+
+        # 3. Voie Lente (1 Hz / 1000ms) : La santé du système et les logs
+        self.timer_slow = QTimer()
+        self.timer_slow.timeout.connect(self._update_health)
+        self.timer_slow.start(1000)
+
+    # --- LES SOUS-ROUTINES (Plus courtes, plus rapides) ---
+
+    def _update_fast_data(self):
         new_data = self.api._data.copy()
         if new_data != self._data:
             self._data = new_data
             self.dataChanged.emit(self._data)
 
+    def _update_stats(self):
         if self.stats_service:
             new_stats = self.stats_service.stats.copy()
             if new_stats != self._stats:
                 self._stats = new_stats
                 self.statsChanged.emit(self._stats)
 
+    def _update_health(self):
         new_health = self.orchestrator.get_system_health()
         if new_health != self._system_health:
             self._system_health = new_health
@@ -127,6 +141,13 @@ class DashboardBridge(QObject):
                 print(f"[ERREUR] Échec de la sauvegarde de {key_path} : {e}")
 
         threading.Thread(target=write_worker, daemon=True).start()
+
+    @Slot(float)
+    def updateFuelPrice(self, new_price: float):
+        """Reçoit le prix depuis l'UI et met à jour le service."""
+        if self.stats_service:
+            self.stats_service.set_fuel_price(new_price)
+            print(f"[BRIDGE] Prix du carburant mis à jour : {new_price} €/L")
 
     def send_notification(self, level: str, message: str, duration: int = 3000):
         """Méthode appelée par l'orchestrateur quand une alerte se déclenche"""
