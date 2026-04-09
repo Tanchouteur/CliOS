@@ -3,7 +3,7 @@ import QtQuick
 
 QtObject {
     // --- Couleurs de Base  ---
-    readonly property color bgMain: "#0e0e10"
+    readonly property color bgMain: "#000000"
     readonly property color bgDimmed: "#1a1a1c"
 
     readonly property color textMain: "#f4f4f4"

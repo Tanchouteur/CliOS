@@ -181,7 +181,7 @@ Item {
                     id: gBall
                     width: 24; height: 24; radius: 12; color: T.Theme.main
                     x: (parent.width / 2) - 12
-                    y: (parent.height / 2) - 12 - ((vStats.g_force !== undefined ? vStats.g_force : 0.0) * 100)
+                    y: (parent.height / 2) - 12 - ((vStats.g_force !== undefined ? -(vStats.g_force) : 0.0) * 100)
                     Behavior on y { NumberAnimation { duration: 100 } }
                 }
 

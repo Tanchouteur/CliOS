@@ -36,8 +36,8 @@ Item {
         id: centerGroup
         anchors.centerIn: root
         width: parent.width * 0.5
-        height: 600
-        anchors.verticalCenterOffset: -40
+        height: 630
+        anchors.verticalCenterOffset: -30
 
         z: -1
 

@@ -1,42 +1,64 @@
 import threading
+import time
 import numpy as np
 import sounddevice as sd
 from src.services.base_service import BaseService
 
 
 class CabinNoiseService(BaseService):
-    """Capte l'audio du micro pour mesurer la pression acoustique brute (SPL)."""
+    """Capte l'audio du micro pour mesurer le SPL et la fréquence dominante."""
 
     def __init__(self, api):
         super().__init__("CabinNoise")
         self.api = api
         self._stream = None
 
-        # Le dictionnaire partagé
+        # NOUVEAU : Chronomètre pour brider le calcul lourd
+        self._last_fft_time = 0
+
         self.api._data["cabin_db_spl"] = 0.0
+        self.api._data["cabin_freq_hz"] = 0  # NOUVELLE VARIABLE
 
     def start(self, stop_event):
         threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="Thread-Noise").start()
 
     def _audio_callback(self, indata, frames, time_info, status):
-        """Fonction appelée automatiquement par le micro des dizaines de fois par seconde."""
-        # 1. Calcul de l'énergie moyenne (Root Mean Square)
-        rms = np.sqrt(np.mean(indata ** 2))
+        # On extrait la première piste (mono)
+        audio_data = indata[:, 0]
+
+        # 1. Calcul du Volume (Très léger, exécuté à 100%)
+        rms = np.sqrt(np.mean(audio_data ** 2))
 
         if rms > 0:
             raw_db = 20 * np.log10(rms)
-            db_spl = raw_db + 98.0 # calibrage
+            db_spl = raw_db + 87.0
+            self.api._data["audio_db_text"] = f"{db_spl:.1f}"
 
-            db_text = f"{db_spl:.1f}"
-            self.api._data["audio_db_text"] = db_text
+            # 2. Calcul de la Fréquence (Plus lourd, exécuté sous conditions)
+            now = time.time()
+            # On ne calcule que si c'est bruyant ET qu'il s'est passé 0.25s
+            if db_spl > 40.0 and (now - self._last_fft_time) > 0.25:
+                # rfft décompose le signal
+                spectre = np.abs(np.fft.rfft(audio_data))
+
+                # On met le volume du 0 Hz à zéro (pour ignorer le courant continu)
+                spectre[0] = 0
+
+                # On génère l'échelle des fréquences correspondantes
+                frequences = np.fft.rfftfreq(len(audio_data), d=1 / 44100)
+
+                # On trouve la fréquence où le spectre est le plus haut
+                freq_dominante = frequences[np.argmax(spectre)]
+
+                self.api._data["cabin_freq_hz"] = int(freq_dominante)
+                self._last_fft_time = now
 
     def _run(self, stop_event):
         try:
-            # Ouverture du micro par défaut en continu
             self._stream = sd.InputStream(callback=self._audio_callback, channels=1, samplerate=44100)
             self._stream.start()
-            self.set_ok("Microphone actif (Mesure SPL Brute)")
-            print(f"[INFO] {self.service_name} : Microphone actif, mesure du SPL en cours...")
+            self.set_ok("Microphone actif")
+            print(f"[INFO] {self.service_name} : Microphone actif, mesure du SPL et Fréquence en cours...")
 
             while not stop_event.is_set():
                 stop_event.wait(0.5)
