@@ -9,7 +9,6 @@ Item {
     // --- Propriétés (Données Véhicule) ---
     property real fuelLevel: bridge.data.fuel_level !== undefined ? bridge.data.fuel_level : 75.0
     property real smoothFuel: fuelLevel
-    Behavior on smoothFuel { SpringAnimation { spring: 10.0; damping: 0.8 } }
 
     property real minFuel: 0.0
     property real maxFuel: 100.0

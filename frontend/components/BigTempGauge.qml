@@ -9,7 +9,6 @@ Item {
     // --- Propriétés (Données Véhicule) ---
     property real engineTemp: bridge.data.engine_temp !== undefined ? bridge.data.engine_temp : 90.0
     property real smoothTemp: engineTemp
-    Behavior on smoothTemp { SpringAnimation { spring: 10.0; damping: 0.8 } }
 
     property real minTemp: bridge.config.engine_temp.min_display !== undefined ? bridge.config.engine_temp.min_display : 50.0
     property real maxTemp: bridge.config.engine_temp.max_display !== undefined ? bridge.config.engine_temp.max_display : 130.0

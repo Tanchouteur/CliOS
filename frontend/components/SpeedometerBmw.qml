@@ -14,18 +14,10 @@ Item {
     property int regMode: bridge.data.regulateur_mode !== undefined ? bridge.data.regulateur_mode : 0
     property int regStatut: bridge.data.regulateur_statut !== undefined ? bridge.data.regulateur_statut : 0
 
-    property real inst_cons: bridge.stats.inst_cons !== undefined ? bridge.stats.inst_cons : 0.0
-    property real max_inst_cons: bridge.config.instant_fuel_consumption.max_display !== undefined ? bridge.config.instant_fuel_consumption.max_display : 20.0
-
     // --- Variables d'Animation ---
     property real smoothSpeed: root.speed
-    Behavior on smoothSpeed { SpringAnimation { spring: 10.0; damping: 0.9 } }
 
     property real smoothTargetSpeed: root.targetSpeed
-    Behavior on smoothTargetSpeed { SpringAnimation { spring: 7.0; damping: 0.9 } }
-
-    property real smoothInstCons: root.inst_cons
-    Behavior on smoothInstCons { SpringAnimation { spring: 10.0; damping: 0.8 } }
 
     // --- Géométrie et Perspective 3D ---
     property real vanishingPointX: width * 0.25
@@ -291,8 +283,5 @@ Item {
         p0Y: root.p0Y
         vanishingPointX: root.vanishingPointX
         vanishingPointY: root.vanishingPointY
-
-        smoothInstCons: root.smoothInstCons
-        maxInstCons: root.max_inst_cons
     }
 }

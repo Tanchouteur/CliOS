@@ -17,9 +17,6 @@ Item {
 
     // --- Variables d'Animation ---
     property real smoothRpm: root.rpm
-    Behavior on smoothRpm {
-        SpringAnimation { spring: 10.0; damping: 0.9 }
-    }
 
     // --- Géométrie et Perspective 3D ---
     property real vanishingPointX: width * 0.25
@@ -201,8 +198,6 @@ Item {
                 opacity: 0.70 + (tickDelegate.proximity * 0.7)
                 scale: 1.0 + (tickDelegate.proximity * 0.5)
 
-                Behavior on scale { SpringAnimation { spring: 10.0; damping: 0.8 } }
-                Behavior on opacity { NumberAnimation { duration: 50 } }
 
                 property real textOffset: 45
 
