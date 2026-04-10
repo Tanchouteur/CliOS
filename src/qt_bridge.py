@@ -151,27 +151,46 @@ class DashboardBridge(QObject):
 
     @Slot(str, bool)
     def toggleService(self, service_name: str, enable: bool):
-        """
-        Point d'entrée QML : Active ou désactive un service à la volée
-        et sauvegarde ce choix pour le prochain démarrage.
-        """
+        """Active ou désactive un service à la volée."""
         print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
 
-        # 1. Mémoire : Sauvegarde sur le disque dur (ex: "service_EngineSound")
-        storage_key = f"services.{service_name}"
+        # --- LA CORRECTION EST ICI (.enabled) ---
+        storage_key = f"services.{service_name}.enabled"
         if hasattr(self, 'storage'):
             self.storage.set(storage_key, enable)
 
-        # 2. Action : Ordre direct à l'électricien (Orchestrateur)
+        # 2. Action : Ordre direct à l'électricien
         if enable:
             self.orchestrator.start_service(service_name)
         else:
             self.orchestrator.stop_service(service_name)
 
-        # 3. Rafraîchissement visuel : Force la mise à jour immédiate de la barre de statut
+        # 3. Rafraîchissement visuel
         self._system_health = self.orchestrator.get_system_health()
         self.systemHealthChanged.emit()
 
     def send_notification(self, level: str, message: str, duration: int = 3000):
         """Méthode appelée par l'orchestrateur quand une alerte se déclenche"""
         self.notificationEvent.emit(level, message, duration)
+
+    def _get_service_obj(self, service_name: str):
+        """Fonction utilitaire pour trouver un objet service par son nom."""
+        for srv in self.orchestrator.services.keys():
+            if srv.service_name == service_name:
+                return srv
+        return None
+
+    @Slot(str, result=str)
+    def getServiceParameters(self, service_name: str) -> str:
+        """Le Bridge ne fait que demander au service sans toucher au disque."""
+        srv = self._get_service_obj(service_name)
+        if srv:
+            return json.dumps(srv.get_params_schema())
+        return "[]"
+
+    @Slot(str, str, 'QVariant')
+    def setServiceParameter(self, service_name: str, param_key: str, value):
+        """Le Bridge fait juste passer le message de l'IHM vers le service."""
+        srv = self._get_service_obj(service_name)
+        if srv:
+            srv.update_param(param_key, value)

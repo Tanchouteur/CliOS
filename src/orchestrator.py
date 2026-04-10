@@ -22,7 +22,6 @@ class SystemOrchestrator:
         for srv, data in self.services.items():
             if srv.service_name == service_name:
                 data["enabled"] = True
-                # On ne le démarre que si le système global est allumé et qu'il n'est pas déjà en route
                 if self.is_running and (data["event"] is None or data["event"].is_set()):
                     data["event"] = threading.Event()
                     srv.start(data["event"])
