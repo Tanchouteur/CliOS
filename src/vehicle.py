@@ -1,14 +1,11 @@
 import threading
 import time
 
-from src.storage import PersistentStorage
-
-
 class VehicleAPI:
     """Couche d'Abstraction Matérielle (HAL). Gère uniquement les données brutes du bus CAN."""
 
-    def __init__(self):
-        storage = PersistentStorage()
+    def __init__(self, storage):
+        storage = storage
         last_odo = storage.get("last_odometer", 0.0)
 
         self._data = {

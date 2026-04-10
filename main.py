@@ -3,11 +3,14 @@ import os
 import sys
 import argparse
 
-from PySide6.QtGui import QGuiApplication
+# --- CHANGEMENT CRUCIAL : QApplication au lieu de QGuiApplication ---
+from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
 from src.driver import Slcan
-from src.mock_driver import MockProvider
+from src.simulation.physique_mock import PhysicsMockProvider
+from src.simulation.mock_ui import MockControlPanel
+
 from src.services.cabin_noise_service import CabinNoiseService
 from src.services.can_service import CanService
 from src.services.diagnostic_service import DiagnosticService
@@ -17,6 +20,7 @@ from src.services.notification_service import NotificationService
 from src.services.orchestrator import SystemOrchestrator
 from src.services.system_monitor_service import SystemMonitorService
 from src.services.trip_stats_service import TripStatsService
+from src.storage import PersistentStorage
 from src.vehicle import VehicleAPI
 from src.qt_bridge import DashboardBridge
 from src.services.dynamics_service import DynamicsService
@@ -65,12 +69,22 @@ def main():
     CAN_DIR = os.path.join(BASE_DIR, "can")
     CONFIG_DIR = os.path.join(BASE_DIR, "config")
     SOUNDS_DIR = os.path.join(BASE_DIR, "assets", "sounds")
+    STORAGE_DIR = os.path.join(BASE_DIR, "data")
 
     with open(os.path.join(CONFIG_DIR, args.conf), 'r', encoding='utf-8') as f:
         vehicle_config = json.load(f)
 
     # --- 1. Initialisation du Disque Dur Central ---
-    api = VehicleAPI()
+    if args.mock:
+        storage_file_name = "save_mock.json"
+    else:
+        storage_file_name = "save.json"
+
+    storage_file_path = os.path.join(STORAGE_DIR, storage_file_name)
+
+    storage = PersistentStorage(storage_file_path)
+
+    api = VehicleAPI(storage)
     api.run_startup_sequence(duration_sec=1.5)
 
     # --- 2. Initialisation de l'Orchestrateur ---
@@ -78,14 +92,14 @@ def main():
 
     # --- 3. Branchement des Périphériques ---
     if args.mock:
-        can_provider = MockProvider(os.path.join(CAN_DIR, "can_moteur_clio3.json"))
+        can_provider = PhysicsMockProvider(api)
     else:
         can_provider = Slcan(channel="/dev/cu.usbmodem207B3949534B1", baudrate=500000)
 
     # --- 4. Création et Ajout de TOUS les services de base ---
     diag_service = DiagnosticService(api, can_provider)
     led_service = BleLedController()
-    stats_service = TripStatsService(api, vehicle_config)
+    stats_service = TripStatsService(api, vehicle_config, storage)
     dynamics_service = DynamicsService(api)
     sound_file_path = os.path.join(SOUNDS_DIR, "gtr.wav")
     engine_sound_service = EngineSoundService(api, audio_path=sound_file_path)
@@ -116,7 +130,8 @@ def main():
             ui_loop(api, orchestrator.stop_event)
 
         elif args.ui == 'gui':
-            app = QGuiApplication(sys.argv)
+            # ON UTILISE QApplication ICI
+            app = QApplication(sys.argv)
             engine = QQmlApplicationEngine()
 
             bridge = DashboardBridge(
@@ -134,6 +149,11 @@ def main():
 
             orchestrator.start_all()
 
+            control_panel = None
+            if args.mock:
+                control_panel = MockControlPanel(can_provider)
+                control_panel.show()
+
             engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
 
             if not engine.rootObjects():
@@ -148,7 +168,6 @@ def main():
     finally:
         # --- 6. Arrêt propre ---
         orchestrator.stop_all()
-
 
 if __name__ == "__main__":
     main()

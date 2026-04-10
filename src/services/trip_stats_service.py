@@ -3,17 +3,15 @@ import threading
 from collections import deque
 
 from src.services.base_service import BaseService
-from src.storage import PersistentStorage
-
 
 class TripStatsService(BaseService):
     """Ordinateur de bord complet : Calcule les statistiques instantanées et persistantes."""
 
-    def __init__(self, api, config):
+    def __init__(self, api, config, storage):
         super().__init__("TripStats")
         self.api = api
         self._thread = None
-        self.storage = PersistentStorage()
+        self.storage = storage
 
         # --- Configuration Véhicule ---
         self._tank_capacity = config.get("tank_capacity", 50.0)
@@ -139,7 +137,14 @@ class TripStatsService(BaseService):
         self._thread.start()
 
     def stop(self):
-        pass
+        """Sauvegarde d'urgence déclenchée à la fermeture de l'application."""
+        try:
+            current_odo = self.api._data.get("odometer", self.last_saved_odo)
+            self.storage.set("last_odometer", current_odo)
+            self.storage.set("fuel_b_accumulated", self.fuel_b_accumulated)
+            print(f"[INFO] {self.service_name} : Sauvegarde finale effectuée avec succès.")
+        except Exception as e:
+            print(f"[ERREUR] {self.service_name} : Échec de la sauvegarde finale ({e})")
 
     def _run(self, stop_event):
         print("[STATS] Ordinateur de bord lancé.")

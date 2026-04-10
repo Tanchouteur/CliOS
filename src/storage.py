@@ -4,9 +4,8 @@ import os
 class PersistentStorage:
     """Gestionnaire de persistance des données avec sécurisation des écritures."""
 
-    def __init__(self, filename="save.json"):
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.filepath = os.path.join(base_dir, "data", filename)
+    def __init__(self, filepath):
+        self.filepath = filepath
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
         self.data = self._load()
 
