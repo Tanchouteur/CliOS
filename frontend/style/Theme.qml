@@ -29,5 +29,5 @@ QtObject {
 
     readonly property string fontMain: "sans-serif"
 
-    readonly property string fontMono: "Courier"
+    readonly property string fontMono: "arial"
 }
