@@ -1,6 +1,6 @@
 from src.parser import DbcParser
 from src.signal_processor import RawFrame, SignalProcessor
-from src.vehicle import VehicleAPI
+from src.api import VehicleAPI
 
 
 class CanDispatcher:
