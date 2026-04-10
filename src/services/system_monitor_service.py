@@ -9,7 +9,7 @@ class SystemMonitorService(BaseService):
     """Surveille la consommation CPU/RAM globale et par service."""
 
     def __init__(self, api):
-        super().__init__("SystemMonitor")
+        super().__init__("Monitor")
         self.api = api
 
         # On cible le processus actuel (ton application entière)

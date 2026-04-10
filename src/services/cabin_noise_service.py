@@ -9,7 +9,7 @@ class CabinNoiseService(BaseService):
     """Capte l'audio du micro pour mesurer le SPL et la fréquence dominante."""
 
     def __init__(self, api):
-        super().__init__("CabinNoise")
+        super().__init__("Noise")
         self.api = api
         self._stream = None
 

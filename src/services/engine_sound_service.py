@@ -11,7 +11,7 @@ class EngineSoundService(BaseService):
     MAX_VOL = 0.8
 
     def __init__(self, api, audio_path="assets/sounds/v6_idle.wav"):
-        super().__init__("SOUND")
+        super().__init__("EngineSound")
         self.api = api
         self.audio_path = audio_path
         self.server = None

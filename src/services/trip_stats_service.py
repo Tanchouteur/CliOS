@@ -26,12 +26,12 @@ class TripStatsService(BaseService):
         self._revision_warning = revision_config.get("warning_threshold_km", 2000)
 
         # --- Chargement de la Persistance (Disque Dur) ---
-        self.trip_a_marker = self.storage.get("trip_a_marker", 0.0)
-        self.trip_b_marker = self.storage.get("trip_b_marker", 0.0)
-        self.fuel_b_accumulated = self.storage.get("fuel_b_accumulated", 0.0)
-        self.last_saved_odo = self.storage.get("last_odometer", 0.0)
-        self.last_revision_odo = self.storage.get("last_revision_odo", 0.0)
-        self.fuel_price = self.storage.get("last_fuel_price", 1.70)
+        self.trip_a_marker = self.storage.get("trips.a.marker", 0.0)
+        self.trip_b_marker = self.storage.get("trips.b.marker", 0.0)
+        self.fuel_b_accumulated = self.storage.get("trips.b.fuel", 0.0)
+        self.last_saved_odo = self.storage.get("vehicle.last_odometer", 0.0)
+        self.last_revision_odo = self.storage.get("vehicle.last_revision_odo", 0.0)
+        self.fuel_price = self.storage.get("settings.last_fuel_price", 1.70)
 
         init_trip_a = max(0.0, self.last_saved_odo - self.trip_a_marker)
         init_trip_b = max(0.0, self.last_saved_odo - self.trip_b_marker)
@@ -100,29 +100,29 @@ class TripStatsService(BaseService):
     def reset_trip_a(self):
         current_odo = self.api._data.get("odometer", self.last_saved_odo)
         self.trip_a_marker = current_odo
-        self.storage.set("trip_a_marker", current_odo)
+        self.storage.set("trips.a.marker", current_odo)
         self.stats["trip_a"] = 0.0
 
     def reset_trip_b(self):
         current_odo = self.api._data.get("odometer", self.last_saved_odo)
         self.trip_b_marker = current_odo
         self.fuel_b_accumulated = 0.0
-        self.storage.set("trip_b_marker", current_odo)
-        self.storage.set("fuel_b_accumulated", 0.0)
+        self.storage.set("trips.b.marker", current_odo)
+        self.storage.set("vehicle.fuel_b_accumulated", 0.0)
         self.stats["trip_b"] = 0.0
         self.stats["avg_cons_b"] = 0.0
 
     def reset_maintenance(self):
         current_odo = self.api._data.get("odometer", self.last_saved_odo)
         self.last_revision_odo = current_odo
-        self.storage.set("last_revision_odo", current_odo)
+        self.storage.set("vehicle.last_revision_odo", current_odo)
         self.stats["km_before_service"] = self._revision_interval
         self.stats["service_warning"] = False
 
     def set_fuel_price(self, new_price: float):
         """Met à jour le prix au litre après un passage à la pompe."""
         self.fuel_price = new_price
-        self.storage.set("last_fuel_price", new_price)
+        self.storage.set("settings.last_fuel_price", new_price)
         self.stats["fuel_price"] = new_price
 
     def get_fuel_price(self):
@@ -140,8 +140,8 @@ class TripStatsService(BaseService):
         """Sauvegarde d'urgence déclenchée à la fermeture de l'application."""
         try:
             current_odo = self.api._data.get("odometer", self.last_saved_odo)
-            self.storage.set("last_odometer", current_odo)
-            self.storage.set("fuel_b_accumulated", self.fuel_b_accumulated)
+            self.storage.set("vehicle.last_odometer", current_odo)
+            self.storage.set("trips.b.fuel", self.fuel_b_accumulated)
             print(f"[INFO] {self.service_name} : Sauvegarde finale effectuée avec succès.")
         except Exception as e:
             print(f"[ERREUR] {self.service_name} : Échec de la sauvegarde finale ({e})")
@@ -336,6 +336,6 @@ class TripStatsService(BaseService):
 
         # Sauvegarde
         if current_odo - self.last_saved_odo >= 1.0:
-            self.storage.set("last_odometer", current_odo)
-            self.storage.set("fuel_b_accumulated", self.fuel_b_accumulated)
+            self.storage.set("vehicle.last_odometer", current_odo)
+            self.storage.set("trips.b.fuel", self.fuel_b_accumulated)
             self.last_saved_odo = current_odo

@@ -158,7 +158,7 @@ class DashboardBridge(QObject):
         print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
 
         # 1. Mémoire : Sauvegarde sur le disque dur (ex: "service_EngineSound")
-        storage_key = f"service_{service_name}"
+        storage_key = f"services.{service_name}"
         if hasattr(self, 'storage'):
             self.storage.set(storage_key, enable)
 

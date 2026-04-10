@@ -5,7 +5,7 @@ from src.services.base_service import BaseService
 
 class DynamicsService(BaseService):
     def __init__(self, api):
-        super().__init__("DYNAMICS")
+        super().__init__("Dynamics")
         self.api = api
         self.thread = None
 

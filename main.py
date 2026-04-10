@@ -113,22 +113,15 @@ def main():
         obd_callback=diag_service.receive_obd_frame
     )
 
-    # 1. Les services VITAUX (Toujours allumés)
-    orchestrator.add_service(can_service, enabled=True)
-    orchestrator.add_service(diag_service, enabled=True)
-    orchestrator.add_service(stats_service, enabled=True)
-    orchestrator.add_service(dynamics_service, enabled=True)
-    orchestrator.add_service(monitor_service, enabled=True)
-
-
-    engine_sound_enabled = storage.get("service_EngineSound", False)
-    orchestrator.add_service(engine_sound_service, enabled=engine_sound_enabled)
-
-    cabin_noise_enabled = storage.get("service_CabinNoise", True)
-    orchestrator.add_service(cabin_sound_service, enabled=cabin_noise_enabled)
-
-    led_enabled = storage.get("service_LedController", True)
-    orchestrator.add_service(led_service, enabled=led_enabled)
+    # 1. Les services
+    orchestrator.add_service(can_service, enabled=storage.get("services.Can", True))
+    orchestrator.add_service(diag_service, enabled=storage.get("services.Diag", True))
+    orchestrator.add_service(stats_service, enabled=storage.get("services.TripStats", True))
+    orchestrator.add_service(dynamics_service, enabled=storage.get("services.Dynamics", True))
+    orchestrator.add_service(monitor_service, enabled=storage.get("services.Monitor", True))
+    orchestrator.add_service(engine_sound_service, enabled=storage.get("services.EngineSound", False))
+    orchestrator.add_service(cabin_sound_service, enabled=storage.get("services.Noise", True))
+    orchestrator.add_service(led_service, enabled=storage.get("services.Leds", True))
 
     # --- 5. Lancement de l'IHM ---
     try:
@@ -154,7 +147,7 @@ def main():
             engine.rootContext().setContextProperty("bridge", bridge)
 
             notif_service = NotificationService(bridge)
-            orchestrator.add_service(notif_service, enabled=True)
+            orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
 
             orchestrator.start_all()
 
