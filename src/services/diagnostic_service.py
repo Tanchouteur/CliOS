@@ -1,6 +1,6 @@
 import threading
 import time
-from src.services.base_service import BaseService
+from src.services.base_service import BaseService, ServiceStatus
 
 
 class DiagnosticService(BaseService):
@@ -17,8 +17,6 @@ class DiagnosticService(BaseService):
 
         self._last_obd_response = None
 
-        print("[DIAG] Service initialisé.")
-
     def start(self, stop_event: threading.Event):
         self.thread = threading.Thread(
             target=self._run,
@@ -27,17 +25,15 @@ class DiagnosticService(BaseService):
             daemon=True
         )
         self.thread.start()
+        super().start(stop_event, implemented=True)
 
     def request_scan(self):
         if self.api._data.get("key_run", False):
-            print("[DIAG] 🖱️ Clic détecté : Requête de scan enregistrée.")
             self._scan_requested.set()
-        else:
-            print("[DIAG] 🚫 Clic refusé : Mettez le contact (key_run = OFF).")
 
     def receive_obd_frame(self, frame):
         hex_data = " ".join([f"{b:02X}" for b in frame.data])
-        print(f"[DIAG] 📥 Trame interceptée (ID: 0x{frame.arbitration_id:03X}) -> [{hex_data}]")
+        #print(f"[DIAG] Trame interceptée (ID: 0x{frame.arbitration_id:03X}) -> [{hex_data}]")
         self._last_obd_response = frame
 
     def _run(self, stop_event: threading.Event):
@@ -52,11 +48,9 @@ class DiagnosticService(BaseService):
             # 2. Gestion des états avec set_warning
             if not is_connected:
                 self.set_error("Adaptateur CAN non détecté")
-            elif not ignition_on:
-                # C'est ici qu'on force le status WARNING
+            elif not ignition_on :
                 self.set_warning("Contact requis pour le diagnostic")
             else:
-                # Le service ne passe au vert que si le contact est mis
                 if not self.api._data.get("diag_scanning", False):
                     self.set_ok("Prêt pour scan")
 
@@ -64,8 +58,8 @@ class DiagnosticService(BaseService):
             if self._scan_requested.wait(timeout=0.5):
                 if is_connected and ignition_on:
                     self._perform_scan()
-                else:
-                    print("[DIAG] 🚫 Abandon : Conditions non réunies (Contact/Connexion).")
+                #else:
+                #    print("[DIAG] Abandon : Conditions non réunies (Contact/Connexion).")
                 self._scan_requested.clear()
 
     def _perform_scan(self):
@@ -102,8 +96,7 @@ class DiagnosticService(BaseService):
                 self.api._data["diag_has_scanned"] = True
 
         except Exception as e:
-            print(f"[DIAG] ❌ Erreur critique pendant le scan : {e}")
-            self.set_error(str(e))
+            self.set_error("Erreur critique pendant le scan : "+str(e))
         finally:
             self.api._data["diag_scanning"] = False
 

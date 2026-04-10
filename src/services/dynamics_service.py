@@ -22,6 +22,7 @@ class DynamicsService(BaseService):
     def start(self, stop_event: threading.Event):
         self.thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True)
         self.thread.start()
+        super().start(stop_event, implemented=True)
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():

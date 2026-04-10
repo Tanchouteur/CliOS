@@ -38,12 +38,12 @@ class SystemOrchestrator:
                 if data["event"] and not data["event"].is_set():
                     data["event"].set()  # Coupe la boucle while du thread
                     srv.stop()  # Nettoyage du service
-                    print(f"[INFO] Orchestrateur : {service_name} ÉTEINT.")
+                    #print(f"[INFO] Orchestrateur : {service_name} ÉTEINT.")
                 return
 
     def start_all(self):
         """Démarre UNIQUEMENT les services cochés 'enabled'."""
-        print("[INFO] Orchestrateur : Démarrage global selon la configuration...")
+        #print("[INFO] Orchestrateur : Démarrage global selon la configuration...")
         self.is_running = True
 
         for srv, data in self.services.items():
@@ -53,7 +53,7 @@ class SystemOrchestrator:
 
     def stop_all(self):
         """Coupe absolument tout."""
-        print("[INFO] Orchestrateur : Signal d'arrêt global envoyé.")
+        #print("[INFO] Orchestrateur : Signal d'arrêt global envoyé.")
         self.is_running = False
 
         for srv, data in self.services.items():
@@ -68,7 +68,6 @@ class SystemOrchestrator:
             if data["enabled"]:
                 health[srv.service_name] = srv.get_health()
             else:
-                # On triche un peu pour afficher joliment "DISABLED" en gris dans l'IHM
                 health[srv.service_name] = {
                     "status": "DISABLED",
                     "message": "Désactivé dans les réglages"

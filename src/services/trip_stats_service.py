@@ -135,6 +135,7 @@ class TripStatsService(BaseService):
     def start(self, stop_event):
         self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="TripStatsWorker")
         self._thread.start()
+        super().start(stop_event, implemented=True)
 
     def stop(self):
         """Sauvegarde d'urgence déclenchée à la fermeture de l'application."""
@@ -147,7 +148,6 @@ class TripStatsService(BaseService):
             print(f"[ERREUR] {self.service_name} : Échec de la sauvegarde finale ({e})")
 
     def _run(self, stop_event):
-        print("[STATS] Ordinateur de bord lancé.")
         last_calc_time = time.time()
         last_tick_time = time.time()
 
@@ -189,8 +189,6 @@ class TripStatsService(BaseService):
                     if self.stats["is_active"]:
                         self._absolute_fuel_session += delta_f
                         self.stats["session_fuel_l"] = round(self._absolute_fuel_session, 2)
-
-                        # NOUVEAU : Calcul du prix en temps réel
                         self.stats["session_cost"] = round(self._absolute_fuel_session * self.fuel_price, 2)
 
                 perfect_fuel_stream = self._absolute_fuel_session if self.stats["is_active"] else None
@@ -205,7 +203,7 @@ class TripStatsService(BaseService):
 
                 time.sleep(0.020)
         except Exception as e:
-            self.set_error(f"[Trip Stats]Crash inattendu : {str(e)}")
+            self.set_error(f"Crash inattendu : {str(e)}")
 
     # ==========================================
     # ROUTINES MATHÉMATIQUES
