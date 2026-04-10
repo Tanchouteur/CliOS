@@ -143,9 +143,11 @@ class TripStatsService(BaseService):
             current_odo = self.api._data.get("odometer", self.last_saved_odo)
             self.storage.set("vehicle.last_odometer", current_odo)
             self.storage.set("trips.b.fuel", self.fuel_b_accumulated)
-            print(f"[INFO] {self.service_name} : Sauvegarde finale effectuée avec succès.")
+            self.print_message("Sauvegarde finale effectuée avec succès.")
         except Exception as e:
-            print(f"[ERREUR] {self.service_name} : Échec de la sauvegarde finale ({e})")
+            self.set_error(f"Échec de la sauvegarde finale : {str(e)}")
+
+        super().stop()
 
     def _run(self, stop_event):
         last_calc_time = time.time()

@@ -23,14 +23,12 @@ class Slcan:
                 bitrate=self.baudrate
             )
             self.is_connected = True
-            print(f"[INFO] Couche liaison de donnees synchronisee sur {self.channel}.")
             return True
 
         except Exception as e:
             self.is_connected = False
             self.bus = None
-            print(f"[ERREUR] Echec de la connexion sur {self.channel} : {e}")
-            return False
+            raise RuntimeError(f"Impossible de se connecter à l'adaptateur CAN sur {self.channel} : {e}")
 
     def read_frame(self, timeout: float = 0.1) -> can.Message | None:
         """Extrait une trame matérielle. Lève une exception si le périphérique est déconnecté physiquement."""
@@ -69,6 +67,5 @@ class Slcan:
             self.bus.send(msg)
             return True
         except Exception as e:
-            print(f"[ERREUR] Échec de l'envoi CAN : {e}")
             self.close()
-            return False
+            raise RuntimeError(f"Échec de l'envoi CAN : {e}")

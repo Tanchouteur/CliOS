@@ -64,3 +64,6 @@ class BaseService:
             "status": self.status.value,
             "message": self.status_msg
         }
+
+    def print_message(self, message: str):
+        print(f"{Color.BLUE}[INFO]{Color.RESET} {self.service_name} : {message}")

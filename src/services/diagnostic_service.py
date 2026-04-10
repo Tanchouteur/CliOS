@@ -57,7 +57,10 @@ class DiagnosticService(BaseService):
             # 3. Gestion de la demande de scan
             if self._scan_requested.wait(timeout=0.5):
                 if is_connected and ignition_on:
-                    self._perform_scan()
+                    try:
+                        self._perform_scan()
+                    except Exception as e:
+                        self.set_error("Erreur pendant le scan : "+str(e))
                 #else:
                 #    print("[DIAG] Abandon : Conditions non réunies (Contact/Connexion).")
                 self._scan_requested.clear()

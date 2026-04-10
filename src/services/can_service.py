@@ -33,14 +33,11 @@ class CanService(BaseService):
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
             if not self.provider.is_connected:
-                self.set_error("Déconnecté. Tentative de connexion...")
-                success = self.provider.connect()
-
-                if not success:
-                    stop_event.wait(2.0)
-                    continue
-                else:
+                try:
+                    self.provider.connect()
                     self.set_ok(f"Connecté avec succès sur {self.name}.")
+                except Exception as e:
+                    self.set_error(f"Échec de connexion : {str(e)}")
 
             try:
                 frame = self.provider.read_frame(timeout=0.2)
