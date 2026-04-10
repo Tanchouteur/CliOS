@@ -17,12 +17,12 @@ class NotificationService(BaseService):
         self._thread = None
 
     def start(self, stop_event):
-        #print("[INFO] Démarrage du thread demandé par l'orchestrateur...")
         self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="NotifWorker")
         self._thread.start()
+        super().start(stop_event, implemented=True)
 
     def stop(self):
-        pass
+        super().stop()
 
     def check_data(self, data: dict):
         if not data:
@@ -33,8 +33,6 @@ class NotificationService(BaseService):
         self._check_clutch_pressed(data.get('clutch', False), current_time)
 
     def _run(self, stop_event):
-        print("[NOTIF] Boucle interne lancée et active.")
-
         time.sleep(1.0)
 
         while not stop_event.is_set():
@@ -61,6 +59,5 @@ class NotificationService(BaseService):
                 self.bridge.send_notification("WARNING", "ATTENTION : EMBRAYAGE SOLLICITÉ", 4000)
                 self._states["clutch_warned"] = True
         else:
-            # Réinitialisation si la pédale est relâchée
             self._states["clutch_start_time"] = None
             self._states["clutch_warned"] = False

@@ -23,7 +23,6 @@ class BleLedController(BaseService):
         self._queue = None
         self._running = False
 
-        # Cache pour maintenir les connexions actives
         self._clients = {}
 
     def start(self, stop_event=None):
@@ -32,23 +31,23 @@ class BleLedController(BaseService):
             return
         self._running = True
 
-        # On sauvegarde le stop_event fourni par l'orchestrateur
         self.stop_event = stop_event
 
         self._thread = threading.Thread(target=self._run_event_loop, daemon=True, name="BLE_Worker")
         self._thread.start()
+
+        super().start(stop_event, implemented=True)
 
     def stop(self):
         """Arrête proprement le thread et ferme les connexions."""
         self._running = False
 
         if self._loop and self._loop.is_running():
-            # Injecte un poison pill (None) pour débloquer le await queue.get()
             asyncio.run_coroutine_threadsafe(self._queue.put(None), self._loop)
 
         if self._thread:
             self._thread.join(timeout=2.0)
-            print("[BLE] Thread Bluetooth arrêté proprement.")
+        super().stop()
 
     def set_color(self, hex_color: str):
         """
@@ -98,24 +97,20 @@ class BleLedController(BaseService):
                 client = BleakClient(mac)
                 await client.connect(timeout=5.0)
                 self._clients[mac] = client
-                print(f"[BLE] Connecté au bandeau {mac}")
-                self.set_ok(f"[BLE] Connecte au bandeau {mac}")
+                self.set_ok(f"Connecte au bandeau {mac}")
             except BleakError as e:
-                print(f"[BLE] Erreur connexion à {mac} : {e}")
-                self.set_error(f"[BLE] Erreur connexion à {mac} : {str(e)}")
+                self.set_error(f"Erreur connexion à {mac} : {str(e)}")
                 return
 
         # Écriture du payload (sans réponse pour plus de rapidité)
         try:
             await client.write_gatt_char(CHAR_UUID, payload, response=False)
         except Exception as e:
-            print(f"[BLE] Erreur d'écriture sur {mac} : {e}")
-            self.set_error(f"[BLE] Erreur d'écriture sur {mac} : {str(e)}")
+            self.set_error(f" Erreur d'écriture sur {mac} : {str(e)}")
             self._clients.pop(mac, None)
 
     async def _ble_worker(self):
         """Boucle principale : génère les bons payloads et les expédie en parallèle."""
-        print("[BLE] Worker asynchrone démarré.")
         while self._running:
             hex_color = await self._queue.get()
             if hex_color is None:
@@ -137,4 +132,3 @@ class BleLedController(BaseService):
         for mac, client in self._clients.items():
             if client and client.is_connected:
                 await client.disconnect()
-        print("[BLE] Worker asynchrone arrêté.")

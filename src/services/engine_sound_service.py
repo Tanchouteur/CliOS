@@ -16,12 +16,11 @@ class EngineSoundService(BaseService):
         self.audio_path = audio_path
         self.server = None
         self.player = None
-
-        # Nouveaux composants
         self.exhaust_synth = None
         self.mixer = None
 
     def start(self, stop_event: threading.Event):
+        super().start(stop_event, implemented=True)
         try:
             self.server = Server(duplex=0).boot()
             self.server.start()
@@ -90,7 +89,7 @@ class EngineSoundService(BaseService):
             time.sleep(0.05)
 
     def stop(self):
-        print(f"[INFO] {self.service_name} : Extinction du V6 virtuel...")
+        super().stop()
         if self.player:
             self.player.stop()
         if self.server:

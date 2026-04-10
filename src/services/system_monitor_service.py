@@ -19,10 +19,12 @@ class SystemMonitorService(BaseService):
 
     def start(self, stop_event):
         """Lance la boucle de surveillance dans un thread dédié."""
+        super().start(stop_event, implemented=True)
         threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="SystemMonitorWorker").start()
 
     def stop(self):
         """Arrêt propre du service."""
+        super().stop()
         pass
 
     def _run(self, stop_event):

@@ -28,6 +28,7 @@ class CanService(BaseService):
             daemon=True
         )
         self.thread.start()
+        super().start(stop_event, implemented=True)
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
@@ -53,7 +54,6 @@ class CanService(BaseService):
                         self.dispatcher.dispatch(frame)
 
             except Exception as e:
-                print(f"[ATTENTION] {self.name} : Rupture de la liaison série.")
                 self.set_error(f"Rupture de la liaison série : {str(e)}")
                 self.provider.close()
                 stop_event.wait(1.0)
@@ -62,3 +62,4 @@ class CanService(BaseService):
         self.provider.close()
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=2)
+        super().stop()
