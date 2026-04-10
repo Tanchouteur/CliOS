@@ -3,7 +3,6 @@ import os
 import sys
 import argparse
 
-# --- CHANGEMENT CRUCIAL : QApplication au lieu de QGuiApplication ---
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -17,11 +16,11 @@ from src.services.diagnostic_service import DiagnosticService
 from src.services.engine_sound_service import EngineSoundService
 from src.services.led_service import BleLedController
 from src.services.notification_service import NotificationService
-from src.services.orchestrator import SystemOrchestrator
+from src.orchestrator import SystemOrchestrator
 from src.services.system_monitor_service import SystemMonitorService
 from src.services.trip_stats_service import TripStatsService
 from src.storage import PersistentStorage
-from src.vehicle import VehicleAPI
+from src.api import VehicleAPI
 from src.qt_bridge import DashboardBridge
 from src.services.dynamics_service import DynamicsService
 
@@ -114,14 +113,15 @@ def main():
         obd_callback=diag_service.receive_obd_frame
     )
 
-    orchestrator.add_service(can_service)
-    orchestrator.add_service(diag_service)
-    orchestrator.add_service(led_service)
-    orchestrator.add_service(stats_service)
-    orchestrator.add_service(dynamics_service)
-    #orchestrator.add_service(engine_sound_service)
-    orchestrator.add_service(cabin_sound_service)
-    orchestrator.add_service(monitor_service)
+    # 1. Les services
+    orchestrator.add_service(can_service, enabled=storage.get("services.Can", True))
+    orchestrator.add_service(diag_service, enabled=storage.get("services.Diag", True))
+    orchestrator.add_service(stats_service, enabled=storage.get("services.TripStats", True))
+    orchestrator.add_service(dynamics_service, enabled=storage.get("services.Dynamics", True))
+    orchestrator.add_service(monitor_service, enabled=storage.get("services.Monitor", True))
+    orchestrator.add_service(engine_sound_service, enabled=storage.get("services.EngineSound", False))
+    orchestrator.add_service(cabin_sound_service, enabled=storage.get("services.Noise", True))
+    orchestrator.add_service(led_service, enabled=storage.get("services.Leds", True))
 
     # --- 5. Lancement de l'IHM ---
     try:
@@ -130,7 +130,6 @@ def main():
             ui_loop(api, orchestrator.stop_event)
 
         elif args.ui == 'gui':
-            # ON UTILISE QApplication ICI
             app = QApplication(sys.argv)
             engine = QQmlApplicationEngine()
 
@@ -142,10 +141,13 @@ def main():
                 stats_service=stats_service,
                 diag_service=diag_service
             )
+            # Ajout du storage au pont si on en a besoin plus tard (Optionnel mais pratique)
+            bridge.storage = storage
+
             engine.rootContext().setContextProperty("bridge", bridge)
 
             notif_service = NotificationService(bridge)
-            orchestrator.add_service(notif_service)
+            orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
 
             orchestrator.start_all()
 
@@ -168,6 +170,7 @@ def main():
     finally:
         # --- 6. Arrêt propre ---
         orchestrator.stop_all()
+
 
 if __name__ == "__main__":
     main()

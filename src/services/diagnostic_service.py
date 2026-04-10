@@ -5,7 +5,7 @@ from src.services.base_service import BaseService
 
 class DiagnosticService(BaseService):
     def __init__(self, api, can_provider):
-        super().__init__("DIAG")
+        super().__init__("Diag")
         self.api = api
         self.provider = can_provider
         self.thread = None

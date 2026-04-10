@@ -149,6 +149,29 @@ class DashboardBridge(QObject):
             self.stats_service.set_fuel_price(new_price)
             print(f"[BRIDGE] Prix du carburant mis à jour : {new_price} €/L")
 
+    @Slot(str, bool)
+    def toggleService(self, service_name: str, enable: bool):
+        """
+        Point d'entrée QML : Active ou désactive un service à la volée
+        et sauvegarde ce choix pour le prochain démarrage.
+        """
+        print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
+
+        # 1. Mémoire : Sauvegarde sur le disque dur (ex: "service_EngineSound")
+        storage_key = f"services.{service_name}"
+        if hasattr(self, 'storage'):
+            self.storage.set(storage_key, enable)
+
+        # 2. Action : Ordre direct à l'électricien (Orchestrateur)
+        if enable:
+            self.orchestrator.start_service(service_name)
+        else:
+            self.orchestrator.stop_service(service_name)
+
+        # 3. Rafraîchissement visuel : Force la mise à jour immédiate de la barre de statut
+        self._system_health = self.orchestrator.get_system_health()
+        self.systemHealthChanged.emit()
+
     def send_notification(self, level: str, message: str, duration: int = 3000):
         """Méthode appelée par l'orchestrateur quand une alerte se déclenche"""
         self.notificationEvent.emit(level, message, duration)

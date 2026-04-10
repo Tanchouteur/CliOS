@@ -1,1 +1,29 @@
-{"trip_a_marker": 130000.0, "trip_b_marker": 134691.0, "last_odometer": 2.563694532272798, "fuel_b_accumulated": 10.701002946269195, "last_revision_odo": 125000.0, "last_fuel_price": 2.09}
+{
+    "trips": {
+        "a": {
+            "marker": 130000.0
+        },
+        "b": {
+            "marker": 134691.0,
+            "fuel": 27.70215174722671
+        }
+    },
+    "vehicle": {
+        "last_odometer": 0.0,
+        "last_revision_odo": 125000.0
+    },
+    "settings": {
+        "last_fuel_price": 2.09
+    },
+    "services": {
+        "Can": true,
+        "Diag": true,
+        "Dynamics": true,
+        "EngineSound": false,
+        "Leds": true,
+        "Monitor": true,
+        "Noise": true,
+        "Notification": true,
+        "TripStats": true
+    }
+}

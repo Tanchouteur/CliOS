@@ -9,7 +9,7 @@ class CanService(BaseService):
     """Service autonome gérant un bus CAN spécifique (lecture, décodage, mise à jour API)."""
 
     def __init__(self, name: str, api, dbc_path: str, provider, obd_callback=None):
-        super().__init__(service_name="CAN")
+        super().__init__(service_name="Can")
         self.name = name
         self.api = api
         self.thread = None
