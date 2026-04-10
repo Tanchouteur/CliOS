@@ -3,6 +3,7 @@ import os
 import sys
 import argparse
 
+from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -69,6 +70,7 @@ def main():
     CONFIG_DIR = os.path.join(BASE_DIR, "config")
     SOUNDS_DIR = os.path.join(BASE_DIR, "assets", "sounds")
     STORAGE_DIR = os.path.join(BASE_DIR, "data")
+    sound_file_path = os.path.join(SOUNDS_DIR, "gtr.wav")
 
     with open(os.path.join(CONFIG_DIR, args.conf), 'r', encoding='utf-8') as f:
         vehicle_config = json.load(f)
@@ -97,31 +99,30 @@ def main():
 
     # --- 4. Création et Ajout de TOUS les services de base ---
     diag_service = DiagnosticService(api, can_provider)
-    led_service = BleLedController()
+    led_service = BleLedController(storage)
     stats_service = TripStatsService(api, vehicle_config, storage)
-    dynamics_service = DynamicsService(api)
-    sound_file_path = os.path.join(SOUNDS_DIR, "gtr.wav")
-    engine_sound_service = EngineSoundService(api, audio_path=sound_file_path)
-    cabin_sound_service = CabinNoiseService(api)
-    monitor_service = SystemMonitorService(api)
+    dynamics_service = DynamicsService(api, storage)
+    engine_sound_service = EngineSoundService(api, storage,audio_path=sound_file_path)
+    cabin_sound_service = CabinNoiseService(api, storage)
+    monitor_service = SystemMonitorService(api, storage)
 
     can_service = CanService(
         name="CAN_Moteur",
         api=api,
+        storage=storage,
         dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),
         provider=can_provider,
         obd_callback=diag_service.receive_obd_frame
     )
 
-    # 1. Les services
-    orchestrator.add_service(can_service, enabled=storage.get("services.Can", True))
-    orchestrator.add_service(diag_service, enabled=storage.get("services.Diag", True))
-    orchestrator.add_service(stats_service, enabled=storage.get("services.TripStats", True))
-    orchestrator.add_service(dynamics_service, enabled=storage.get("services.Dynamics", True))
-    orchestrator.add_service(monitor_service, enabled=storage.get("services.Monitor", True))
-    orchestrator.add_service(engine_sound_service, enabled=storage.get("services.EngineSound", False))
-    orchestrator.add_service(cabin_sound_service, enabled=storage.get("services.Noise", True))
-    orchestrator.add_service(led_service, enabled=storage.get("services.Leds", True))
+    orchestrator.add_service(can_service, enabled=storage.get("services.Can.enabled", True))
+    orchestrator.add_service(diag_service, enabled=storage.get("services.Diag.enabled", True))
+    orchestrator.add_service(stats_service, enabled=storage.get("services.TripStats.enabled", True))
+    orchestrator.add_service(dynamics_service, enabled=storage.get("services.Dynamics.enabled", True))
+    orchestrator.add_service(monitor_service, enabled=storage.get("services.Monitor.enabled", True))
+    orchestrator.add_service(engine_sound_service, enabled=storage.get("services.EngineSound.enabled", False))
+    orchestrator.add_service(cabin_sound_service, enabled=storage.get("services.Noise.enabled", True))
+    orchestrator.add_service(led_service, enabled=storage.get("services.Leds.enabled", True))
 
     # --- 5. Lancement de l'IHM ---
     try:
@@ -130,6 +131,8 @@ def main():
             ui_loop(api, orchestrator.stop_event)
 
         elif args.ui == 'gui':
+            QQuickStyle.setStyle("Basic")
+
             app = QApplication(sys.argv)
             engine = QQmlApplicationEngine()
 
@@ -146,7 +149,7 @@ def main():
 
             engine.rootContext().setContextProperty("bridge", bridge)
 
-            notif_service = NotificationService(bridge)
+            notif_service = NotificationService(bridge, storage)
             orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
 
             orchestrator.start_all()

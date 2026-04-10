@@ -5,7 +5,7 @@
         },
         "b": {
             "marker": 134691.0,
-            "fuel": 27.73247495412827
+            "fuel": 27.819311241149922
         }
     },
     "vehicle": {
@@ -16,14 +16,40 @@
         "last_fuel_price": 2.09
     },
     "services": {
-        "Can": true,
-        "Diag": true,
-        "Dynamics": true,
-        "EngineSound": false,
-        "Leds": true,
-        "Monitor": true,
-        "Noise": true,
-        "Notification": true,
-        "TripStats": true
+        "Can": {
+            "enabled": true,
+            "params": {
+                "baudrate": 500000,
+                "modem_port": "/dev/cu.debug-console"
+            }
+        },
+        "Diag": {
+            "enabled": true
+        },
+        "EngineSound": {
+            "params": {
+                "max_vol": 75.39351851851852,
+                "idle_vol": 10.482494212962964,
+                "bass_boost": 59.87051504629629,
+                "tone": 3478.117766203704
+            },
+            "enabled": false
+        },
+        "Noise": {
+            "params": {
+                "calib_offset": 85.88563368055554,
+                "fft_threshold": 40.80381944444444,
+                "fft_rate": 0.24216471354166663
+            },
+            "enabled": true
+        },
+        "Dynamics": {
+            "params": {
+                "min_speed": 5.500217013888889
+            }
+        },
+        "Leds": {
+            "enabled": true
+        }
     }
 }

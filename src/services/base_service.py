@@ -16,11 +16,13 @@ class ServiceStatus(Enum):
 class BaseService:
     """Classe parente (Interface) pour tous les services d'arrière-plan."""
 
-    def __init__(self, service_name: str):
+    def __init__(self, service_name: str, storage=None):
         self.service_name = service_name
         self.status = ServiceStatus.OK
         self.status_msg = ""
-        print(f"{Color.GREEN}[INIT]{Color.RESET} Service '{self.service_name}' initialisé avec succès.")
+        self._params = {}
+        self.storage = storage
+        #print(f"{Color.GREEN}[INIT]{Color.RESET} Service '{self.service_name}' initialisé avec succès.")
 
     def start(self, stop_event: threading.Event, implemented=False):
         """Doit être implémentée par l'enfant. Lance le thread."""
@@ -32,6 +34,42 @@ class BaseService:
     def stop(self):
         """Méthode optionnelle pour un arrêt propre."""
         print(f"{Color.YELLOW}[STOP]{Color.RESET} Service '{self.service_name}' arrêté.")
+
+    def register_param(self, key: str, label: str, param_type: str, default_val, persistent=True, **kwargs):
+        """Enregistre un paramètre. Si persistent=True, le service gère sa propre sauvegarde."""
+
+        val = default_val
+        if persistent and self.storage:
+            val = self.storage.get(f"services.{self.service_name}.params.{key}", default_val)
+
+        self._params[key] = {
+            "key": key,
+            "label": label,
+            "type": param_type,
+            "value": val,
+            "persistent": persistent
+        }
+        self._params[key].update(kwargs)
+
+    def update_param(self, key: str, value):
+        """Met à jour la valeur et gère la sauvegarde de manière autonome."""
+        if key in self._params:
+            self._params[key]["value"] = value
+
+            if self._params[key]["persistent"] and self.storage:
+                self.storage.set(f"services.{self.service_name}.params.{key}", value)
+                print(
+                    f"{Color.BLUE}[INFO]{Color.RESET} {self.service_name} : Paramètre '{key}' sauvegardé sur le disque.")
+
+            self.on_param_changed(key, value)
+
+    def get_params_schema(self) -> list:
+        """Retourne la liste des paramètres pour le QML."""
+        return list(self._params.values())
+
+    def on_param_changed(self, key: str, value):
+        """Méthode à écraser dans l'enfant si le service doit réagir en direct."""
+        pass
 
     def set_ok(self, message: str = ""):
         """Remet le service en état nominal (Vert)."""
