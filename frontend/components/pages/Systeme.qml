@@ -5,7 +5,6 @@ import "../../style" as T
 
 Item {
     id: systemMenuPage
-    anchors.fill: parent
 
     // Modèle des sous-options du menu Système
     readonly property var menuItems: [

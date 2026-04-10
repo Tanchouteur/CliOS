@@ -68,7 +68,7 @@ Rectangle {
                 text: root.displayDb + " dB"
                 font.pixelSize: 16
                 font.bold: true
-                font.family: T.Theme.fontMono || "Courier"
+                font.family: T.Theme.fontMono
                 Layout.alignment: Qt.AlignLeft
 
                 color: {
