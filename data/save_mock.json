@@ -5,11 +5,11 @@
         },
         "b": {
             "marker": 134691.0,
-            "fuel": 27.842593301773086
+            "fuel": 27.84666044855119
         }
     },
     "vehicle": {
-        "last_odometer": 0.08922903356602273,
+        "last_odometer": 0.7725635084942711,
         "last_revision_odo": 125000.0
     },
     "settings": {
@@ -33,14 +33,16 @@
                 "bass_boost": 51.703922448165876,
                 "tone": 2417.8939176245212,
                 "pitch_factor": 49.51629784688995,
-                "sound_model": "v8-1",
+                "sound_model": "v8-2",
                 "turbo_discharge": 0.1961825284090909,
-                "wg_vol": 52.87081339712919,
+                "wg_vol": 19.890724681020732,
                 "turbo_charge": 0.37721354166666665,
                 "turbo_on": true,
-                "turbo_vol": 0.2746348180076629,
+                "turbo_vol": 19.890724681020732,
                 "wg_active": false,
-                "turbo_decay_wg": 0.01
+                "turbo_decay_wg": 0.01,
+                "wind_vol": 14.946546052631579,
+                "wg_duration": 1.249283542663477
             },
             "enabled": true
         },

@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from pyo import Server, SfPlayer, Mix, LFO, Biquad, SigTo, Sine, Noise, PinkNoise
+from pyo import Server, SfPlayer, Mix, LFO, Biquad, SigTo, Sine, PinkNoise
 from src.services.base_service import BaseService
 
 
@@ -27,20 +27,19 @@ class EngineSoundService(BaseService):
                             options=available_models)
         self.register_param("max_vol", "Volume Maximum (%)", "slider", 80.0, min_val=0.0, max_val=100.0)
         self.register_param("idle_vol", "Volume au Ralenti (%)", "slider", 10.0, min_val=0.0, max_val=100.0)
-        self.register_param("bass_boost", "Niveau des Basses (%)", "slider", 60.0, min_val=0.0, max_val=100.0)
+        self.register_param("bass_boost", "Niveau des Basses (%)", "slider", 40.0, min_val=0.0, max_val=100.0)
         self.register_param("tone", "Ouverture Filtre (Hz)", "slider", 4000.0, min_val=1000.0, max_val=8000.0)
 
         # --- PARAMÈTRES TURBO & WASTEGATE ---
         self.register_param("turbo_on", "Activer Turbo", "toggle", True)
-        self.register_param("turbo_vol", "Volume Sifflement (%)", "slider", 30.0, min_val=0.0, max_val=100.0)
+        self.register_param("turbo_vol", "Sifflement (Whine) (%)", "slider", 10.0, min_val=0.0, max_val=100.0)
+        self.register_param("wind_vol", "Aspiration (Whoosh) (%)", "slider", 70.0, min_val=0.0, max_val=100.0)
         self.register_param("turbo_charge", "Temps Charge (s)", "slider", 0.6, min_val=0.1, max_val=2.0)
 
-        # Section Wastegate
         self.register_param("wg_active", "Activer Wastegate", "toggle", True)
         self.register_param("wg_vol", "Volume Wastegate (%)", "slider", 40.0, min_val=0.0, max_val=100.0)
-        self.register_param("wg_duration", "Durée Pschhht (s)", "slider", 0.4, min_val=0.1, max_val=1.5)  # NOUVEAU
+        self.register_param("wg_duration", "Durée Pschhht (s)", "slider", 0.4, min_val=0.1, max_val=1.5)
 
-        # Section Décharge (La distinction avec/sans WG)
         self.register_param("turbo_decay_wg", "Décharge avec WG (s)", "slider", 0.08, min_val=0.01, max_val=0.3)
         self.register_param("turbo_decay_slow", "Décharge sans WG (s)", "slider", 0.8, min_val=0.3, max_val=3.0)
 
@@ -77,15 +76,16 @@ class EngineSoundService(BaseService):
             self.mixer = Mix([
                 self.player_idle, self.player_mid, self.player_high,
                 self.muffled_synth,
-                self.turbo_whistle1, self.turbo_whistle2, self.spool_filter,
-                self.wg_synth
+                self.turbo_whistle, self.turbo_harmonic,  # 1. Whine + 2. Harmonique
+                self.spool_filter,  # 3. Whoosh
+                self.wg_synth  # 4. Dump Valve
             ], voices=2)
 
             self.master_filter = Biquad(self.mixer, freq=self.filter_ctrl, type=0)
             self.output = self.master_filter * self.master_vol_ctrl
             self.output.out()
 
-            self.set_ok(f"Modèle '{model_name}' (Turbo Diesel) chargé.")
+            self.set_ok(f"Modèle '{model_name}' chargé.")
         else:
             self.set_error(f"Fichiers manquants dans le dossier {model_name}/")
 
@@ -106,26 +106,32 @@ class EngineSoundService(BaseService):
             self.bass_freq_ctrl = SigTo(value=40.0, time=0.05)
             self.bass_vol_ctrl = SigTo(value=0.0, time=0.05)
             self.raw_synth = LFO(freq=self.bass_freq_ctrl, type=3, mul=self.bass_vol_ctrl)
-            self.muffled_synth = Biquad(self.raw_synth, freq=150, type=0)
+            self.muffled_synth = Biquad(self.raw_synth, freq=120, type=0)
 
-            self.turbo_freq_ctrl = SigTo(value=800.0, time=0.6)
+            # --- 1 & 2. SIFFLEMENT (Whine + Harmonique) ---
+            self.turbo_freq_ctrl = SigTo(value=1000.0, time=0.6)
             self.turbo_vol_ctrl = SigTo(value=0.0, time=0.6)
 
-            self.turbo_whistle1 = Sine(freq=self.turbo_freq_ctrl, mul=self.turbo_vol_ctrl)
-            self.turbo_freq_low = self.turbo_freq_ctrl * 0.5
-            self.turbo_whistle2 = Sine(freq=self.turbo_freq_low, mul=self.turbo_vol_ctrl * 0.8)
+            self.turbo_whistle = Sine(freq=self.turbo_freq_ctrl, mul=self.turbo_vol_ctrl)
+            # Harmonique (Fréquence x2, Volume 30%)
+            self.turbo_harmonic = Sine(freq=self.turbo_freq_ctrl * 2.0, mul=self.turbo_vol_ctrl * 0.3)
 
-            self.spool_noise = Noise()
-            self.spool_filter = Biquad(self.spool_noise, freq=self.turbo_freq_ctrl, q=1.5, type=2,
-                                       mul=self.turbo_vol_ctrl * 0.4)
+            # --- 3. ASPIRATION (Whoosh) ---
+            self.wind_freq_ctrl = SigTo(value=200.0, time=0.6)
+            self.wind_vol_ctrl = SigTo(value=0.0, time=0.6)
 
-            # --- LA WASTEGATE (Ajustée pour enlever le coup de fouet) ---
-            self.wg_vol_ctrl = SigTo(value=0.0, time=0.05)  # Attaque plus douce (50ms)
+            self.spool_noise = PinkNoise()
+            # Filtre plus large (q=0.8) dédié aux fréquences basses/médiums
+            self.spool_filter = Biquad(self.spool_noise, freq=self.wind_freq_ctrl, q=0.8, type=2,
+                                       mul=self.wind_vol_ctrl)
+
+            # --- 4. DUMP VALVE ---
+            self.wg_vol_ctrl = SigTo(value=0.0, time=0.05)
             self.wg_noise = PinkNoise()
-            # On adoucit le filtre (q=1.5) et on descend un peu la fréquence (4500Hz) pour un souffle lourd
-            self.wg_synth = Biquad(self.wg_noise, freq=4500, q=1.5, type=2, mul=self.wg_vol_ctrl)
+            # Fréquence fixe autour de 2.5 kHz pour un bon gros Pschhht lourd
+            self.wg_synth = Biquad(self.wg_noise, freq=2500.0, q=1.0, type=2, mul=self.wg_vol_ctrl)
 
-            self.filter_ctrl = SigTo(value=4000.0, time=0.1)
+            self.filter_ctrl = SigTo(value=6000.0, time=0.1)
             self.master_vol_ctrl = SigTo(value=0.0, time=0.1)
 
             self._load_sound_model()
@@ -144,6 +150,7 @@ class EngineSoundService(BaseService):
                     self.master_vol_ctrl.value = 0.0
                     self.bass_vol_ctrl.value = 0.0
                     self.turbo_vol_ctrl.value = 0.0
+                    self.wind_vol_ctrl.value = 0.0
                     self.wg_vol_ctrl.value = 0.0
                     time.sleep(0.1)
                     continue
@@ -153,10 +160,14 @@ class EngineSoundService(BaseService):
 
                 max_v = self._params["max_vol"]["value"] / 100.0
                 idle_v = self._params["idle_vol"]["value"] / 100.0
-                bass_level = self._params["bass_boost"]["value"] / 100.0
                 base_tone = self._params["tone"]["value"]
 
-                # --- 1. GESTION DU TURBO ET WASTEGATE ---
+                bass_level = (self._params["bass_boost"]["value"] / 100.0) ** 2
+                t_vol = (self._params["turbo_vol"]["value"] / 100.0) ** 3
+                w_vol = (self._params["wind_vol"]["value"] / 100.0) ** 2
+                wg_vol = (self._params["wg_vol"]["value"] / 100.0) ** 2
+
+                # --- GESTION DU TURBO ET WASTEGATE ---
                 is_turbo_on = self._params["turbo_on"]["value"]
 
                 if is_turbo_on:
@@ -165,9 +176,6 @@ class EngineSoundService(BaseService):
                     decay_wg = self._params["turbo_decay_wg"]["value"]
                     decay_slow = self._params["turbo_decay_slow"]["value"]
                     charge_spd = self._params["turbo_charge"]["value"]
-
-                    t_vol = self._params["turbo_vol"]["value"] / 100.0
-                    wg_vol = self._params["wg_vol"]["value"] / 100.0
 
                     raw_torque = self.api._data.get("driver_torque_request")
                     if raw_torque is not None:
@@ -182,57 +190,63 @@ class EngineSoundService(BaseService):
                         boost_capacity = (rpm - 1400.0) / (2200.0 - 1400.0)
 
                     boost_target = boost_capacity * engine_load
-
-                    # Détection d'un relâchement franc de la pédale
                     is_releasing = throttle < 0.1 and self.last_throttle >= 0.1
 
                     if wg_active:
-                        # --- DÉTECTION WASTEGATE ---
                         if is_releasing and self.last_boost_target > 0.3:
-                            self.wg_vol_ctrl.time = 0.05  # Attaque douce anti-clac
+                            self.wg_vol_ctrl.time = 0.05
                             self.wg_vol_ctrl.value = self.last_boost_target * wg_vol
                             self.wg_timer = time.time()
 
-                        # Le Pschht s'évanouit selon le slider 'wg_duration'
                         if time.time() - self.wg_timer > 0.05:
                             self.wg_vol_ctrl.time = wg_duration
                             self.wg_vol_ctrl.value = 0.0
 
-                        # --- APPLICATION SUR LE TURBO ---
                         if time.time() - self.wg_timer < wg_duration:
-                            # Purge ouverte = on vide le turbo très vite
                             boost_target = 0.0
                             self.turbo_vol_ctrl.time = decay_wg
+                            self.wind_vol_ctrl.time = decay_wg
                             self.turbo_freq_ctrl.time = decay_wg
+                            self.wind_freq_ctrl.time = decay_wg
                         else:
-                            # Comportement normal
                             if boost_target > self.last_boost_target:
                                 self.turbo_vol_ctrl.time = charge_spd
+                                self.wind_vol_ctrl.time = charge_spd
                                 self.turbo_freq_ctrl.time = charge_spd
+                                self.wind_freq_ctrl.time = charge_spd
                             else:
                                 self.turbo_vol_ctrl.time = decay_slow
+                                self.wind_vol_ctrl.time = decay_slow
                                 self.turbo_freq_ctrl.time = decay_slow
+                                self.wind_freq_ctrl.time = decay_slow
                     else:
-                        # --- SANS WASTEGATE ---
-                        self.wg_vol_ctrl.value = 0.0  # Pas de pschhht
+                        self.wg_vol_ctrl.value = 0.0
                         if boost_target > self.last_boost_target:
                             self.turbo_vol_ctrl.time = charge_spd
+                            self.wind_vol_ctrl.time = charge_spd
                             self.turbo_freq_ctrl.time = charge_spd
+                            self.wind_freq_ctrl.time = charge_spd
                         else:
-                            self.turbo_vol_ctrl.time = decay_slow  # Décharge longue et naturelle
+                            self.turbo_vol_ctrl.time = decay_slow
+                            self.wind_vol_ctrl.time = decay_slow
                             self.turbo_freq_ctrl.time = decay_slow
+                            self.wind_freq_ctrl.time = decay_slow
 
-                    # On applique les cibles physiques au son (Sifflement diesel)
-                    self.turbo_freq_ctrl.value = 1000.0 + (boost_target * 3500.0)
-                    self.turbo_vol_ctrl.value = boost_target * 0.08 * t_vol
+                    # APPLICATION DES FRÉQUENCES (Selon ton guide)
+                    self.turbo_freq_ctrl.value = 1000.0 + (boost_target * 4000.0)  # 1 kHz -> 5 kHz
+                    self.wind_freq_ctrl.value = 200.0 + (boost_target * 1800.0)  # 200 Hz -> 2 kHz
+
+                    self.turbo_vol_ctrl.value = boost_target * 0.05 * t_vol
+                    self.wind_vol_ctrl.value = boost_target * 0.5 * w_vol
 
                     self.last_throttle = throttle
                     self.last_boost_target = boost_target
                 else:
                     self.turbo_vol_ctrl.value = 0.0
+                    self.wind_vol_ctrl.value = 0.0
                     self.wg_vol_ctrl.value = 0.0
 
-                # --- 2. LE RESTE DU MOTEUR ---
+                # --- LE RESTE DU MOTEUR ---
                 self.pitch_idle.value = max(0.5, rpm / self.RPM_IDLE)
                 self.pitch_mid.value = max(0.5, rpm / self.RPM_MID)
                 self.pitch_high.value = max(0.5, rpm / self.RPM_HIGH)
@@ -251,10 +265,10 @@ class EngineSoundService(BaseService):
                 self.vol_high.value = v_high * 0.7
 
                 self.bass_freq_ctrl.value = (rpm / 60.0) * 3.0
-                self.bass_vol_ctrl.value = (0.2 + (throttle * 0.8)) * bass_level
+                self.bass_vol_ctrl.value = (0.05 + (throttle * 0.2)) * bass_level
 
                 rpm_ratio = rpm / self.RPM_HIGH
-                self.filter_ctrl.value = base_tone + (throttle * 1000) + (rpm_ratio * 2000)
+                self.filter_ctrl.value = base_tone + (throttle * 1500) + (rpm_ratio * 4000)
                 self.master_vol_ctrl.value = idle_v + (throttle * (max_v - idle_v))
 
             time.sleep(0.05)
