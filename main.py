@@ -68,9 +68,9 @@ def main():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     CAN_DIR = os.path.join(BASE_DIR, "can")
     CONFIG_DIR = os.path.join(BASE_DIR, "config")
-    SOUNDS_DIR = os.path.join(BASE_DIR, "assets", "sounds")
     STORAGE_DIR = os.path.join(BASE_DIR, "data")
-    sound_file_path = os.path.join(SOUNDS_DIR, "gtr.wav")
+    SOUNDS_DIR = os.path.join(BASE_DIR, "assets", "sounds")
+    ENGINE_DIR = os.path.join(SOUNDS_DIR, "engine")
 
     with open(os.path.join(CONFIG_DIR, args.conf), 'r', encoding='utf-8') as f:
         vehicle_config = json.load(f)
@@ -102,7 +102,7 @@ def main():
     led_service = BleLedController(storage)
     stats_service = TripStatsService(api, vehicle_config, storage)
     dynamics_service = DynamicsService(api, storage)
-    engine_sound_service = EngineSoundService(api, storage,audio_path=sound_file_path)
+    engine_sound_service = EngineSoundService(api, storage,engine_path=ENGINE_DIR)
     cabin_sound_service = CabinNoiseService(api, storage)
     monitor_service = SystemMonitorService(api, storage)
 

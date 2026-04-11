@@ -6,7 +6,7 @@ import "components"
 
 ApplicationWindow {
     id: appWindow
-    property string version: "1.1.3"
+    property string version: "1.12.0"
     visible: true
     width: 1920
     height: 700

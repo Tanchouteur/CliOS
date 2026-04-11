@@ -1,6 +1,6 @@
 {
     "theme": {
-        "main": "#ff00bc"
+        "main": "#ff00b8"
     },
     "tachometer": {
         "max_rpm": 6000,

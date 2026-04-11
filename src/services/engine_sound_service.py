@@ -1,32 +1,97 @@
 import os
 import threading
 import time
-from pyo import Server, SfPlayer, Mix, LFO, Biquad, Sig
+from pyo import Server, SfPlayer, Mix, LFO, Biquad, SigTo, Sine, PinkNoise
 from src.services.base_service import BaseService
 
 
 class EngineSoundService(BaseService):
-    IDLE_RPM = 800.0
-
-    def __init__(self, api, storage, audio_path="assets/sounds/v6_idle.wav"):
+    def __init__(self, api, storage, engine_path):
         super().__init__("EngineSound", storage)
-        self.master_volume = None
-        self.output = None
-        self.master_filter = None
-        self.raw_synth = None
-        self.muffled_synth = None
         self.api = api
-        self.audio_path = audio_path
         self.server = None
-        self.player = None
-        self.exhaust_synth = None
-        self.mixer = None
+        self.engine_path = engine_path
 
-        # --- DÉCLARATION DES PARAMÈTRES (Visibles en QML) ---
+        self.RPM_IDLE = 803.0
+        self.RPM_MID = 1500.0
+        self.RPM_HIGH = 3500.0
+
+        available_models = ["standard"]
+        if os.path.exists(self.engine_path):
+            folders = [d for d in os.listdir(self.engine_path) if os.path.isdir(os.path.join(self.engine_path, d))]
+            if folders:
+                available_models = folders
+
+        # --- PARAMÈTRES AUDIO ---
+        self.register_param("sound_model", "Modèle de Son", "list", available_models[0], persistent=True,
+                            options=available_models)
         self.register_param("max_vol", "Volume Maximum (%)", "slider", 80.0, min_val=0.0, max_val=100.0)
         self.register_param("idle_vol", "Volume au Ralenti (%)", "slider", 10.0, min_val=0.0, max_val=100.0)
-        self.register_param("bass_boost", "Niveau des Basses (%)", "slider", 60.0, min_val=0.0, max_val=100.0)
-        self.register_param("tone", "Ouverture Filtre (Hz)", "slider", 3500.0, min_val=1000.0, max_val=6000.0)
+        self.register_param("bass_boost", "Niveau des Basses (%)", "slider", 40.0, min_val=0.0, max_val=100.0)
+        self.register_param("tone", "Ouverture Filtre (Hz)", "slider", 4000.0, min_val=1000.0, max_val=8000.0)
+
+        # --- PARAMÈTRES TURBO & WASTEGATE ---
+        self.register_param("turbo_on", "Activer Turbo", "toggle", True)
+        self.register_param("turbo_vol", "Sifflement (Whine) (%)", "slider", 10.0, min_val=0.0, max_val=100.0)
+        self.register_param("wind_vol", "Aspiration (Whoosh) (%)", "slider", 70.0, min_val=0.0, max_val=100.0)
+        self.register_param("turbo_charge", "Temps Charge (s)", "slider", 0.6, min_val=0.1, max_val=2.0)
+
+        self.register_param("wg_active", "Activer Wastegate", "toggle", True)
+        self.register_param("wg_vol", "Volume Wastegate (%)", "slider", 40.0, min_val=0.0, max_val=100.0)
+        self.register_param("wg_duration", "Durée Pschhht (s)", "slider", 0.4, min_val=0.1, max_val=1.5)
+
+        self.register_param("turbo_decay_wg", "Décharge avec WG (s)", "slider", 0.08, min_val=0.01, max_val=0.3)
+        self.register_param("turbo_decay_slow", "Décharge sans WG (s)", "slider", 0.8, min_val=0.3, max_val=3.0)
+
+        self.player_idle = None
+        self.player_mid = None
+        self.player_high = None
+        self.output = None
+
+        self.last_throttle = 0.0
+        self.last_boost_target = 0.0
+        self.wg_timer = 0.0
+
+    def on_param_changed(self, key: str, value):
+        if key == "sound_model" and self.server:
+            self.print_message(f"Chargement du nouveau moteur : {value}")
+            self._load_sound_model()
+
+    def _load_sound_model(self):
+        model_name = self._params["sound_model"]["value"]
+        final_sound_path = os.path.join(self.engine_path, model_name)
+
+        path_idle = os.path.join(final_sound_path, "idle.wav")
+        path_mid = os.path.join(final_sound_path, "mid.wav")
+        path_high = os.path.join(final_sound_path, "high.wav")
+
+        if os.path.exists(path_idle) and os.path.exists(path_mid) and os.path.exists(path_high):
+            if self.output:
+                self.output.stop()
+
+            self.player_idle = SfPlayer(path_idle, loop=True, speed=self.pitch_idle, mul=self.vol_idle)
+            self.player_mid = SfPlayer(path_mid, loop=True, speed=self.pitch_mid, mul=self.vol_mid)
+            self.player_high = SfPlayer(path_high, loop=True, speed=self.pitch_high, mul=self.vol_high)
+
+            # --- 1. LE MIXEUR MONO (voices=1) ---
+            self.mono_mixer = Mix([
+                self.player_idle, self.player_mid, self.player_high,
+                self.muffled_synth,
+                self.turbo_whistle, self.turbo_harmonic,
+                self.spool_filter,
+                self.wg_synth
+            ], voices=1)
+
+            # --- 2. LE DUAL MONO (Répartition 50/50) ---
+            self.stereo_balancer = self.mono_mixer.mix(2)
+
+            # --- 3. SORTIE DIRECTE (SANS FILTRE) ---
+            self.output = self.stereo_balancer * self.master_vol_ctrl
+            self.output.out()
+
+            self.set_ok(f"Modèle '{model_name}' (Dual Mono) chargé.")
+        else:
+            self.set_error(f"Fichiers manquants dans le dossier {model_name}/")
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
@@ -34,23 +99,40 @@ class EngineSoundService(BaseService):
             self.server = Server(duplex=0).boot()
             self.server.start()
 
-            if os.path.exists(self.audio_path):
-                self.player = SfPlayer(self.audio_path, loop=True, speed=1.0, mul=0.6)
-                self.raw_synth = LFO(freq=40.0, type=3, mul=0.6)
-                self.muffled_synth = Biquad(self.raw_synth, freq=150, type=0)
-                self.mixer = Mix([self.player, self.muffled_synth], voices=2)
+            self.pitch_idle = SigTo(value=1.0, time=0.05)
+            self.pitch_mid = SigTo(value=1.0, time=0.05)
+            self.pitch_high = SigTo(value=1.0, time=0.05)
 
-                # Le filtre master prendra sa valeur dynamique dans la boucle
-                self.master_filter = Biquad(self.mixer, freq=3500, type=0)
+            self.vol_idle = SigTo(value=1.0, time=0.05)
+            self.vol_mid = SigTo(value=0.0, time=0.05)
+            self.vol_high = SigTo(value=0.0, time=0.05)
 
-                # Volume master initié à 0, il montera tout seul
-                self.master_volume = Sig(0.0)
-                self.output = self.master_filter * self.master_volume
-                self.output.out()
+            self.bass_freq_ctrl = SigTo(value=40.0, time=0.05)
+            self.bass_vol_ctrl = SigTo(value=0.0, time=0.05)
+            self.raw_synth = LFO(freq=self.bass_freq_ctrl, type=3, mul=self.bass_vol_ctrl)
+            self.muffled_synth = Biquad(self.raw_synth, freq=150, type=0)  # Filtre des basses remonté à 150Hz
 
-                self.set_ok("Active Sound (Propre & Filtré) en ligne.")
-            else:
-                self.set_warning(f"Fichier audio introuvable : {self.audio_path}")
+            # --- TURBO & WASTEGATE ---
+            self.turbo_freq_ctrl = SigTo(value=1000.0, time=0.6)
+            self.turbo_vol_ctrl = SigTo(value=0.0, time=0.6)
+
+            self.turbo_whistle = Sine(freq=self.turbo_freq_ctrl, mul=self.turbo_vol_ctrl)
+            self.turbo_harmonic = Sine(freq=self.turbo_freq_ctrl * 2.0, mul=self.turbo_vol_ctrl * 0.3)
+
+            self.wind_freq_ctrl = SigTo(value=200.0, time=0.6)
+            self.wind_vol_ctrl = SigTo(value=0.0, time=0.6)
+            self.spool_noise = PinkNoise()
+            self.spool_filter = Biquad(self.spool_noise, freq=self.wind_freq_ctrl, q=0.8, type=2,
+                                       mul=self.wind_vol_ctrl)
+
+            self.wg_vol_ctrl = SigTo(value=0.0, time=0.05)
+            self.wg_noise = PinkNoise()
+            self.wg_synth = Biquad(self.wg_noise, freq=2500.0, q=1.0, type=2, mul=self.wg_vol_ctrl)
+
+            # Volume Master (Plus de filtre global)
+            self.master_vol_ctrl = SigTo(value=0.0, time=0.1)
+
+            self._load_sound_model()
 
         except Exception as e:
             self.set_error(f"Échec pyo : {e}")
@@ -59,41 +141,139 @@ class EngineSoundService(BaseService):
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            if self.player and self.status.value == "OK":
-                rpm = self.api._data.get("rpm", self.IDLE_RPM)
-                throttle = self.api._data.get("accel_pos", 0.0) / 100.0
+            if self.status.value == "OK":
+                rpm = self.api._data.get("rpm", 0.0)
 
-                # --- LECTURE DES PARAMÈTRES EN DIRECT ---
+                if rpm < 100.0:
+                    self.master_vol_ctrl.value = 0.0
+                    self.bass_vol_ctrl.value = 0.0
+                    self.turbo_vol_ctrl.value = 0.0
+                    self.wind_vol_ctrl.value = 0.0
+                    self.wg_vol_ctrl.value = 0.0
+                    time.sleep(0.1)
+                    continue
+
+                throttle = self.api._data.get("accel_pos", 0.0) / 100.0
+                speed = self.api._data.get("speed", 0.0)
+
                 max_v = self._params["max_vol"]["value"] / 100.0
                 idle_v = self._params["idle_vol"]["value"] / 100.0
+
+                # --- CORRECTION DES VOLUMES ---
+                # On remet les basses en puissance linéaire (fini le carré qui écrasait le son)
                 bass_level = self._params["bass_boost"]["value"] / 100.0
-                base_tone = self._params["tone"]["value"]
 
-                # --- 1. GESTION DES BASSES ---
-                real_hz = (rpm / 60.0) * 3.0
-                self.raw_synth.setFreq(real_hz)
-                self.muffled_synth.setFreq(150 + (throttle * 150))
+                # On garde l'échelle au carré SEULEMENT pour le turbo pour la précision du réglage
+                t_vol = (self._params["turbo_vol"]["value"] / 100.0) ** 2
+                w_vol = (self._params["wind_vol"]["value"] / 100.0) ** 2
+                wg_vol = (self._params["wg_vol"]["value"] / 100.0) ** 2
 
-                # On applique le multiplicateur de basses choisi par l'utilisateur
-                self.raw_synth.setMul((0.2 + (throttle * 0.8)) * bass_level)
+                is_turbo_on = self._params["turbo_on"]["value"]
 
-                # --- 2. GESTION DU WAV (Texture mécanique) ---
-                texture_ratio = 1.0 + ((rpm - self.IDLE_RPM) / 10000.0)
-                self.player.setSpeed(texture_ratio)
+                if is_turbo_on:
+                    wg_active = self._params["wg_active"]["value"]
+                    wg_duration = self._params["wg_duration"]["value"]
+                    decay_wg = self._params["turbo_decay_wg"]["value"]
+                    decay_slow = self._params["turbo_decay_slow"]["value"]
+                    charge_spd = self._params["turbo_charge"]["value"]
 
-                # Le plafond master s'ouvre en fonction de la tonalité de base
-                self.master_filter.setFreq(base_tone + (texture_ratio * 1000))
+                    raw_torque = self.api._data.get("driver_torque_request")
+                    if raw_torque is not None:
+                        engine_load = max(0.0, float(raw_torque)) / 100.0
+                    else:
+                        engine_load = throttle if speed > 5.0 else throttle * 0.15
 
-                # --- 3. VOLUME MASTER ---
-                target_vol = idle_v + (throttle * (max_v - idle_v))
-                self.master_volume.setValue(target_vol)
+                    boost_capacity = 0.0
+                    if rpm > 2200.0:
+                        boost_capacity = 1.0
+                    elif rpm > 1400.0:
+                        boost_capacity = (rpm - 1400.0) / (2200.0 - 1400.0)
+
+                    boost_target = boost_capacity * engine_load
+                    is_releasing = throttle < 0.1 and self.last_throttle >= 0.1
+
+                    if wg_active:
+                        if is_releasing and self.last_boost_target > 0.3:
+                            self.wg_vol_ctrl.time = 0.05
+                            self.wg_vol_ctrl.value = self.last_boost_target * wg_vol
+                            self.wg_timer = time.time()
+
+                        if time.time() - self.wg_timer > 0.05:
+                            self.wg_vol_ctrl.time = wg_duration
+                            self.wg_vol_ctrl.value = 0.0
+
+                        if time.time() - self.wg_timer < wg_duration:
+                            boost_target = 0.0
+                            self.turbo_vol_ctrl.time = decay_wg
+                            self.wind_vol_ctrl.time = decay_wg
+                            self.turbo_freq_ctrl.time = decay_wg
+                            self.wind_freq_ctrl.time = decay_wg
+                        else:
+                            if boost_target > self.last_boost_target:
+                                self.turbo_vol_ctrl.time = charge_spd
+                                self.wind_vol_ctrl.time = charge_spd
+                                self.turbo_freq_ctrl.time = charge_spd
+                                self.wind_freq_ctrl.time = charge_spd
+                            else:
+                                self.turbo_vol_ctrl.time = decay_slow
+                                self.wind_vol_ctrl.time = decay_slow
+                                self.turbo_freq_ctrl.time = decay_slow
+                                self.wind_freq_ctrl.time = decay_slow
+                    else:
+                        self.wg_vol_ctrl.value = 0.0
+                        if boost_target > self.last_boost_target:
+                            self.turbo_vol_ctrl.time = charge_spd
+                            self.wind_vol_ctrl.time = charge_spd
+                            self.turbo_freq_ctrl.time = charge_spd
+                            self.wind_freq_ctrl.time = charge_spd
+                        else:
+                            self.turbo_vol_ctrl.time = decay_slow
+                            self.wind_vol_ctrl.time = decay_slow
+                            self.turbo_freq_ctrl.time = decay_slow
+                            self.wind_freq_ctrl.time = decay_slow
+
+                    self.turbo_freq_ctrl.value = 1000.0 + (boost_target * 4000.0)
+                    self.wind_freq_ctrl.value = 200.0 + (boost_target * 1800.0)
+
+                    self.turbo_vol_ctrl.value = boost_target * 0.05 * t_vol
+                    self.wind_vol_ctrl.value = boost_target * 0.5 * w_vol
+
+                    self.last_throttle = throttle
+                    self.last_boost_target = boost_target
+                else:
+                    self.turbo_vol_ctrl.value = 0.0
+                    self.wind_vol_ctrl.value = 0.0
+                    self.wg_vol_ctrl.value = 0.0
+
+                # --- 2. LE RESTE DU MOTEUR (Restauré à pleine puissance) ---
+                self.pitch_idle.value = max(0.5, rpm / self.RPM_IDLE)
+                self.pitch_mid.value = max(0.5, rpm / self.RPM_MID)
+                self.pitch_high.value = max(0.5, rpm / self.RPM_HIGH)
+
+                v_idle = max(0.0, 1.0 - (abs(rpm - self.RPM_IDLE) / (self.RPM_MID - self.RPM_IDLE)))
+                if rpm < self.RPM_MID:
+                    v_mid = max(0.0, 1.0 - (abs(rpm - self.RPM_MID) / (self.RPM_MID - self.RPM_IDLE)))
+                else:
+                    v_mid = max(0.0, 1.0 - (abs(rpm - self.RPM_MID) / (self.RPM_HIGH - self.RPM_MID)))
+
+                v_high = max(0.0, 1.0 - (abs(rpm - self.RPM_HIGH) / (self.RPM_HIGH - self.RPM_MID)))
+                if rpm > self.RPM_HIGH: v_high = 1.0
+
+                self.vol_idle.value = v_idle * 1.0
+                self.vol_mid.value = v_mid * 1.0
+                self.vol_high.value = v_high * 1.0
+
+                # NOUVEAU : Les basses retrouvent leur ancienne formule coup de poing
+                self.bass_freq_ctrl.value = (rpm / 60.0) * 3.0
+                self.bass_vol_ctrl.value = (0.2 + (throttle * 0.8)) * bass_level
+
+                # Sortie Master pure
+                self.master_vol_ctrl.value = idle_v + (throttle * (max_v - idle_v))
 
             time.sleep(0.05)
 
     def stop(self):
         super().stop()
-        if self.player:
-            self.player.stop()
         if self.server:
             self.server.stop()
             self.server.shutdown()
