@@ -13,8 +13,8 @@ class EngineSoundService(BaseService):
         self.engine_path = engine_path
 
         self.RPM_IDLE = 803.0
-        self.RPM_MID = 2370.0
-        self.RPM_HIGH = 4073.0
+        self.RPM_MID = 1500.0
+        self.RPM_HIGH = 3500.0
 
         available_models = ["standard"]
         if os.path.exists(self.engine_path):
@@ -73,19 +73,23 @@ class EngineSoundService(BaseService):
             self.player_mid = SfPlayer(path_mid, loop=True, speed=self.pitch_mid, mul=self.vol_mid)
             self.player_high = SfPlayer(path_high, loop=True, speed=self.pitch_high, mul=self.vol_high)
 
-            self.mixer = Mix([
+            # --- 1. LE MIXEUR MONO (voices=1) ---
+            self.mono_mixer = Mix([
                 self.player_idle, self.player_mid, self.player_high,
                 self.muffled_synth,
-                self.turbo_whistle, self.turbo_harmonic,  # 1. Whine + 2. Harmonique
-                self.spool_filter,  # 3. Whoosh
-                self.wg_synth  # 4. Dump Valve
-            ], voices=2)
+                self.turbo_whistle, self.turbo_harmonic,
+                self.spool_filter,
+                self.wg_synth
+            ], voices=1)
 
-            self.master_filter = Biquad(self.mixer, freq=self.filter_ctrl, type=0)
-            self.output = self.master_filter * self.master_vol_ctrl
+            # --- 2. LE DUAL MONO (Répartition 50/50) ---
+            self.stereo_balancer = self.mono_mixer.mix(2)
+
+            # --- 3. SORTIE DIRECTE (SANS FILTRE) ---
+            self.output = self.stereo_balancer * self.master_vol_ctrl
             self.output.out()
 
-            self.set_ok(f"Modèle '{model_name}' chargé.")
+            self.set_ok(f"Modèle '{model_name}' (Dual Mono) chargé.")
         else:
             self.set_error(f"Fichiers manquants dans le dossier {model_name}/")
 
@@ -106,32 +110,26 @@ class EngineSoundService(BaseService):
             self.bass_freq_ctrl = SigTo(value=40.0, time=0.05)
             self.bass_vol_ctrl = SigTo(value=0.0, time=0.05)
             self.raw_synth = LFO(freq=self.bass_freq_ctrl, type=3, mul=self.bass_vol_ctrl)
-            self.muffled_synth = Biquad(self.raw_synth, freq=120, type=0)
+            self.muffled_synth = Biquad(self.raw_synth, freq=150, type=0)  # Filtre des basses remonté à 150Hz
 
-            # --- 1 & 2. SIFFLEMENT (Whine + Harmonique) ---
+            # --- TURBO & WASTEGATE ---
             self.turbo_freq_ctrl = SigTo(value=1000.0, time=0.6)
             self.turbo_vol_ctrl = SigTo(value=0.0, time=0.6)
 
             self.turbo_whistle = Sine(freq=self.turbo_freq_ctrl, mul=self.turbo_vol_ctrl)
-            # Harmonique (Fréquence x2, Volume 30%)
             self.turbo_harmonic = Sine(freq=self.turbo_freq_ctrl * 2.0, mul=self.turbo_vol_ctrl * 0.3)
 
-            # --- 3. ASPIRATION (Whoosh) ---
             self.wind_freq_ctrl = SigTo(value=200.0, time=0.6)
             self.wind_vol_ctrl = SigTo(value=0.0, time=0.6)
-
             self.spool_noise = PinkNoise()
-            # Filtre plus large (q=0.8) dédié aux fréquences basses/médiums
             self.spool_filter = Biquad(self.spool_noise, freq=self.wind_freq_ctrl, q=0.8, type=2,
                                        mul=self.wind_vol_ctrl)
 
-            # --- 4. DUMP VALVE ---
             self.wg_vol_ctrl = SigTo(value=0.0, time=0.05)
             self.wg_noise = PinkNoise()
-            # Fréquence fixe autour de 2.5 kHz pour un bon gros Pschhht lourd
             self.wg_synth = Biquad(self.wg_noise, freq=2500.0, q=1.0, type=2, mul=self.wg_vol_ctrl)
 
-            self.filter_ctrl = SigTo(value=6000.0, time=0.1)
+            # Volume Master (Plus de filtre global)
             self.master_vol_ctrl = SigTo(value=0.0, time=0.1)
 
             self._load_sound_model()
@@ -160,14 +158,16 @@ class EngineSoundService(BaseService):
 
                 max_v = self._params["max_vol"]["value"] / 100.0
                 idle_v = self._params["idle_vol"]["value"] / 100.0
-                base_tone = self._params["tone"]["value"]
 
-                bass_level = (self._params["bass_boost"]["value"] / 100.0) ** 2
-                t_vol = (self._params["turbo_vol"]["value"] / 100.0) ** 3
+                # --- CORRECTION DES VOLUMES ---
+                # On remet les basses en puissance linéaire (fini le carré qui écrasait le son)
+                bass_level = self._params["bass_boost"]["value"] / 100.0
+
+                # On garde l'échelle au carré SEULEMENT pour le turbo pour la précision du réglage
+                t_vol = (self._params["turbo_vol"]["value"] / 100.0) ** 2
                 w_vol = (self._params["wind_vol"]["value"] / 100.0) ** 2
                 wg_vol = (self._params["wg_vol"]["value"] / 100.0) ** 2
 
-                # --- GESTION DU TURBO ET WASTEGATE ---
                 is_turbo_on = self._params["turbo_on"]["value"]
 
                 if is_turbo_on:
@@ -232,9 +232,8 @@ class EngineSoundService(BaseService):
                             self.turbo_freq_ctrl.time = decay_slow
                             self.wind_freq_ctrl.time = decay_slow
 
-                    # APPLICATION DES FRÉQUENCES (Selon ton guide)
-                    self.turbo_freq_ctrl.value = 1000.0 + (boost_target * 4000.0)  # 1 kHz -> 5 kHz
-                    self.wind_freq_ctrl.value = 200.0 + (boost_target * 1800.0)  # 200 Hz -> 2 kHz
+                    self.turbo_freq_ctrl.value = 1000.0 + (boost_target * 4000.0)
+                    self.wind_freq_ctrl.value = 200.0 + (boost_target * 1800.0)
 
                     self.turbo_vol_ctrl.value = boost_target * 0.05 * t_vol
                     self.wind_vol_ctrl.value = boost_target * 0.5 * w_vol
@@ -246,7 +245,7 @@ class EngineSoundService(BaseService):
                     self.wind_vol_ctrl.value = 0.0
                     self.wg_vol_ctrl.value = 0.0
 
-                # --- LE RESTE DU MOTEUR ---
+                # --- 2. LE RESTE DU MOTEUR (Restauré à pleine puissance) ---
                 self.pitch_idle.value = max(0.5, rpm / self.RPM_IDLE)
                 self.pitch_mid.value = max(0.5, rpm / self.RPM_MID)
                 self.pitch_high.value = max(0.5, rpm / self.RPM_HIGH)
@@ -260,15 +259,15 @@ class EngineSoundService(BaseService):
                 v_high = max(0.0, 1.0 - (abs(rpm - self.RPM_HIGH) / (self.RPM_HIGH - self.RPM_MID)))
                 if rpm > self.RPM_HIGH: v_high = 1.0
 
-                self.vol_idle.value = v_idle * 0.7
-                self.vol_mid.value = v_mid * 0.7
-                self.vol_high.value = v_high * 0.7
+                self.vol_idle.value = v_idle * 1.0
+                self.vol_mid.value = v_mid * 1.0
+                self.vol_high.value = v_high * 1.0
 
+                # NOUVEAU : Les basses retrouvent leur ancienne formule coup de poing
                 self.bass_freq_ctrl.value = (rpm / 60.0) * 3.0
-                self.bass_vol_ctrl.value = (0.05 + (throttle * 0.2)) * bass_level
+                self.bass_vol_ctrl.value = (0.2 + (throttle * 0.8)) * bass_level
 
-                rpm_ratio = rpm / self.RPM_HIGH
-                self.filter_ctrl.value = base_tone + (throttle * 1500) + (rpm_ratio * 4000)
+                # Sortie Master pure
                 self.master_vol_ctrl.value = idle_v + (throttle * (max_v - idle_v))
 
             time.sleep(0.05)
