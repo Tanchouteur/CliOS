@@ -1,0 +1,19 @@
+{
+    "trips": {
+        "a": {
+            "marker": 0.0
+        },
+        "b": {
+            "marker": 0.0,
+            "fuel": 0.0
+        }
+    },
+    "vehicle": {
+        "last_odometer": 0.0,
+        "last_revision_odo": 0.0
+    },
+    "settings": {
+        "last_fuel_price": 1.7
+    },
+    "services": {}
+}

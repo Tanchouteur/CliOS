@@ -1,0 +1,46 @@
+{
+    "trips": {
+        "a": {
+            "marker": 130000.0
+        },
+        "b": {
+            "marker": 134691.0,
+            "fuel": 34.14103999999885
+        }
+    },
+    "vehicle": {
+        "last_odometer": 0.0,
+        "last_revision_odo": 125000.0
+    },
+    "settings": {
+        "last_fuel_price": 2.09
+    },
+    "services": {
+        "Can": {
+            "params": {
+                "modem_port": "/dev/cu.usbmodem207B3949534B1"
+            }
+        },
+        "Dynamics": {
+            "params": {
+                "min_speed": 5.38671875,
+                "slip_margin": 10.274839264354068,
+                "lock_margin": 14.968880831339714
+            }
+        },
+        "EngineSound": {
+            "enabled": true,
+            "params": {
+                "max_vol": 100.0,
+                "idle_vol": 35.73171096743295,
+                "bass_boost": 12.020908094098884,
+                "tone": 8000.0,
+                "wg_active": false,
+                "turbo_vol": 5.292439194577352,
+                "sound_model": "v8-2",
+                "turbo_on": true,
+                "wind_vol": 5.142917663476874
+            }
+        }
+    }
+}

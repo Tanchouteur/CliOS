@@ -1,0 +1,17 @@
+{
+    "active_profile": "clio3diesel",
+    "profiles": {
+        "clio3diesel": {
+            "name": "Renault Clio 3",
+            "can_file": "can_moteur_clio3.json",
+            "config_file": "config_clio3diesel.json",
+            "save_file": "save_clio3diesel.json"
+        },
+        "clio3_rs": {
+            "name": "Clio 3  RS",
+            "can_file": "can_moteur_clio3.json",
+            "config_file": "clio3rs.json",
+            "save_file": "save_clio3_rs.json"
+        }
+    }
+}
