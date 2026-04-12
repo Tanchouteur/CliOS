@@ -5,11 +5,11 @@
         },
         "b": {
             "marker": 134691.0,
-            "fuel": 27.861846693038956
+            "fuel": 27.896278423547766
         }
     },
     "vehicle": {
-        "last_odometer": 0.28995797732241513,
+        "last_odometer": 0.0,
         "last_revision_odo": 125000.0
     },
     "settings": {
