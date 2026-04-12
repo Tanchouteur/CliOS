@@ -1,34 +1,64 @@
-# Os qui va tourner sur un rasberry dans ma clio pour faire un dashboard qui centralise les données de la voiture et les affiche sur un écran tactile
-## 🚀 Roadmap & Avancement du Projet
+# 🏎️ CliOS - Smart Automotive Dashboard
 
-Légende :
-- ✅ **Terminé** : Fonctionnalité implémentée et stable.
-- 🟧 **En cours** : En cours de développement ou nécessite des corrections (bugs).
-- ⬜ **À faire** : Idée validée, développement à venir.
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)
+![Qt](https://img.shields.io/badge/UI-QML%20%2F%20PySide6-green.svg)
+![License](https://img.shields.io/badge/License-GPLv3-purple.svg)
+![Status](https://img.shields.io/badge/Status-Active%20Development-orange.svg)
 
-### ✅ Terminé
-* ✅ **Moteur CAN Moteur** : Lecture et décodage du bus CAN principal.
-* ✅ **Système de son moteur synthétique** : Génération audio dynamique incluant le sifflement et l'aspiration du turbo basés sur les RPM et le couple ECU.
-* ✅ **Gestion multi-véhicules** : Création de profils de voitures avec des fichiers de sauvegarde isolés (`save_[id].json`) et changement à chaud depuis l'interface.
-* ✅ **Système de notifications** : Alertes système et conduite (ex: avertissement si embrayage enfoncé plus de 5 secondes).
-* ✅ **Scanner OBD** : Lecture des codes défauts.
-* ✅ **Paramétrage des services** : Configuration individuelle et persistante pour chaque module du système.
-* ✅ **Télémétrie de session** : Enregistrement des données du trajet en cours.
-* ✅ **Analyse de fréquences** : Détection des requêtes donnant les mesures les plus élevées.
-* ✅ **Calculateur de coût de trajet** : Estimation financière basée sur la consommation et le prix du carburant.
-* ✅ **Sonomètre** : Mesure du bruit ambiant dans l'habitacle.
-* ✅ **Interface de Debug** : Affichage en direct de l'intégralité des trames lues sur le bus CAN et de leurs valeurs décodées.
+CliOS est un système embarqué modulaire et léger conçu pour moderniser l'interface des véhicules. Il s'interface directement avec le bus CAN et la prise OBD pour offrir une télémétrie en temps réel, des diagnostics avancés et des fonctionnalités de confort (Active Sound Design, éclairage).
 
-### 🟧 En cours / À stabiliser
-* 🟧 **Gestion de l'éclairage de l'habitacle** : Contrôle des LEDs ou lumières intérieures.
-* 🟧 **Intégration IMU** : Exploitation de la centrale à inertie (accélération, g-force, inclinaison).
-* 🟧 **Simulateur (Mock) avancé** : Création d'un générateur de données de roulage cohérentes, incluant un contrôle manuel (ex: forcer le throttle à 50% pour simuler une accélération).
-* 🟧 **Monitoring Système** : Système de calcul de l'empreinte processeur (CPU/RAM) de chaque service en temps réel.
+## 🏗️ Architecture du Projet
 
-### 💡 À faire / Boîte à idées
-* ⬜ **Moteur CAN Habitacle** : Interfaçage avec le réseau secondaire du véhicule (confort, multimédia).
-* ⬜ **Dashcam intégrée** : Enregistrement vidéo synchronisé avec la télémétrie.
-* ⬜ **Télémétrie Cloud** : Envoi et stockage distant des trajets, avec génération de statistiques globales (RPM moyen, vitesse max, historique des rapports).
-* ⬜ **Luminosité adaptative️** : Gestion automatique du rétroéclairage de l'écran en utilisant les capteurs de luminosité d'origine via le bus CAN.
-* ⬜ **Indicateur de dissipation d'énergie** : Calcul de l'argent "perdu" lors des phases de freinage (énergie dissipée en chaleur).
-* ⬜ **Coût instantané (€/min)** : Affichage de la consommation financière en temps réel, équivalent à la consommation instantanée en L/100km.
+Le système est construit sur une architecture orientée micro-services en Python, couplée à un moteur de rendu graphique QML pour garantir une faible empreinte CPU (idéal pour Raspberry Pi).
+```
+📂 ClOS
+ ┣ 📂 frontend/         # Interface graphique QML (Dashboards, Gauges, Settings)
+ ┣ 📂 src/
+ ┃ ┣ 📂 services/       # Micro-services autonomes fonctionnant en arrière-plan
+ ┃ ┃ ┣ 🐍 can_service.py         # Moteur de lecture CAN
+ ┃ ┃ ┣ 🐍 engine_sound_service.py# Synthèse audio dynamique du moteur
+ ┃ ┃ ┣ 🐍 diagnostic_service.py  # Scanner OBD et codes défauts
+ ┃ ┃ ┣ 🐍 trip_stats_service.py  # Télémétrie et calcul de coût de trajet
+ ┃ ┃ ┗ ...
+ ┃ ┣ 📂 simulation/     # Outils de Mocking pour le développement hors-véhicule
+ ┃ ┃ ┣ 🐍 mock_driver.py         # Générateur de fausses trames réalistes
+ ┃ ┃ ┗ 🐍 orchestrator.py        # Gestion dynamique du cycle de vie des services
+ ┃ ┗ 📂 tools/          # Utilitaires (Parsers DBC, bridge Qt)
+ ┣ 🐍 main.py           # Point d'entrée de l'application
+ ┗ 📜 requirements.txt  # Dépendances Python (PySide6, pyo, python-can, etc.)
+```
+
+## ✨ État des Fonctionnalités
+
+### ✅ Déployé & Stable
+* **Télémétrie CAN & OBD** : Lecture en temps réel et décodage des trames du bus moteur (RPM, Couple, Températures) et interface de debug en direct.
+* **Active Sound Design (ASD)** : Synthèse audio réactive (sifflement/aspiration turbo) basée sur la charge ECU et le régime.
+* **Gestion Multi-Véhicules** : Profils de voitures avec fichiers de sauvegarde isolés (`save_[id].json`) sélectionnables à chaud.
+* **Notifications & Sécurité** : Alertes de conduite (ex: avertissement d'usure si l'embrayage est maintenu enfoncé).
+* **Trip Computer Avancé** : Enregistrement de session et estimateur de coût de trajet basé sur la consommation réelle et le prix à la pompe.
+* **Acoustique** : Sonomètre intégré mesurant le bruit ambiant (SPL) dans l'habitacle.
+
+### 🚧 En développement
+* **Système d'Éclairage (Ambiance)** : Interfaçage avec l'habitacle pour le contrôle des LEDs.
+* **Télémétrie Dynamique (IMU)** : Intégration d'une centrale à inertie pour l'affichage des forces G et de l'inclinaison.
+* **Monitoring Système** : Suivi en direct de l'empreinte CPU/RAM des micro-services.
+* **Mock Provider Avancé** : Simulateur de roulage interactif pour le développement.
+
+### 💡 Roadmap (À venir)
+* **Bus Habitacle** : Interfaçage avec le réseau secondaire (Confort, Multimédia, Commandes au volant).
+* **Dashcam Télémétrique** : Enregistrement vidéo incrusté des données de conduite.
+* **Luminosité Adaptative** : Utilisation du capteur de pluie/luminosité d'origine pour assombrir l'interface QML.
+* **Eco-Conduite** : Affichage du coût instantané (€/min) et de l'énergie thermique dissipée lors des freinages.
+* **Cloud Sync** : Sauvegarde des historiques de trajets et statistiques globales sur serveur distant.
+
+## 🤝 Contribuer au projet
+
+Les Pull Requests sont les bienvenues ! Si tu souhaites ajouter le support d'un nouveau véhicule (nouveau fichier de parsing DBC) ou optimiser l'interface QML :
+1. Fork le projet.
+2. Crée ta branche de fonctionnalité (`git checkout -b feature/NouvelleJauge`).
+3. Commit tes changements (`git commit -m "Ajout d'une jauge de pression turbo"`).
+4. Push vers la branche (`git push origin feature/NouvelleJauge`).
+5. Ouvre une Pull Request.
+
+
+## Liste de todo du projet : [TODO.md](TODO.md)
