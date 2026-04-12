@@ -29,6 +29,6 @@ Légende :
 * ⬜ **Moteur CAN Habitacle** : Interfaçage avec le réseau secondaire du véhicule (confort, multimédia).
 * ⬜ **Dashcam intégrée** : Enregistrement vidéo synchronisé avec la télémétrie.
 * ⬜ **Télémétrie Cloud** : Envoi et stockage distant des trajets, avec génération de statistiques globales (RPM moyen, vitesse max, historique des rapports).
-* ⬜ **Luminosité adaptative ☀️** : Gestion automatique du rétroéclairage de l'écran en utilisant les capteurs de luminosité d'origine via le bus CAN.
+* ⬜ **Luminosité adaptative️** : Gestion automatique du rétroéclairage de l'écran en utilisant les capteurs de luminosité d'origine via le bus CAN.
 * ⬜ **Indicateur de dissipation d'énergie** : Calcul de l'argent "perdu" lors des phases de freinage (énergie dissipée en chaleur).
 * ⬜ **Coût instantané (€/min)** : Affichage de la consommation financière en temps réel, équivalent à la consommation instantanée en L/100km.
