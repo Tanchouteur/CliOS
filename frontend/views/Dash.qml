@@ -65,11 +65,11 @@ Item {
     Item {
         id: leftGauges
         width: 500
-        height: 400
+        height: 450
         anchors.verticalCenter: root.verticalCenter
         anchors.verticalCenterOffset: 50
         anchors.left: root.left
-        anchors.leftMargin: root.width * -0.03
+        anchors.leftMargin: root.width * -0.015
 
         SpeedometerBmw {
             id: speedo
@@ -77,6 +77,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: 0 // Position de base
             anchors.left: parent.left
+            scale: 1.15
         }
 
         BigFuelGauge {
@@ -98,7 +99,7 @@ Item {
         anchors.verticalCenter: root.verticalCenter
         anchors.verticalCenterOffset: 50
         anchors.right: root.right
-        anchors.rightMargin: root.width * -0.03
+        anchors.rightMargin: root.width * -0.015
 
         TachometerBmw {
             id: tacho
@@ -106,6 +107,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: 0
             anchors.right: parent.right
+            scale: 1.15
         }
 
         BigTempGauge {
@@ -114,27 +116,6 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: 600
             anchors.right: parent.right
-        }
-    }
-
-    // --- Lien Visuel Central ---
-    Rectangle {
-        id: centerLink
-        z: -2
-        anchors.bottom: leftGauges.bottom
-        anchors.bottomMargin: 6
-        anchors.left: leftGauges.right
-        anchors.leftMargin: -120
-        anchors.right: rightGauges.left
-        anchors.rightMargin: -120
-        height: 5
-
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: "transparent" }
-            GradientStop { position: 0.05; color: "#A3ffffff" }
-            GradientStop { position: 0.95; color: "#A3ffffff" }
-            GradientStop { position: 1.0; color: "transparent" }
         }
     }
 
@@ -305,7 +286,6 @@ Item {
             PropertyChanges { target: bigTemp; anchors.rightMargin: -100; opacity: 1.0 }
 
             PropertyChanges { target: bottomBar; anchors.topMargin: 30 }
-            PropertyChanges { target: centerLink; anchors.topMargin: 60; opacity: 0.0 }
         },
         State {
             name: "DRIVE"
@@ -320,7 +300,6 @@ Item {
             PropertyChanges { target: bigTemp; anchors.rightMargin: -600; opacity: 0.0 }
 
             PropertyChanges { target: bottomBar; anchors.topMargin: 0 }
-            PropertyChanges { target: centerLink; anchors.topMargin: 0; opacity: 1.0 }
         }
     ]
 

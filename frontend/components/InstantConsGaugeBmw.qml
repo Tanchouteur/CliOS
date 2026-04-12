@@ -12,9 +12,12 @@ Item {
     property real vanishingPointY: 0
 
     property real maxInstCons: 20.0
-    property real smoothInstCons: bridge.stats.inst_cons ?? -1.0
+    property real InstCons: bridge.stats.inst_cons ?? -1.0
     property real avgCons: bridge.stats.avg_cons_b ?? -1.0
     property int intervalG: 5
+
+    // Lissage de la consommation instantanée pour une animation plus fluide TODO
+    property real smoothInstCons: InstCons
 
     // --- Géométrie Interne ---
     // Ajustement des coordonnées pour le rendu visuel en miroir
@@ -164,7 +167,7 @@ Item {
         Text {
             text: Math.min(gaugeRoot.smoothInstCons, 99.9).toFixed(1)
             color: Theme.textMain
-            font.pixelSize: 18
+            font.pixelSize: 20
             font.bold: true
             font.family: "Arial"
             opacity: 0.9
