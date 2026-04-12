@@ -8,7 +8,7 @@ ApplicationWindow {
     id: appWindow
     property string version: "1.12.0"
     visible: true
-    width: 1920
+    width: 2000
     height: 700
     title: "CliOS v" + version
 

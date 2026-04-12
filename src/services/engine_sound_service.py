@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from pyo import Server, SfPlayer, Mix, LFO, Biquad, SigTo, Sine, PinkNoise
+from pyo import Server, SfPlayer, Mix, LFO, Biquad, Tone, Disto, Interp, SigTo, Sine, PinkNoise
 from src.services.base_service import BaseService
 
 
@@ -12,9 +12,9 @@ class EngineSoundService(BaseService):
         self.server = None
         self.engine_path = engine_path
 
-        self.RPM_IDLE = 803.0
-        self.RPM_MID = 1500.0
-        self.RPM_HIGH = 3500.0
+        self.RPM_IDLE = 903.0
+        self.RPM_MID = 2000.0
+        self.RPM_HIGH = 4000.0
 
         available_models = ["standard"]
         if os.path.exists(self.engine_path):
@@ -27,8 +27,12 @@ class EngineSoundService(BaseService):
                             options=available_models)
         self.register_param("max_vol", "Volume Maximum (%)", "slider", 80.0, min_val=0.0, max_val=100.0)
         self.register_param("idle_vol", "Volume au Ralenti (%)", "slider", 10.0, min_val=0.0, max_val=100.0)
+        self.register_param("master_gain", "Amplificateur Global (x)", "slider", 2.5, min_val=1.0, max_val=5.0)
         self.register_param("bass_boost", "Niveau des Basses (%)", "slider", 40.0, min_val=0.0, max_val=100.0)
-        self.register_param("tone", "Ouverture Filtre (Hz)", "slider", 4000.0, min_val=1000.0, max_val=8000.0)
+
+        # NOUVEAU : Filtre habitacle naturel et Raclement V8 sans déphasage
+        self.register_param("cabin_freq", "Filtre Habitacle (Hz)", "slider", 4000.0, min_val=500.0, max_val=15000.0)
+        self.register_param("rasp_vol", "Raclement V8 (Rasp) (%)", "slider", 50.0, min_val=0.0, max_val=100.0)
 
         # --- PARAMÈTRES TURBO & WASTEGATE ---
         self.register_param("turbo_on", "Activer Turbo", "toggle", True)
@@ -73,7 +77,7 @@ class EngineSoundService(BaseService):
             self.player_mid = SfPlayer(path_mid, loop=True, speed=self.pitch_mid, mul=self.vol_mid)
             self.player_high = SfPlayer(path_high, loop=True, speed=self.pitch_high, mul=self.vol_high)
 
-            # --- 1. LE MIXEUR MONO (voices=1) ---
+            # 1. Mixage des sources brutes (Mono parfait)
             self.mono_mixer = Mix([
                 self.player_idle, self.player_mid, self.player_high,
                 self.muffled_synth,
@@ -82,16 +86,24 @@ class EngineSoundService(BaseService):
                 self.wg_synth
             ], voices=1)
 
-            # --- 2. LE DUAL MONO (Répartition 50/50) ---
-            self.stereo_balancer = self.mono_mixer.mix(2)
+            # 2. Le Raclement (Rasp) repensé : Distorsion harmonique intégrée
+            # Au lieu de doubler le son, on crée une version distordue et on fait un fondu (crossfade)
+            self.rasp_disto = Disto(self.mono_mixer, drive=0.4, slope=0.8)
+            self.rasp_blend = Interp(self.mono_mixer, self.rasp_disto, interp=self.rasp_mix_ctrl)
 
-            # --- 3. SORTIE DIRECTE (SANS FILTRE) ---
-            self.output = self.stereo_balancer * self.master_vol_ctrl
+            # 3. Dual Mono pour l'équilibre G/D
+            self.stereo_balancer = self.rasp_blend.mix(2)
+
+            # 4. Le filtre Habitacle : "Tone" (Filtre du 1er ordre, très naturel)
+            self.cabin_muffler = Tone(self.stereo_balancer, freq=self.cabin_freq_ctrl)
+
+            # 5. Sortie Master (Amplifiée)
+            self.output = self.cabin_muffler * self.master_vol_ctrl
             self.output.out()
 
-            self.set_ok(f"Modèle '{model_name}' (Dual Mono) chargé.")
+            self.set_ok(f"Modèle '{model_name}' chargé.")
         else:
-            self.set_error(f"Fichiers manquants dans le dossier {model_name}/")
+            self.set_error(f"Fichiers manquants dans {model_name}/")
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
@@ -107,10 +119,17 @@ class EngineSoundService(BaseService):
             self.vol_mid = SigTo(value=0.0, time=0.05)
             self.vol_high = SigTo(value=0.0, time=0.05)
 
+            # --- SYNTHÉTISEUR DE BASSES ---
             self.bass_freq_ctrl = SigTo(value=40.0, time=0.05)
             self.bass_vol_ctrl = SigTo(value=0.0, time=0.05)
-            self.raw_synth = LFO(freq=self.bass_freq_ctrl, type=3, mul=self.bass_vol_ctrl)
-            self.muffled_synth = Biquad(self.raw_synth, freq=150, type=0)  # Filtre des basses remonté à 150Hz
+            self.raw_synth = LFO(freq=self.bass_freq_ctrl, type=1, mul=self.bass_vol_ctrl)
+            self.muffled_synth = Biquad(self.raw_synth, freq=120, q=2.0, type=0)
+
+            # --- CONTRÔLE DU RACLEMENT (Blend dynamique) ---
+            self.rasp_mix_ctrl = SigTo(value=0.0, time=0.1)
+
+            # --- CONTRÔLE DU FILTRE HABITACLE ---
+            self.cabin_freq_ctrl = SigTo(value=4000.0, time=0.1)
 
             # --- TURBO & WASTEGATE ---
             self.turbo_freq_ctrl = SigTo(value=1000.0, time=0.6)
@@ -129,7 +148,7 @@ class EngineSoundService(BaseService):
             self.wg_noise = PinkNoise()
             self.wg_synth = Biquad(self.wg_noise, freq=2500.0, q=1.0, type=2, mul=self.wg_vol_ctrl)
 
-            # Volume Master (Plus de filtre global)
+            # Contrôle Maître
             self.master_vol_ctrl = SigTo(value=0.0, time=0.1)
 
             self._load_sound_model()
@@ -150,6 +169,7 @@ class EngineSoundService(BaseService):
                     self.turbo_vol_ctrl.value = 0.0
                     self.wind_vol_ctrl.value = 0.0
                     self.wg_vol_ctrl.value = 0.0
+                    self.rasp_mix_ctrl.value = 0.0
                     time.sleep(0.1)
                     continue
 
@@ -158,18 +178,19 @@ class EngineSoundService(BaseService):
 
                 max_v = self._params["max_vol"]["value"] / 100.0
                 idle_v = self._params["idle_vol"]["value"] / 100.0
+                gain = self._params["master_gain"]["value"]
 
-                # --- CORRECTION DES VOLUMES ---
-                # On remet les basses en puissance linéaire (fini le carré qui écrasait le son)
+                # Échelles
                 bass_level = self._params["bass_boost"]["value"] / 100.0
+                rasp_level = self._params["rasp_vol"]["value"] / 100.0
+                cabin_base = self._params["cabin_freq"]["value"]
 
-                # On garde l'échelle au carré SEULEMENT pour le turbo pour la précision du réglage
                 t_vol = (self._params["turbo_vol"]["value"] / 100.0) ** 2
                 w_vol = (self._params["wind_vol"]["value"] / 100.0) ** 2
                 wg_vol = (self._params["wg_vol"]["value"] / 100.0) ** 2
 
+                # --- TURBO LOGIC ---
                 is_turbo_on = self._params["turbo_on"]["value"]
-
                 if is_turbo_on:
                     wg_active = self._params["wg_active"]["value"]
                     wg_duration = self._params["wg_duration"]["value"]
@@ -245,7 +266,7 @@ class EngineSoundService(BaseService):
                     self.wind_vol_ctrl.value = 0.0
                     self.wg_vol_ctrl.value = 0.0
 
-                # --- 2. LE RESTE DU MOTEUR (Restauré à pleine puissance) ---
+                # --- LECTURE DES WAVS ---
                 self.pitch_idle.value = max(0.5, rpm / self.RPM_IDLE)
                 self.pitch_mid.value = max(0.5, rpm / self.RPM_MID)
                 self.pitch_high.value = max(0.5, rpm / self.RPM_HIGH)
@@ -259,16 +280,25 @@ class EngineSoundService(BaseService):
                 v_high = max(0.0, 1.0 - (abs(rpm - self.RPM_HIGH) / (self.RPM_HIGH - self.RPM_MID)))
                 if rpm > self.RPM_HIGH: v_high = 1.0
 
-                self.vol_idle.value = v_idle * 1.0
-                self.vol_mid.value = v_mid * 1.0
-                self.vol_high.value = v_high * 1.0
+                self.vol_idle.value = v_idle
+                self.vol_mid.value = v_mid
+                self.vol_high.value = v_high
 
-                # NOUVEAU : Les basses retrouvent leur ancienne formule coup de poing
-                self.bass_freq_ctrl.value = (rpm / 60.0) * 3.0
+                # --- DYNAMIQUE MOTEUR ---
+                self.bass_freq_ctrl.value = (rpm / 60.0) * 4.0
                 self.bass_vol_ctrl.value = (0.2 + (throttle * 0.8)) * bass_level
 
-                # Sortie Master pure
-                self.master_vol_ctrl.value = idle_v + (throttle * (max_v - idle_v))
+                # Interpolation du raclement (0.0 = son pur, 0.7 = très crade)
+                # Lié à la pédale pour que le moteur "grogne" en charge
+                self.rasp_mix_ctrl.value = (throttle * 0.7) * rasp_level
+
+                # Dynamique du Filtre Habitacle
+                # Plus on accélère et plus on monte dans les tours, plus le son perce l'isolation
+                rpm_ratio = min(1.0, rpm / self.RPM_HIGH)
+                self.cabin_freq_ctrl.value = cabin_base + (throttle * 1500.0) + (rpm_ratio * 3000.0)
+
+                # Sortie Master amplifiée
+                self.master_vol_ctrl.value = (idle_v + (throttle * (max_v - idle_v))) * gain
 
             time.sleep(0.05)
 
