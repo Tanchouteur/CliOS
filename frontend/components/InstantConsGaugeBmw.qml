@@ -12,12 +12,12 @@ Item {
     property real vanishingPointY: 0
 
     property real maxInstCons: 20.0
-    property real InstCons: bridge.stats.inst_cons ?? -1.0
+    property real instCons: bridge.stats.inst_cons ?? -1.0
     property real avgCons: bridge.stats.avg_cons_b ?? -1.0
     property int intervalG: 5
 
     // Lissage de la consommation instantanée pour une animation plus fluide TODO
-    property real smoothInstCons: InstCons
+    property real smoothInstCons: instCons
 
     // --- Géométrie Interne ---
     // Ajustement des coordonnées pour le rendu visuel en miroir
