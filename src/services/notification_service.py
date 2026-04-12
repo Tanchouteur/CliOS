@@ -75,3 +75,6 @@ class NotificationService(BaseService):
         else:
             self._states["clutch_start_time"] = None
             self._states["clutch_warned"] = False
+
+    def send_notification(self,level: str ,message: str, duration: int):
+        self.bridge.send_notification(level ,message, duration)

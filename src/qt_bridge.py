@@ -1,7 +1,7 @@
 import json
 import threading
 
-from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot
+from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
 
 
 class DashboardBridge(QObject):
@@ -13,13 +13,15 @@ class DashboardBridge(QObject):
     statsChanged = Signal(dict)
     systemHealthChanged = Signal()
 
-    def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None):
+    def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
+                 profile_manager=None):
         super().__init__()
         self.api = api
         self.led_service = led_service
         self.stats_service = stats_service
         self.diag_service = diag_service
         self.orchestrator = orchestrator
+        self.profile_manager = profile_manager  # NOUVEAU : Référence au manager
 
         self._config_path = config_path
         self._data = {}
@@ -29,23 +31,24 @@ class DashboardBridge(QObject):
         with open(config_path, 'r') as f:
             self._config = json.load(f)
 
-        # 1. Voie Ultra-Rapide (60 Hz / 16ms) : Uniquement la télémétrie (Vitesse, RPM)
+        # 1. Voie Ultra-Rapide (60 Hz / 16ms)
         self.timer_fast = QTimer()
         self.timer_fast.timeout.connect(self._update_fast_data)
         self.timer_fast.start(16)
 
-        # 2. Voie Moyenne (2 Hz / 500ms) : Les calculs de l'ordinateur de bord
+        # 2. Voie Moyenne (2 Hz / 500ms)
         self.timer_medium = QTimer()
         self.timer_medium.timeout.connect(self._update_stats)
         self.timer_medium.start(500)
 
-        # 3. Voie Lente (1 Hz / 1000ms) : La santé du système et les logs
+        # 3. Voie Lente (1 Hz / 1000ms)
         self.timer_slow = QTimer()
         self.timer_slow.timeout.connect(self._update_health)
         self.timer_slow.start(1000)
 
-    # --- LES SOUS-ROUTINES (Plus courtes, plus rapides) ---
+        self.needs_restart = False
 
+    # --- LES SOUS-ROUTINES ---
     def _update_fast_data(self):
         new_data = self.api._data.copy()
         if new_data != self._data:
@@ -67,17 +70,14 @@ class DashboardBridge(QObject):
 
     @Property('QVariant', notify=dataChanged)
     def data(self):
-        """Accesseur de la structure de données télémétriques exposé au moteur QML."""
         return self._data
 
     @Property('QVariant', notify=configChanged)
     def config(self):
-        """Accesseur de la configuration statique exposé au moteur QML."""
         return self._config
 
     @Property('QVariant', notify=statsChanged)
     def stats(self):
-        """Accesseur des statistiques exposé au moteur QML."""
         return self._stats
 
     @Property('QVariant', notify=systemHealthChanged)
@@ -103,20 +103,12 @@ class DashboardBridge(QObject):
 
     @Slot()
     def resetTripB(self):
-        """
-        Point d'entrée QML (Slot) permettant à l'IHM d'invoquer une méthode métier.
-        Déclenche la réinitialisation matérielle de l'odomètre partiel B et des accumulateurs associés.
-        """
         print("[INFO] Signal IHM reçu : Réinitialisation du Trip B.")
         if self.stats_service:
             self.stats_service.reset_trip_b()
 
     @Slot(str, str)
     def save_setting(self, key_path, value):
-        """
-        Met à jour la configuration en RAM (supporte les clés imbriquées ex: 'theme.main')
-        et l'écrit sur le disque en arrière-plan.
-        """
         if key_path == "theme.main" and self.led_service:
             self.led_service.set_color(value)
 
@@ -129,7 +121,6 @@ class DashboardBridge(QObject):
             current_dict = current_dict[k]
 
         current_dict[keys[-1]] = value
-
         self.configChanged.emit(self._config)
 
         def write_worker():
@@ -144,37 +135,29 @@ class DashboardBridge(QObject):
 
     @Slot(float)
     def updateFuelPrice(self, new_price: float):
-        """Reçoit le prix depuis l'UI et met à jour le service."""
         if self.stats_service:
             self.stats_service.set_fuel_price(new_price)
             print(f"[BRIDGE] Prix du carburant mis à jour : {new_price} €/L")
 
     @Slot(str, bool)
     def toggleService(self, service_name: str, enable: bool):
-        """Active ou désactive un service à la volée."""
         print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
-
-        # --- LA CORRECTION EST ICI (.enabled) ---
         storage_key = f"services.{service_name}.enabled"
         if hasattr(self, 'storage'):
             self.storage.set(storage_key, enable)
 
-        # 2. Action : Ordre direct à l'électricien
         if enable:
             self.orchestrator.start_service(service_name)
         else:
             self.orchestrator.stop_service(service_name)
 
-        # 3. Rafraîchissement visuel
         self._system_health = self.orchestrator.get_system_health()
         self.systemHealthChanged.emit()
 
     def send_notification(self, level: str, message: str, duration: int = 3000):
-        """Méthode appelée par l'orchestrateur quand une alerte se déclenche"""
         self.notificationEvent.emit(level, message, duration)
 
     def _get_service_obj(self, service_name: str):
-        """Fonction utilitaire pour trouver un objet service par son nom."""
         for srv in self.orchestrator.services.keys():
             if srv.service_name == service_name:
                 return srv
@@ -182,7 +165,6 @@ class DashboardBridge(QObject):
 
     @Slot(str, result=str)
     def getServiceParameters(self, service_name: str) -> str:
-        """Le Bridge ne fait que demander au service sans toucher au disque."""
         srv = self._get_service_obj(service_name)
         if srv:
             return json.dumps(srv.get_params_schema())
@@ -190,7 +172,71 @@ class DashboardBridge(QObject):
 
     @Slot(str, str, 'QVariant')
     def setServiceParameter(self, service_name: str, param_key: str, value):
-        """Le Bridge fait juste passer le message de l'IHM vers le service."""
         srv = self._get_service_obj(service_name)
         if srv:
             srv.update_param(param_key, value)
+
+    # --- NOUVEAU : INTERFACE DU PROFILE MANAGER ---
+
+    @Slot(result='QVariantList')
+    def getAvailableProfiles(self):
+        """Renvoie la liste des identifiants de profils existants."""
+        if self.profile_manager:
+            return self.profile_manager.get_available_profiles()
+        return []
+
+    @Slot(result=str)
+    def getActiveProfile(self):
+        """Renvoie l'identifiant du profil actuellement chargé."""
+        if self.profile_manager:
+            return self.profile_manager.active_profile_id
+        return ""
+
+    @Slot(result='QVariantList')
+    def getAvailableCanFiles(self):
+        """Renvoie la liste des fichiers .json dans le dossier can/"""
+        if self.profile_manager:
+            return self.profile_manager.get_available_can_files()
+        return []
+
+    @Slot(result='QVariantList')
+    def getAvailableConfigFiles(self):
+        """Renvoie la liste des fichiers .json dans le dossier config/"""
+        if self.profile_manager:
+            return self.profile_manager.get_available_config_files()
+        return []
+
+    @Slot(str, str, str, str, str, result=bool)
+    def createNewProfile(self, profile_id: str, name: str, can_file: str, config_file: str, save_file: str):
+        """Crée un nouveau profil et génère un fichier de config vierge si besoin."""
+        if not self.profile_manager:
+            return False
+
+        # 1. On s'assure que le fichier de config existe ou on en crée un vierge
+        self.profile_manager.create_new_config(config_file)
+
+        # 2. On ajoute le profil au trousseau
+        self.profile_manager.add_profile(profile_id, name, can_file, config_file, save_file)
+        print(f"[INFO] Nouveau profil créé : {name} ({profile_id})")
+        return True
+
+    @Slot(str, result=bool)
+    def setActiveProfile(self, profile_id: str):
+        """Change le profil actif pour le prochain redémarrage."""
+        if not self.profile_manager:
+            return False
+
+        success = self.profile_manager.set_active_profile(profile_id)
+        if success:
+            print(f"[INFO] Changement de profil programmé : {profile_id}. Redémarrage nécessaire.")
+            self.send_notification("info", f"Profil '{profile_id}' sélectionné. Veuillez redémarrer l'application.",
+                                   4000)
+        return success
+
+    @Slot()
+    def restartApplication(self):
+        """Demande un redémarrage complet du système."""
+        print("[INFO] Ordre de redémarrage reçu depuis l'IHM.")
+        self.needs_restart = True
+        # On demande à l'interface graphique de se fermer proprement
+        QCoreApplication.instance().quit()

@@ -7,6 +7,9 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
+# --- NOUVEL IMPORT ---
+from src.profile_manager import ProfileManager
+
 from src.driver import Slcan
 from src.simulation.physique_mock import PhysicsMockProvider
 from src.simulation.mock_ui import MockControlPanel
@@ -26,7 +29,6 @@ from src.qt_bridge import DashboardBridge
 from src.services.dynamics_service import DynamicsService
 
 
-# --- Console de Débogage ---
 def ui_loop(api, stop_event):
     """Interface de débogage en ligne de commande (CLI)."""
     while not stop_event.is_set():
@@ -57,11 +59,9 @@ def ui_loop(api, stop_event):
 
 
 def main():
-    # --- Traitement des Arguments ---
     cmd_parser = argparse.ArgumentParser()
     cmd_parser.add_argument('--ui', choices=['cli', 'gui'], default='gui')
     cmd_parser.add_argument('--mock', action='store_true')
-    cmd_parser.add_argument('--conf', type=str, default='config_clio3diesel.json')
     args = cmd_parser.parse_args()
 
     # --- Environnement ---
@@ -72,37 +72,39 @@ def main():
     SOUNDS_DIR = os.path.join(BASE_DIR, "assets", "sounds")
     ENGINE_DIR = os.path.join(SOUNDS_DIR, "engine")
 
-    with open(os.path.join(CONFIG_DIR, args.conf), 'r', encoding='utf-8') as f:
+    # --- 1. Initialisation du Profile Manager ---
+    profile_manager = ProfileManager(
+        config_dir=CONFIG_DIR,
+        can_dir=CAN_DIR,
+        storage_dir=STORAGE_DIR,
+        is_mock=args.mock
+    )
+
+    # --- Chargement de la Config du Véhicule ---
+    with open(profile_manager.get_config_path(), 'r', encoding='utf-8') as f:
         vehicle_config = json.load(f)
 
-    # --- 1. Initialisation du Disque Dur Central ---
-    if args.mock:
-        storage_file_name = "save_mock.json"
-    else:
-        storage_file_name = "save.json"
-
-    storage_file_path = os.path.join(STORAGE_DIR, storage_file_name)
-
-    storage = PersistentStorage(storage_file_path)
+    # --- 2. Initialisation du Disque Dur Central ---
+    storage = PersistentStorage(profile_manager.get_save_path())
 
     api = VehicleAPI(storage)
     api.run_startup_sequence(duration_sec=1.5)
 
-    # --- 2. Initialisation de l'Orchestrateur ---
+    # --- 3. Initialisation de l'Orchestrateur ---
     orchestrator = SystemOrchestrator()
 
-    # --- 3. Branchement des Périphériques ---
+    # --- 4. Branchement des Périphériques ---
     if args.mock:
         can_provider = PhysicsMockProvider(api)
     else:
         can_provider = Slcan(channel="/dev/cu.usbmodem207B3949534B1", baudrate=500000)
 
-    # --- 4. Création et Ajout de TOUS les services de base ---
+    # --- 5. Création et Ajout des Services ---
     diag_service = DiagnosticService(api, can_provider)
     led_service = BleLedController(storage)
     stats_service = TripStatsService(api, vehicle_config, storage)
     dynamics_service = DynamicsService(api, storage)
-    engine_sound_service = EngineSoundService(api, storage,engine_path=ENGINE_DIR)
+    engine_sound_service = EngineSoundService(api, storage, engine_path=ENGINE_DIR)
     cabin_sound_service = CabinNoiseService(api, storage)
     monitor_service = SystemMonitorService(api, storage)
 
@@ -110,7 +112,7 @@ def main():
         name="CAN_Moteur",
         api=api,
         storage=storage,
-        dbc_path=os.path.join(CAN_DIR, "can_moteur_clio3.json"),
+        dbc_path=profile_manager.get_can_path(),
         provider=can_provider,
         obd_callback=diag_service.receive_obd_frame
     )
@@ -124,7 +126,9 @@ def main():
     orchestrator.add_service(cabin_sound_service, enabled=storage.get("services.Noise.enabled", True))
     orchestrator.add_service(led_service, enabled=storage.get("services.Leds.enabled", True))
 
-    # --- 5. Lancement de l'IHM ---
+    # --- 6. Lancement de l'IHM ---
+    needs_restart = False  # Variable pour mémoriser l'état après la fermeture de l'UI
+
     try:
         if args.ui == 'cli':
             orchestrator.start_all()
@@ -138,13 +142,13 @@ def main():
 
             bridge = DashboardBridge(
                 api,
-                os.path.join(CONFIG_DIR, args.conf),
+                profile_manager.get_config_path(),
                 orchestrator=orchestrator,
                 led_service=led_service,
                 stats_service=stats_service,
-                diag_service=diag_service
+                diag_service=diag_service,
+                profile_manager=profile_manager
             )
-            # Ajout du storage au pont si on en a besoin plus tard (Optionnel mais pratique)
             bridge.storage = storage
 
             engine.rootContext().setContextProperty("bridge", bridge)
@@ -164,15 +168,27 @@ def main():
             if not engine.rootObjects():
                 sys.exit(-1)
 
+            # L'application bloque ici tant qu'elle est ouverte
             app.exec()
+
+            # --- QUAND L'APPLICATION SE FERME ---
+            needs_restart = bridge.needs_restart
+
             del engine
             del bridge
 
     except KeyboardInterrupt:
         print("\n[INFO] Interruption manuelle détectée.")
     finally:
-        # --- 6. Arrêt propre ---
+        # --- 7. Arrêt propre ABSOLUMENT NÉCESSAIRE ---
+        print("[INFO] Extinction de l'orchestrateur et libération des ports...")
         orchestrator.stop_all()
+
+    # --- 8. LE REDÉMARRAGE (Hors du try/finally) ---
+    if needs_restart:
+        print("[INFO] >>> REDÉMARRAGE DU SYSTÈME <<<")
+        # os.execv remplace le processus actuel par une nouvelle instance de python exécutant le même script
+        os.execv(sys.executable, ['python'] + sys.argv)
 
 
 if __name__ == "__main__":

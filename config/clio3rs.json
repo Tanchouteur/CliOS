@@ -1,0 +1,45 @@
+{
+    "theme": {
+        "main": "#ff00b8"
+    },
+    "tachometer": {
+        "max_rpm": 7500,
+        "redline_rpm": 7000,
+        "idle_rpm": 900,
+        "color_normal": "#00aaff",
+        "color_redline": "#ff0033"
+    },
+    "speedometer": {
+        "max_speed": 250
+    },
+    "fuel": {
+        "max_liters": 55,
+        "reserve_percentage": 0.15
+    },
+    "engine_temp": {
+        "min_display": 40,
+        "optimal": 90,
+        "warning": 105,
+        "max_display": 120
+    },
+    "transmission": {
+        "tolerance": 5.0,
+        "ratios": {
+            "1": 115.0,
+            "2": 64.5,
+            "3": 40.0,
+            "4": 29.0,
+            "5": 25.0
+        }
+    },
+    "instant_fuel_consumption": {
+        "min_display": 0.0,
+        "max_display": 20.0
+    },
+    "maintenance": {
+        "revision": {
+            "interval_km": 20000,
+            "warning_threshold_km": 2000
+        }
+    }
+}

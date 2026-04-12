@@ -1,78 +1,130 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 import "../../style" as T
 
 Item {
-    id: root
+    id: vehicleMenuPage
 
-    // --- Header ---
-    Item {
-        id: header
-        anchors { top: parent.top; left: parent.left; right: parent.right; topMargin: 20; leftMargin: 30 }
-        height: 50
+    // Modèle des sous-options du menu Véhicule
+    readonly property var menuItems: [
+        { label: "Profils & Véhicules", desc: "Changer de voiture ou créer un nouveau profil", icon: "🚗", source: "VehicleProfiles.qml" },
+        { label: "Coûts & Statistiques", desc: "Prix du carburant et suivi de maintenance", icon: "⛽", source: "VehicleStats.qml" }
+    ]
 
-        Text {
-            text: "VEHICULE"
-            color: T.Theme.textMain
-            font.pixelSize: 22; font.bold: true; font.letterSpacing: 2
-        }
-    }
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 20
+        spacing: 20
 
-    Column {
-        anchors { top: header.bottom; left: parent.left; right: parent.right; margins: 30; topMargin: 40 }
-        spacing: 15
+        // --- HEADER ---
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 15
 
-        // --- BOUTON : PROFILS ---
-        ButtonDelegate {
-            title: "Profils & Véhicules"
-            description: "Changer de voiture ou créer un nouveau profil"
-            icon: "🚗"
-            onClicked: root.StackView.view.push("VehicleProfiles.qml")
-        }
+            Rectangle {
+                width: 40; height: 40; radius: 20
+                color: backMouse.pressed ? T.Theme.main : (backMouse.containsMouse ? T.Theme.main : T.Theme.bgDimmed)
+                border.color: Qt.rgba(1, 1, 1, 0.1)
+                border.width: 1
 
-        // --- BOUTON : STATS ---
-        ButtonDelegate {
-            title: "Coûts & Statistiques"
-            description: "Prix du carburant et suivi de maintenance"
-            icon: "⛽"
-            onClicked: root.StackView.view.push("VehicleStats.qml")
-        }
-    }
+                Text {
+                    text: "〈"
+                    color: backMouse.pressed || backMouse.containsMouse ? T.Theme.bgMain : T.Theme.textMain
+                    font.pixelSize: 20; font.bold: true
+                    anchors.centerIn: parent
+                    transform: Translate { x: -2 }
+                }
 
-    // --- Composant interne pour les boutons du menu ---
-    component ButtonDelegate : Rectangle {
-        property string title: ""
-        property string description: ""
-        property string icon: ""
-        signal clicked()
-
-        width: parent.width; height: 90
-        color: ma.pressed ? T.Theme.main : T.Theme.bgDimmed
-        radius: 12
-        border.color: Qt.rgba(1, 1, 1, 0.05)
-
-        Row {
-            anchors { fill: parent; leftMargin: 20; rightMargin: 20 }
-            spacing: 20
-            verticalCenter: parent.verticalCenter
-
-            Text { text: icon; font.pixelSize: 30; anchors.verticalCenter: parent.verticalCenter }
-
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-                Text { text: title; color: parent.parent.parent.ma.pressed ? T.Theme.bgMain : T.Theme.textMain; font.pixelSize: 18; font.bold: true }
-                Text { text: description; color: parent.parent.parent.ma.pressed ? T.Theme.bgMain : T.Theme.unselected; font.pixelSize: 14 }
+                MouseArea {
+                    id: backMouse
+                    anchors.fill: parent
+                    hoverEnabled: true // Gardé pour les tests sur PC, inoffensif sur tactile
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: vehicleMenuPage.StackView.view.pop()
+                }
             }
 
             Text {
-                text: "〉"
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                color: parent.parent.parent.ma.pressed ? T.Theme.bgMain : T.Theme.unselected
-                font.bold: true
+                text: "VÉHICULE"
+                color: T.Theme.textMain
+                font.pixelSize: 22; font.bold: true
+                font.letterSpacing: 2
             }
         }
 
-        MouseArea { id: ma; anchors.fill: parent; onClicked: parent.clicked() }
+        // --- LISTE DES OPTIONS ---
+        ListView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            model: vehicleMenuPage.menuItems
+            spacing: 12
+            clip: true
+
+            delegate: Rectangle {
+                id: menuTile
+                width: ListView.view.width
+                height: 90
+                color: T.Theme.bgDimmed
+                radius: 12
+
+                // Illumination de la bordure au toucher
+                border.color: tileMouse.pressed || tileMouse.containsMouse ? T.Theme.main : Qt.rgba(1, 1, 1, 0.05)
+                border.width: tileMouse.pressed || tileMouse.containsMouse ? 2 : 1
+
+                // Effet tactile d'enfoncement physique
+                scale: tileMouse.pressed ? 0.98 : 1.0
+                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 25
+                    spacing: 20
+
+                    // Icône (Emoji)
+                    Text {
+                        text: modelData.icon
+                        font.pixelSize: 30
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    // Textes
+                    Column {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 4
+                        Text {
+                            text: modelData.label
+                            color: T.Theme.textMain
+                            font.pixelSize: 20; font.bold: true
+                        }
+                        Text {
+                            text: modelData.desc
+                            color: T.Theme.unselected
+                            font.pixelSize: 13
+                        }
+                    }
+
+                    // Flèche de navigation animée
+                    Text {
+                        text: "〉"
+                        color: tileMouse.pressed || tileMouse.containsMouse ? T.Theme.main : T.Theme.unselected
+                        font.pixelSize: 20; font.bold: true
+                        transform: Translate { x: tileMouse.pressed || tileMouse.containsMouse ? 5 : 0 }
+                        Behavior on transform { NumberAnimation { duration: 200; easing.type: Easing.OutBack } }
+                    }
+                }
+
+                MouseArea {
+                    id: tileMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: vehicleMenuPage.StackView.view.push(Qt.resolvedUrl(modelData.source))
+                }
+            }
+        }
     }
 }
