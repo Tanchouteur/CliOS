@@ -8,7 +8,7 @@
 CliOS est un système embarqué modulaire et léger conçu pour moderniser l'interface des véhicules. Il s'interface directement avec le bus CAN et la prise OBD pour offrir une télémétrie en temps réel, des diagnostics avancés et des fonctionnalités de confort (Active Sound Design, éclairage).
 
 ## Aperçu de l'interface QML
-![Aperçu de l'interface QML](assets/readme/qml_dashboard.png)
+![Aperçu de l'interface QML](assets/readme/stats.png)
 
 ## ✨ État des Fonctionnalités
 
