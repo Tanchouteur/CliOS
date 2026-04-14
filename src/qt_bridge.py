@@ -141,7 +141,7 @@ class DashboardBridge(QObject):
 
     @Slot(str, bool)
     def toggleService(self, service_name: str, enable: bool):
-        print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
+        #print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
         storage_key = f"services.{service_name}.enabled"
         if hasattr(self, 'storage'):
             self.storage.set(storage_key, enable)
@@ -175,8 +175,6 @@ class DashboardBridge(QObject):
         srv = self._get_service_obj(service_name)
         if srv:
             srv.update_param(param_key, value)
-
-    # --- NOUVEAU : INTERFACE DU PROFILE MANAGER ---
 
     @Slot(result='QVariantList')
     def getAvailableProfiles(self):

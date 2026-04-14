@@ -25,7 +25,7 @@ class SystemOrchestrator:
                 if self.is_running and (data["event"] is None or data["event"].is_set()):
                     data["event"] = threading.Event()
                     srv.start(data["event"])
-                    print(f"[INFO] Orchestrateur : {service_name} ALLUMÉ.")
+                    #print(f"[INFO] Orchestrateur : {service_name} ALLUMÉ.")
                 return
         print(f"[ATTENTION] Orchestrateur : Impossible d'allumer {service_name} (Introuvable).")
 

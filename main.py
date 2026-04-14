@@ -9,6 +9,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 from src.profile_manager import ProfileManager
 from src.driver import Slcan
+from src.services.power_management_service import PowerManagementService
 from src.simulation.physique_mock import PhysicsMockProvider
 from src.simulation.mock_ui import MockControlPanel
 
@@ -58,6 +59,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         (EngineSoundService(api, storage, engine_path=engine_dir), "services.EngineSound.enabled", False),
         (CabinNoiseService(api, storage), "services.Noise.enabled", True),
         (led_service, "services.Leds.enabled", True),
+        (PowerManagementService(api, storage), "services.PowerManager.enabled", True)
     ]
 
     # 3. Enregistrement dynamique

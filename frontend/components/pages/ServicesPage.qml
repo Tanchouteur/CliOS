@@ -145,7 +145,7 @@ Item {
                                 Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
                             }
 
-                            // ⚠️ Ce clic est réservé UNIQUEMENT à l'allumage du service
+                            // Ce clic est réservé UNIQUEMENT à l'allumage du service
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
@@ -154,7 +154,7 @@ Item {
                         }
                     }
 
-                    // ⚠️ Ce clic étire la carte pour dévoiler les paramètres
+                    // Ce clic étire la carte pour dévoiler les paramètres
                     MouseArea {
                         id: cardMouse
                         anchors.fill: parent
