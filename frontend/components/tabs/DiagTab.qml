@@ -14,8 +14,8 @@ Item {
 
     property bool isIgnitionOn: bridge.data !== undefined && bridge.data["key_run"] === true
     property bool isServiceReady: bridge.systemHealth !== undefined &&
-                                  bridge.systemHealth["DIAG"] !== undefined &&
-                                  bridge.systemHealth["DIAG"].status !== "ERROR"
+                                  bridge.systemHealth["Diag"] !== undefined &&
+                                  bridge.systemHealth["Diag"].status !== "ERROR"
 
     // --- Fonctions de style dynamiques ---
     function getStatusColor() {
