@@ -1,28 +1,37 @@
 import threading
 import time
 
+
 class VehicleAPI:
-    """Couche d'Abstraction Matérielle (HAL). Gère uniquement les données brutes du bus CAN."""
+    """Couche d'Abstraction Matérielle (HAL). Gère les données brutes du bus CAN."""
 
     def __init__(self, storage):
-        storage = storage
+        self.storage = storage
         last_odo = storage.get("last_odometer", 0.0)
 
+        # 1. LA VRAIE RÉALITÉ PHYSIQUE (Lue par tes services)
         self._data = {
             "fuel_level": 100.0,
             "engine_light": "OFF",
             "odometer": last_odo
         }
 
+        # 2. L'ILLUSION VISUELLE (Lue par le QML pendant le démarrage)
+        self._ui_data = self._data.copy()
+
         # Indicateurs d'état système
         self.is_starting_up = False
         self.critical_engine_error = False
 
-    def update(self, new_data: dict):
-        """Intègre les nouvelles données brutes du bus CAN (exécuté très fréquemment)."""
+    def get_display_data(self):
+        """Méthode que le Bridge doit appeler pour alimenter l'interface."""
         if self.is_starting_up:
-            return
+            return self._ui_data
+        return self._data
 
+    def update(self, new_data: dict):
+        """Intègre les nouvelles données brutes du bus CAN en temps réel."""
+        # On met à jour la vraie réalité en permanence, même pendant l'animation !
         self._data.update(new_data)
 
         rpm = self._data.get("rpm", 0)
@@ -38,8 +47,11 @@ class VehicleAPI:
     # --- Séquences d'Initialisation ---
 
     def run_startup_sequence(self, duration_sec=2.0):
-        """Exécute la routine de vérification matérielle visuelle (Sweep) au démarrage."""
+        """Exécute la routine de vérification matérielle visuelle (Sweep)."""
         self.is_starting_up = True
+
+        # On synchronise l'illusion avec la réalité avant de commencer
+        self._ui_data = self._data.copy()
 
         def sequence():
             time.sleep(1.0)
@@ -54,9 +66,9 @@ class VehicleAPI:
                 "stop_warning", "service_warning"
             ]
 
-            # Phase d'activation maximale (Optimisé en une seule ligne)
-            self._data.update(dict.fromkeys(voyants_booleens, True))
-            self._data.update({"brightness": 100.0, "gear": "8", "engine_light": "RED"})
+            # Phase d'activation maximale (On modifie UNIQUEMENT l'illusion visuelle)
+            self._ui_data.update(dict.fromkeys(voyants_booleens, True))
+            self._ui_data.update({"brightness": 100.0, "gear": "8", "engine_light": "RED"})
 
             steps = 50
             sleep_time = (duration_sec / 2.0) / steps
@@ -64,7 +76,7 @@ class VehicleAPI:
             # Interpolation linéaire montante
             for i in range(steps + 1):
                 fraction = i / steps
-                self._data.update({
+                self._ui_data.update({
                     "rpm": fraction * 7000.0,
                     "speed": fraction * 200.0,
                     "accel_pos": fraction * 100.0,
@@ -78,7 +90,7 @@ class VehicleAPI:
             # Interpolation linéaire descendante
             for i in range(steps, -1, -1):
                 fraction = i / steps
-                self._data.update({
+                self._ui_data.update({
                     "rpm": fraction * 7000.0,
                     "speed": fraction * 200.0,
                     "accel_pos": fraction * 100.0,
@@ -86,15 +98,6 @@ class VehicleAPI:
                     "inst_cons": fraction * 30.0
                 })
                 time.sleep(sleep_time)
-
-            # Rétablissement de l'état nominal
-            self._data.update(dict.fromkeys(voyants_booleens, False))
-            self._data.update({
-                "gear": "N",
-                "accel_pos": 0.0,
-                "engine_temp": 0.0,
-                "engine_light": "ORANGE"
-            })
 
             self.is_starting_up = False
 

@@ -9,6 +9,8 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 from src.profile_manager import ProfileManager
 from src.driver import Slcan
+from src.services.gear_calibration_service import GearCalibrationService
+from src.services.power_management_service import PowerManagementService
 from src.simulation.physique_mock import PhysicsMockProvider
 from src.simulation.mock_ui import MockControlPanel
 
@@ -44,29 +46,31 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         obd_callback=diag_service.receive_obd_frame
     )
 
-    # Instanciation des services requis par l'interface
+    # 2. Instanciation des services complexes (avec dépendances)
     led_service = BleLedController(storage)
     stats_service = TripStatsService(api, vehicle_config, storage)
+    dynamics_service = DynamicsService(api, vehicle_config, storage)
+    gear_calib_service = GearCalibrationService(api, storage, profile_manager, dynamics_service)
 
-    # 2. Tableau de configuration : (Instance, Clé_Storage, Valeur_Par_Défaut)
+    # 3. Tableau de configuration
     services_to_register = [
         (can_service, "services.Can.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
-        (DynamicsService(api, storage), "services.Dynamics.enabled", True),
+        (dynamics_service, "services.Dynamics.enabled", True),
+        (gear_calib_service, "services.GearCalibration.enabled", True),  # Ajout ici
         (SystemMonitorService(api, storage), "services.Monitor.enabled", True),
         (EngineSoundService(api, storage, engine_path=engine_dir), "services.EngineSound.enabled", False),
         (CabinNoiseService(api, storage), "services.Noise.enabled", True),
         (led_service, "services.Leds.enabled", True),
+        (PowerManagementService(api, storage), "services.PowerManager.enabled", True)
     ]
 
-    # 3. Enregistrement dynamique
+    # 4. Enregistrement dynamique
     for service, storage_key, default_state in services_to_register:
         orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
 
-    # Retourne uniquement les références dont le Bridge PySide a besoin
-    return led_service, stats_service, diag_service
-
+    return led_service, stats_service, diag_service, gear_calib_service
 
 def main():
     # --- 1. Arguments & Environnement ---
@@ -100,7 +104,7 @@ def main():
         can_provider = Slcan(channel="/dev/cu.usbmodem207B3949534B1", baudrate=500000)
 
     # --- 4. Branchement des Services ---
-    led_srv, stats_srv, diag_srv = setup_services(
+    led_srv, stats_srv, diag_srv, gear_calib_srv = setup_services(
         api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR
     )
 
@@ -124,7 +128,8 @@ def main():
                 led_service=led_srv,
                 stats_service=stats_srv,
                 diag_service=diag_srv,
-                profile_manager=profile_manager
+                profile_manager=profile_manager,
+                gear_calib_service=gear_calib_srv
             )
             bridge.storage = storage
             engine.rootContext().setContextProperty("bridge", bridge)

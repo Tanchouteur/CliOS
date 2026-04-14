@@ -9,7 +9,7 @@
         }
     },
     "vehicle": {
-        "last_odometer": 135747.0,
+        "last_odometer": 0.0,
         "last_revision_odo": 125000.0
     },
     "settings": {
@@ -48,6 +48,12 @@
                 "turbo_decay_slow": 1.1372738486842104,
                 "turbo_decay_wg": 0.06372277462121212
             }
+        },
+        "PowerManager": {
+            "params": {
+                "shutdown_delay": 5.310255028735632
+            },
+            "enabled": true
         }
     }
 }

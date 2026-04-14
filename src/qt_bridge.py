@@ -14,14 +14,15 @@ class DashboardBridge(QObject):
     systemHealthChanged = Signal()
 
     def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
-                 profile_manager=None):
+                 profile_manager=None, gear_calib_service=None):
         super().__init__()
         self.api = api
         self.led_service = led_service
         self.stats_service = stats_service
         self.diag_service = diag_service
         self.orchestrator = orchestrator
-        self.profile_manager = profile_manager  # NOUVEAU : Référence au manager
+        self.profile_manager = profile_manager
+        self.gear_calib_service = gear_calib_service
 
         self._config_path = config_path
         self._data = {}
@@ -141,7 +142,7 @@ class DashboardBridge(QObject):
 
     @Slot(str, bool)
     def toggleService(self, service_name: str, enable: bool):
-        print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
+        #print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
         storage_key = f"services.{service_name}.enabled"
         if hasattr(self, 'storage'):
             self.storage.set(storage_key, enable)
@@ -175,8 +176,6 @@ class DashboardBridge(QObject):
         srv = self._get_service_obj(service_name)
         if srv:
             srv.update_param(param_key, value)
-
-    # --- NOUVEAU : INTERFACE DU PROFILE MANAGER ---
 
     @Slot(result='QVariantList')
     def getAvailableProfiles(self):
@@ -238,5 +237,17 @@ class DashboardBridge(QObject):
         """Demande un redémarrage complet du système."""
         print("[INFO] Ordre de redémarrage reçu depuis l'IHM.")
         self.needs_restart = True
-        # On demande à l'interface graphique de se fermer proprement
         QCoreApplication.instance().quit()
+
+    @Slot()
+    def startGearCalibration(self):
+        """Lance la capture des rapports de boîte."""
+        if self.gear_calib_service:
+            self.gear_calib_service.start_calibration()
+
+    @Slot(result=bool)
+    def stopGearCalibration(self):
+        """Stoppe la capture et sauvegarde les rapports dans la config."""
+        if self.gear_calib_service:
+            return self.gear_calib_service.stop_and_save_calibration()
+        return False
