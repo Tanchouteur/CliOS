@@ -17,30 +17,36 @@ class TripSessionManager(BaseService):
 
         self.api._data["session_state"] = "IDLE"
 
-        self.api._data["session_state"] = "IDLE"
-
         self.trip_start_time = None
         self.trip_start_odo = 0.0
         self.trip_trace = []
         self.last_trace_time = 0.0
 
+    # ==========================================
+    # COMMANDES UI
+    # ==========================================
     def resume_trip(self):
         if self.api._data["session_state"] == "PAUSED":
-            self.api._data["session_state"] = "RUNNING"
-            self.set_ok("Trajet repris")
+            # On passe dans un état d'attente silencieuse au lieu de RUNNING
+            self.api._data["session_state"] = "WAITING_IGNITION"
+            self.set_ok("Trajet repris, en attente de contact...")
 
     def end_trip(self):
-        if self.api._data["session_state"] in ["RUNNING", "PAUSED"]:
+        if self.api._data["session_state"] in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
             self._save_trip_summary()
 
             current_odo = self.api._data.get("odometer", 0.0)
             self.stats_service.reset_session(current_odo)
 
             self.api._data["session_state"] = "IDLE"
+
             self.trip_start_time = None
             self.trip_trace.clear()
-            self.set_ok("Trajet sauvegardé dans un nouveau fichier")
+            self.set_ok("Trajet sauvegardé")
 
+    # ==========================================
+    # SAUVEGARDE
+    # ==========================================
     def _save_trip_summary(self):
         stats = self.stats_service.stats
         end_time = time.time()
@@ -65,26 +71,25 @@ class TripSessionManager(BaseService):
             "trace": self.trip_trace
         }
 
-        # --- NOUVEAU : Formatage du nom de fichier (ex: trip_20260414_133000.json) ---
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"trip_{timestamp_str}.json"
         filepath = os.path.join(self.trips_dir, filename)
 
         try:
-            # On écrit un fichier JSON standard, propre et indenté pour qu'il soit lisible
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(trip_summary, f, indent=4)
             self.print_message(f"Trajet exporté : {filename}")
         except Exception as e:
             self.set_error(f"Erreur d'écriture : {e}")
 
+    # ==========================================
+    # CYCLE DE VIE
+    # ==========================================
     def stop(self):
-        """Intercepte le signal d'arrêt de l'orchestrateur pour forcer la sauvegarde."""
         state = self.api._data.get("session_state")
-        if state in ["RUNNING", "PAUSED"]:
-            self.print_message("Arrêt système détecté : Sauvegarde automatique du trajet en cours.")
+        if state in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
+            self.print_message("Arrêt système détecté : Sauvegarde automatique du trajet.")
             self.end_trip()
-
         super().stop()
 
     def start(self, stop_event: threading.Event):
@@ -97,17 +102,25 @@ class TripSessionManager(BaseService):
             state = self.api._data.get("session_state")
             current_time = time.time()
 
-            if ignition and state == "IDLE":
+            # 1. NOUVEAU TRAJET (Démarrage à froid ou après avoir validé le trajet précédent)
+            if ignition and state in ["IDLE", "ENDED"]:
                 self.api._data["session_state"] = "RUNNING"
                 self.trip_start_time = current_time
                 self.trip_start_odo = self.api._data.get("odometer", 0.0)
                 self.trip_trace = []
                 self.set_ok("Enregistrement en cours")
 
+            # 1b. REPRISE DU TRAJET (Après avoir cliqué sur "Continuer" et remis le contact)
+            elif ignition and state == "WAITING_IGNITION":
+                self.api._data["session_state"] = "RUNNING"
+                self.set_ok("Reprise de l'enregistrement")
+
+            # 2. MISE EN PAUSE AUTOMATIQUE
             elif not ignition and state == "RUNNING":
                 self.api._data["session_state"] = "PAUSED"
                 self.set_warning("En attente de décision...")
 
+            # 3. ENREGISTREMENT DE LA TRACE
             elif state == "RUNNING":
                 if current_time - self.last_trace_time >= 5.0:
                     point = {

@@ -6,8 +6,21 @@ import "../style"
 Item {
     id: root
 
-    // --- NOUVEAU : Écoute directe du service Python ---
     property string sessionState: bridge.data !== undefined && bridge.data.session_state !== undefined ? bridge.data.session_state : "IDLE"
+
+    // --- MODE TEST SUR MAC (Raccourci Clavier) ---
+    // Appuie sur 'T' pour simuler la coupure du contact sans utiliser le mock python !
+    focus: true
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_T) {
+            console.log("Touche T pressée : Bascule de l'état de session")
+            if (root.sessionState === "RUNNING" || root.sessionState === "IDLE") {
+                bridge.data.session_state = "PAUSED"
+            } else {
+                bridge.data.session_state = "RUNNING"
+            }
+        }
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -28,14 +41,17 @@ Item {
         z: 100
     }
 
-    // --- Conteneur Central (Sécurité et Informations) ---
+    // --- Conteneur Central (Reste affiché !) ---
     Item {
         id: centerGroup
-        anchors.centerIn: root
+        // Au lieu de centerIn, on gère les axes séparément pour pouvoir l'animer
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenterOffset: -30
+
         width: parent.width * 0.5
         height: 630
-        anchors.verticalCenterOffset: -30
-        z: -1
+        z: 10 // On le met au-dessus du panneau pour l'effet de glissement
 
         CenterHub {
             anchors.centerIn: parent
@@ -56,30 +72,31 @@ Item {
     }
 
     // ==========================================
-    // NOUVEAU : PANNEAU DE FIN DE SESSION
+    // PANNEAU DE FIN DE SESSION (Le "Tiroir")
     // ==========================================
     Rectangle {
         id: sessionOverlay
-        anchors.centerIn: parent
-        width: 700
+
+        // MODIFICATION : On l'attache à la gauche du CenterHub
+        anchors.verticalCenter: centerGroup.verticalCenter
+        anchors.right: centerGroup.left
+
+        width: 650 // Légèrement affiné pour être élégant sur le côté
         height: 450
-        color: Qt.rgba(0, 0, 0, 0.7) // Fond semi-transparent
+        color: Qt.rgba(0, 0, 0, 0.7)
         radius: 20
         border.color: Qt.rgba(1, 1, 1, 0.1)
         border.width: 2
 
-        // État de base (caché et réduit pour l'effet de pop-in)
-        opacity: 0.0
-        scale: 0.8
-        z: 50
+        z: 5
 
         Column {
             anchors.centerIn: parent
             spacing: 30
-            width: parent.width * 0.8
+            width: parent.width * 0.9
 
             Text {
-                text: "Trajet en Pause"
+                text: "Résumé du Trajet"
                 color: "white"
                 font.pixelSize: 36
                 font.bold: true
@@ -119,12 +136,12 @@ Item {
 
             Item { width: 1; height: 20 } // Espaceur
 
-            // Boutons d'action
+            // --- BOUTONS (Cachés si le trajet est ENDED) ---
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 30
+                visible: root.sessionState === "PAUSED"
 
-                // Bouton Reprendre
                 Rectangle {
                     width: 220; height: 60; radius: 10
                     color: Qt.rgba(1, 1, 1, 0.1)
@@ -134,32 +151,42 @@ Item {
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: bridge.resumeTripSession() // Appel Python
+                        onClicked: bridge.resumeTripSession()
                         onPressed: parent.opacity = 0.5
                         onReleased: parent.opacity = 1.0
                     }
                 }
 
-                // Bouton Terminer
                 Rectangle {
                     width: 280; height: 60; radius: 10
-                    color: Theme.main // Couleur principale de ton thème
+                    color: Theme.main
 
-                    Text { anchors.centerIn: parent; text: "Terminer & Sauvegarder"; color: "white"; font.pixelSize: 20; font.bold: true }
+                    Text { anchors.centerIn: parent; text: "Terminer"; color: "white"; font.pixelSize: 20; font.bold: true }
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: bridge.endTripSession() // Appel Python
+                        onClicked: bridge.endTripSession()
                         onPressed: parent.opacity = 0.7
                         onReleased: parent.opacity = 1.0
                     }
                 }
             }
+
+            // --- MESSAGE DE FIN (Visible si ENDED) ---
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: root.sessionState === "ENDED"
+                text: "✓ Données sauvegardées.\nExtinction en cours..."
+                color: Theme.main
+                font.pixelSize: 24
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+            }
         }
     }
 
     // ==========================================
-    // INSTRUMENTATION GAUCHE
+    // INSTRUMENTATION GAUCHE & DROITE
     // ==========================================
     Item {
         id: leftGauges
@@ -170,21 +197,15 @@ Item {
         SpeedometerBmw {
             id: speedo
             width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left
-            scale: 1.15
+            anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; scale: 1.15
         }
-
         BigFuelGauge {
             id: bigFuel
             width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 600
-            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 600; anchors.left: parent.left
         }
     }
 
-    // ==========================================
-    // INSTRUMENTATION DROITE
-    // ==========================================
     Item {
         id: rightGauges
         width: 500; height: 400
@@ -194,15 +215,12 @@ Item {
         TachometerBmw {
             id: tacho
             width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right
-            scale: 1.15
+            anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; scale: 1.15
         }
-
         BigTempGauge {
             id: bigTemp
             width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 600
-            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 600; anchors.right: parent.right
         }
     }
 
@@ -215,7 +233,6 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width * 0.9; height: 40
 
-        // ... (J'ai conservé toute ta logique de bottomBar intacte ici)
         property real autonomy: bridge.stats !== undefined && bridge.stats.autonomy !== undefined ? bridge.stats.autonomy : 450
         property real outsideTemp: bridge.data !== undefined && bridge.data.outside_temp !== undefined ? bridge.data.outside_temp : 21.5
         property string timeString: Qt.formatTime(new Date(), "hh:mm")
@@ -238,14 +255,12 @@ Item {
             text: "→ " + bottomBar.autonomy.toFixed(0) + " km"
             color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
         }
-
         Text {
             id: avgB
             anchors.left : autonomyText.right; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter
             text: bridge.stats !== undefined && bridge.stats.avg_cons_b !== undefined ? "Avg " + bridge.stats.avg_cons_b.toFixed(1) : "0.0"
             color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
         }
-
         Item {
             anchors.left: avgB.right; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; height: parent.height
             Row {
@@ -261,13 +276,11 @@ Item {
                 Text { text: bridge.stats !== undefined && bridge.stats.km_before_service !== undefined ? "Service dans : " + bridge.stats.km_before_service.toFixed(0) + " km" : "Service : ---"; color: (bridge.data !== undefined && bridge.data.service_warning === true) ? Theme.danger : Theme.textMain; font.pixelSize: 22; font.bold: (bridge.data !== undefined && bridge.data.service_warning === true); font.family: "Arial"; opacity: 0.9 }
             }
         }
-
         Row {
             anchors.horizontalCenter: parent.horizontalCenter; anchors.verticalCenter: parent.verticalCenter; anchors.horizontalCenterOffset: 95; spacing: 60
             Text { text: bottomBar.timeString; color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.9 }
             Text { text: bridge.data !== undefined && bridge.data.odometer !== undefined ? bridge.data.odometer.toFixed(0) + " km" : "0 km"; color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.9 }
         }
-
         Text {
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
             text: bottomBar.outsideTemp.toFixed(1) + " °C"; color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
@@ -279,43 +292,43 @@ Item {
     // ==========================================
     states: [
         State {
-            name: "PAUSED"
-            // Se déclenche quand la clé est coupée mais encore sur le contact
-            when: root.sessionState === "PAUSED"
+            name: "PAUSED_OR_ENDED"
+            when: root.sessionState === "PAUSED" || root.sessionState === "ENDED"
 
-            // 1. Les compteurs sortent complètement de l'écran (-800px)
+            // 1. Les compteurs sortent de l'écran (-800px)
             PropertyChanges { target: speedo; anchors.leftMargin: -800; opacity: 0.0 }
             PropertyChanges { target: tacho; anchors.rightMargin: -800; opacity: 0.0 }
             PropertyChanges { target: bigFuel; anchors.leftMargin: -800; opacity: 0.0 }
             PropertyChanges { target: bigTemp; anchors.rightMargin: -800; opacity: 0.0 }
 
-            // 2. On cache le logo central de la voiture pour faire de la place
-            PropertyChanges { target: centerGroup; opacity: 0.0; scale: 0.8 }
+            // 2. Le Hub Central se décale vers la droite !
+            PropertyChanges { target: centerGroup; anchors.horizontalCenterOffset: 350 }
 
-            // 3. On affiche le grand panneau de résumé
-            PropertyChanges { target: sessionOverlay; opacity: 1.0; scale: 1.0 }
+            // 3. Le tiroir sort de derrière (il s'écarte du hub central)
+            PropertyChanges { target: sessionOverlay; anchors.rightMargin: 40; opacity: 1.0; scale: 1.0 }
         },
         State {
             name: "DRIVE"
-            // État par défaut (RUNNING ou IDLE)
-            when: root.sessionState == "RUNNING"
+            when: root.sessionState !== "PAUSED" && root.sessionState !== "ENDED"
 
-            // On remet tout en place (position 0)
             PropertyChanges { target: speedo; anchors.leftMargin: 0; opacity: 1.0 }
             PropertyChanges { target: tacho; anchors.rightMargin: 0; opacity: 1.0 }
             PropertyChanges { target: bigFuel; anchors.leftMargin: -600; opacity: 0.0 }
             PropertyChanges { target: bigTemp; anchors.rightMargin: -600; opacity: 0.0 }
 
-            PropertyChanges { target: centerGroup; opacity: 1.0; scale: 1.0 }
-            PropertyChanges { target: sessionOverlay; opacity: 0.0; scale: 0.8 }
+            // Le Hub Central revient au milieu
+            PropertyChanges { target: centerGroup; anchors.horizontalCenterOffset: 0 }
+
+            // Le tiroir se cache derrière le hub central (rightMargin négatif)
+            PropertyChanges { target: sessionOverlay; anchors.rightMargin: -300; opacity: 0.0; scale: 0.9 }
         }
     ]
 
     transitions: [
         Transition {
-            // S'applique à l'opacité, l'échelle (scale) et les marges
             NumberAnimation {
-                properties: "opacity, anchors.leftMargin, anchors.rightMargin, scale"
+                // On ajoute horizontalCenterOffset à la liste des animations
+                properties: "opacity, anchors.leftMargin, anchors.rightMargin, anchors.horizontalCenterOffset, scale"
                 duration: 700
                 easing.type: Easing.InOutCubic
             }
