@@ -6,10 +6,10 @@ import shutil
 class ProfileManager:
     """Gère les profils de véhicules, la validation des fichiers et l'exposition pour l'UI."""
 
-    def __init__(self, config_dir: str, can_dir: str, storage_dir: str, is_mock: bool = False):
+    def __init__(self, config_dir: str, can_dir: str, save_dash_dir: str, is_mock: bool = False):
         self.config_dir = config_dir
         self.can_dir = can_dir
-        self.storage_dir = storage_dir
+        self.save_dash_dir = save_dash_dir
         self.is_mock = is_mock
 
         self.profiles_path = os.path.join(self.config_dir, "profiles.json")
@@ -102,8 +102,8 @@ class ProfileManager:
 
     def get_save_path(self) -> str:
         if self.is_mock:
-            return os.path.join(self.storage_dir, "save_mock.json")
-        return os.path.join(self.storage_dir, self.active_info.get("save_file", "save.json"))
+            return os.path.join(self.save_dash_dir, "save_mock.json")
+        return os.path.join(self.save_dash_dir, self.active_info.get("save_file", "save.json"))
 
     # --- MÉTHODES POUR L'INTERFACE (QML / Bridge) ---
     def get_available_can_files(self) -> list:

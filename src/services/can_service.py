@@ -62,7 +62,6 @@ class CanService(BaseService):
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            # Si le service est fermé (ou qu'on vient de changer le port via on_param_changed)
             if not self.provider.is_connected:
                 try:
                     self.provider.connect()

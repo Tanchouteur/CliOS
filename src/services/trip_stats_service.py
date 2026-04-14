@@ -67,11 +67,12 @@ class TripStatsService(BaseService):
             "g_force": 0.0
         }
 
-        self._reset_session_accumulators(api._data.get("odometer"))
         self._prev_speed = 0.0
         self._last_g_time = time.time()
 
-    def _reset_session_accumulators(self, last_odo):
+        self.reset_session(self.api._data.get("odometer"))
+
+    def reset_session(self, last_odo):
         self._start_odo = last_odo if last_odo is not None else 0.0
         self._session_distance_km = 0.0
         self._rpm_sum = 0.0
@@ -153,17 +154,13 @@ class TripStatsService(BaseService):
                 current_odo = self.api._data.get('odometer')
                 raw_fuel = self.api._data.get('fuel_used')
                 current_speed = self.api._data.get('speed', 0.0)
-                ignition = self.api._data.get('ignition_on', False) or self.api._data.get('key_run', False)
 
                 if current_odo is None:
                     stop_event.wait(0.1)
                     continue
 
-                if ignition and not self.stats["is_active"]:
-                    self._reset_session_accumulators(current_odo)
-                    self.stats["is_active"] = True
-                elif not ignition and self.stats["is_active"]:
-                    self.stats["is_active"] = False
+                session_state = self.api._data.get("session_state", "IDLE")
+                self.stats["is_active"] = (session_state == "RUNNING")
 
                 if raw_fuel is not None:
                     if self._last_raw_fuel is not None:

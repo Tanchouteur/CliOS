@@ -14,8 +14,9 @@ class DashboardBridge(QObject):
     systemHealthChanged = Signal()
 
     def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
-                 profile_manager=None, gear_calib_service=None):
+                 profile_manager=None, gear_calib_service=None, session_manager=None):
         super().__init__()
+        self.session_manager = session_manager
         self.api = api
         self.led_service = led_service
         self.stats_service = stats_service
@@ -251,3 +252,13 @@ class DashboardBridge(QObject):
         if self.gear_calib_service:
             return self.gear_calib_service.stop_and_save_calibration()
         return False
+
+    @Slot()
+    def resumeTripSession(self):
+        if self.session_manager:
+            self.session_manager.resume_trip()
+
+    @Slot()
+    def endTripSession(self):
+        if self.session_manager:
+            self.session_manager.end_trip()

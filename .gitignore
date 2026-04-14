@@ -1,4 +1,6 @@
 .venv
 git.txt
 .idea
-data/save_mock.json
+data/dash_save/save_mock.json
+data/trips
+data/trips_mock

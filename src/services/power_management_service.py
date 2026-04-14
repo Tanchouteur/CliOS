@@ -2,16 +2,18 @@ import os
 import time
 import threading
 import platform
+
+from src import orchestrator
 from src.services.base_service import BaseService
 
 
 class PowerManagementService(BaseService):
-    def __init__(self, api, storage):
+    def __init__(self, api, storage, orchestrator):
         super().__init__("PowerManager", storage)
         self.api = api
         self.off_timer = None
+        self.orchestrator = orchestrator
 
-        # Le fameux flag de sécurité : on attend que la voiture démarre au moins une fois
         self.has_been_started = False
 
         self.register_param("shutdown_delay", "Délai avant extinction (s)", "slider", 10.0, min_val=0.0, max_val=60.0)
@@ -53,18 +55,30 @@ class PowerManagementService(BaseService):
                         current_os = platform.system()
                         if current_os == "Darwin" or current_os == "Windows":
                             print(f"[POWER] Ordre de coupure simulé (Bloqué par sécurité sur {current_os}).")
-                            # On réinitialise pour te laisser continuer à tester
                             self.has_been_started = False
                             self.off_timer = None
                             self.set_ok("Surveillance alim : En attente du contact")
+
                         else:
-                            # C'est un Raspberry Pi (Linux), on coupe pour de vrai !
-                            print("[POWER] Ordre de coupure détecté. Arrêt du Raspberry Pi...")
+                            # C'est un Raspberry Pi (Linux), on coupe proprement !
+                            print("\n[POWER] Arrêt du système demandé. Délégation à l'orchestrateur...")
+
+                            # 1. L'orchestrateur appelle le stop() de TOUS les services proprement
+                            self.orchestrator.stop_all()
+
+                            # 2. On laisse 1 seconde au disque dur/carte SD pour finir d'écrire les JSON
+                            time.sleep(1.0)
+
+                            # 3. Coupure physique
+                            print("[POWER] Sauvegardes terminées. Arrêt du Raspberry Pi...")
                             os.system("sudo poweroff")
                             break
 
-            # CAS 3 : Le contact est coupé, mais il n'a jamais été mis (Ex: Allumage de l'appli sur ton Mac)
             else:
-                pass  # On ne fait rien, on attend sagement.
+                pass
 
             time.sleep(1.0)
+
+    def stop(self):
+        """Surcharge : Le PowerManager ignore l'ordre d'arrêt car c'est lui qui le donne."""
+        pass
