@@ -1,13 +1,12 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "../../style" as T // Adapte le chemin si besoin
+import "../style" as T
 
 StackView {
     id: settingsStackView
     anchors.fill: parent
 
-    // 1. LE MODÈLE ENRICHI (Titre + Description)
     readonly property var tiles: [
         { label: "Ambiance", desc: "Éclairage LED, couleurs et thèmes visuels", source: "../pages/AmbiancePage.qml" },
         { label: "Audio",    desc: "Volumes, égaliseur et sources multimédias", source: "../pages/NonBuildPage.qml"    },
