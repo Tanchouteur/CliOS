@@ -11,6 +11,7 @@ from src.profile_manager import ProfileManager
 from src.driver import Slcan
 from src.services.gear_calibration_service import GearCalibrationService
 from src.services.power_management_service import PowerManagementService
+from src.services.trip_session_manager import TripSessionManager
 from src.simulation.physique_mock import PhysicsMockProvider
 from src.simulation.mock_ui import MockControlPanel
 
@@ -32,7 +33,7 @@ from src.services.dynamics_service import DynamicsService
 from src.cli_debug import ui_loop
 
 
-def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir):
+def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir, storage_dir):
     """Initialise et enregistre tous les services via une boucle propre."""
 
     # 1. Instanciation des dépendances croisées (Diag et CAN)
@@ -52,25 +53,29 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     dynamics_service = DynamicsService(api, vehicle_config, storage)
     gear_calib_service = GearCalibrationService(api, storage, profile_manager, dynamics_service)
 
+    # NOUVEAU : On passe storage_dir pour qu'il sache où créer le dossier des logs
+    session_manager = TripSessionManager(api, storage, stats_service, storage_dir)
+
     # 3. Tableau de configuration
     services_to_register = [
         (can_service, "services.Can.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
         (dynamics_service, "services.Dynamics.enabled", True),
-        (gear_calib_service, "services.GearCalibration.enabled", True),  # Ajout ici
+        (gear_calib_service, "services.GearCalibration.enabled", True),
         (SystemMonitorService(api, storage), "services.Monitor.enabled", True),
         (EngineSoundService(api, storage, engine_path=engine_dir), "services.EngineSound.enabled", False),
         (CabinNoiseService(api, storage), "services.Noise.enabled", True),
         (led_service, "services.Leds.enabled", True),
-        (PowerManagementService(api, storage), "services.PowerManager.enabled", True)
+        (PowerManagementService(api, storage, orchestrator), "services.PowerManager.enabled", True),
+        (session_manager, "services.SessionManager.enabled", True),  # Ajout ici
     ]
 
     # 4. Enregistrement dynamique
     for service, storage_key, default_state in services_to_register:
         orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
 
-    return led_service, stats_service, diag_service, gear_calib_service
+    return led_service, stats_service, diag_service, gear_calib_service, session_manager
 
 def main():
     # --- 1. Arguments & Environnement ---
@@ -80,13 +85,14 @@ def main():
     args = parser.parse_args()
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    CAN_DIR = os.path.join(BASE_DIR, "can")
-    CONFIG_DIR = os.path.join(BASE_DIR, "config")
     STORAGE_DIR = os.path.join(BASE_DIR, "data")
+    CAN_DIR = os.path.join(STORAGE_DIR, "can")
+    CONFIG_DIR = os.path.join(STORAGE_DIR, "config")
+    SAVE_DASH_DIR = os.path.join(STORAGE_DIR, "dash_save")
     ENGINE_DIR = os.path.join(BASE_DIR, "assets", "sounds", "engine")
 
     # --- 2. Initialisation Core (Fichiers, BDD, API) ---
-    profile_manager = ProfileManager(CONFIG_DIR, CAN_DIR, STORAGE_DIR, args.mock)
+    profile_manager = ProfileManager(CONFIG_DIR, CAN_DIR, SAVE_DASH_DIR, args.mock)
 
     with open(profile_manager.get_config_path(), 'r', encoding='utf-8') as f:
         vehicle_config = json.load(f)
@@ -101,11 +107,14 @@ def main():
     if args.mock:
         can_provider = PhysicsMockProvider(api)
     else:
-        can_provider = Slcan(channel="/dev/cu.usbmodem207B3949534B1", baudrate=500000)
+        can_provider = Slcan()
+
+    folder_name = "trips_mock" if profile_manager.is_mock else "trips"
+    TRIPS_DIR = os.path.join(STORAGE_DIR, folder_name)
 
     # --- 4. Branchement des Services ---
-    led_srv, stats_srv, diag_srv, gear_calib_srv = setup_services(
-        api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR
+    led_srv, stats_srv, diag_srv, gear_calib_srv, session_manager = setup_services(
+        api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR
     )
 
     # --- 5. Lancement de l'Application ---
@@ -129,7 +138,8 @@ def main():
                 stats_service=stats_srv,
                 diag_service=diag_srv,
                 profile_manager=profile_manager,
-                gear_calib_service=gear_calib_srv
+                gear_calib_service=gear_calib_srv,
+                session_manager=session_manager
             )
             bridge.storage = storage
             engine.rootContext().setContextProperty("bridge", bridge)
