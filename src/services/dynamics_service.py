@@ -42,7 +42,7 @@ class DynamicsService(BaseService):
         self.print_message(f"Rapports de boîte rechargés ({len(self._gear_ratios)} rapports).")
 
     def start(self, stop_event: threading.Event):
-        self.thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True)
+        self.thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="DynamicsService")
         self.thread.start()
         super().start(stop_event, implemented=True)
 

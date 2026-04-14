@@ -1,4 +1,6 @@
 import threading
+import time
+
 import serial.tools.list_ports
 from src.parser import DbcParser
 from src.services.base_service import BaseService
@@ -54,7 +56,7 @@ class CanService(BaseService):
         self.thread = threading.Thread(
             target=self._run,
             args=(stop_event,),
-            name=f"Thread-{self.name}",
+            name=self.name,
             daemon=True
         )
         self.thread.start()
@@ -72,7 +74,12 @@ class CanService(BaseService):
                     continue  # On passe au tour de boucle suivant
 
             try:
-                frame = self.provider.read_frame(timeout=0.2)
+                frame = self.provider.read_frame(timeout=0.1)
+
+                if frame is None:
+                    time.sleep(0.005)
+                    continue
+
                 if frame:
                     if getattr(self.api, 'is_starting_up', False):
                         continue

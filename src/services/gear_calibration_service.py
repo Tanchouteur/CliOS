@@ -93,7 +93,7 @@ class GearCalibrationService(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True).start()
+        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="GearCalibration").start()
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
