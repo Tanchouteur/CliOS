@@ -13,7 +13,7 @@ Item {
     property int idle_rpm: bridge.config.tachometer.idle_rpm !== undefined ? bridge.config.tachometer.idle_rpm : 800
     property int redline_rpm: bridge.config.tachometer.redline_rpm !== undefined ? bridge.config.tachometer.redline_rpm : 6000
 
-    property string currentGear: bridge.stats.gear !== undefined ? bridge.stats.gear : "D"
+    property string currentGear: bridge.data.gear !== undefined ? bridge.data.gear : "Error"
 
     // --- Variables d'Animation ---
     property real smoothRpm: root.rpm

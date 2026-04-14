@@ -10,15 +10,26 @@ class GearCalibrationService(BaseService):
         super().__init__("GearCalibration", storage)
         self.api = api
         self.profile_manager = profile_manager
-        self.dynamics_service = dynamics_service  # Le service à recharger
+        self.dynamics_service = dynamics_service
 
         self.is_calibrating = False
         self.collected_ratios = []
 
-        # Variables pour l'interface QML
+        # Variables pour l'interface visuelle (Télémétrie)
         self.api._data["calibration_active"] = False
         self.api._data["calibration_ratio"] = 0.0
         self.api._data["calibration_count"] = 0
+
+        # --- L'INTERRUPTEUR DANS LES RÉGLAGES ---
+        self.register_param("calib_toggle", "Mode Étalonnage", "toggle", False, persistent=False)
+
+    def on_param_changed(self, key: str, value):
+        """Intercepte les clics de l'utilisateur dans l'interface de réglages."""
+        if key == "calib_toggle":
+            if value is True:
+                self.start_calibration()
+            else:
+                self.stop_and_save_calibration()
 
     def start_calibration(self):
         self.is_calibrating = True
@@ -33,8 +44,9 @@ class GearCalibrationService(BaseService):
         self.api._data["calibration_active"] = False
         self.api._data["calibration_ratio"] = 0.0
 
+        # Sécurité si on éteint l'interrupteur sans avoir roulé
         if not self.collected_ratios:
-            self.set_error("Échec : Aucune donnée.")
+            self.set_warning("Annulé : Aucune donnée.")
             return False
 
         # Regroupement par tranches pour trouver les rapports
@@ -43,14 +55,14 @@ class GearCalibrationService(BaseService):
             rounded_ratio = round(ratio)
             histogram[rounded_ratio] += 1
 
-        # On garde les ratios qui ont été tenus stables (ex: plus de 20 occurrences = 1 seconde à 50ms)
+        # On garde les ratios stables (plus de 20 occurrences = 1 seconde à 50ms)
         valid_peaks = [ratio for ratio, count in histogram.items() if count > 20]
 
         if not valid_peaks:
             self.set_error("Échec : Données instables.")
             return False
 
-        # Le ratio le plus élevé est la 1ère vitesse (beaucoup de RPM, peu de vitesse)
+        # Le ratio le plus élevé est la 1ère vitesse
         valid_peaks.sort(reverse=True)
         new_ratios = {str(idx + 1): float(peak) for idx, peak in enumerate(valid_peaks)}
 
@@ -68,6 +80,7 @@ class GearCalibrationService(BaseService):
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=4)
 
+            # Rechargement à chaud dans le DynamicsService
             self.dynamics_service.reload_config(config_data)
 
             self.set_ok(f"Succès : {len(new_ratios)} rapports enregistrés.")
@@ -94,7 +107,6 @@ class GearCalibrationService(BaseService):
                     current_ratio = rpm / speed
                     self.collected_ratios.append(current_ratio)
 
-                    # Mise à jour pour le visuel UI
                     self.api._data["calibration_ratio"] = round(current_ratio, 1)
                     self.api._data["calibration_count"] = len(self.collected_ratios)
                 else:
