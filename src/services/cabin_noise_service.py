@@ -26,7 +26,7 @@ class CabinNoiseService(BaseService):
     def start(self, stop_event):
         # On appelle le start du parent d'abord (c'est plus propre)
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="Thread-Noise").start()
+        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
 
     def _audio_callback(self, indata, frames, time_info, status):
         audio_data = indata[:, 0]
