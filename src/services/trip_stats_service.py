@@ -6,7 +6,7 @@ from src.services.base_service import BaseService
 
 
 class TripStatsService(BaseService):
-    """Ordinateur de bord complet : Calcule les statistiques instantanées et persistantes."""
+    """Ordinateur de bord : Calcule les statistiques instantanées et persistantes (Consommation, Distance, Entretien)."""
 
     def __init__(self, api, config, storage=None):
         super().__init__("TripStats", storage)
@@ -14,22 +14,11 @@ class TripStatsService(BaseService):
         self._thread = None
         self.storage = storage
 
-        # --- Configuration Véhicule (Valeurs par défaut) ---
-        default_tank = config.get("tank_capacity", 50.0)
-
-        trans_config = config.get("transmission", {})
-        self._gear_ratios = trans_config.get("ratios", {})
-        self._gear_tolerance = trans_config.get("tolerance", 5.0)
-        self._last_gear_rpm = -100
-        self._last_gear_speed = -100
-
+        # --- Configuration Véhicule (Maintenance) ---
         revision_config = config.get("maintenance", {}).get("revision", {})
         default_rev_interval = revision_config.get("interval_km", 20000)
         default_rev_warning = revision_config.get("warning_threshold_km", 2000)
 
-        # --- DÉCLARATION DES PARAMÈTRES DYNAMIQUES ---
-        self.register_param("tank_capacity", "Capacité Réservoir (L)", "slider", default_tank, min_val=20.0,
-                            max_val=120.0)
         self.register_param("revision_interval", "Intervalle Révision (km)", "slider", default_rev_interval,
                             min_val=5000.0, max_val=50000.0)
         self.register_param("revision_warning", "Alerte Révision (km)", "slider", default_rev_warning, min_val=500.0,
@@ -47,7 +36,6 @@ class TripStatsService(BaseService):
         init_trip_b = max(0.0, self.last_saved_odo - self.trip_b_marker)
         init_avg_cons = (self.fuel_b_accumulated / init_trip_b * 100.0) if init_trip_b > 0.05 else 0.0
 
-        # On utilise le paramètre dynamique tout juste chargé
         current_rev_interval = self._params["revision_interval"]["value"]
         init_km_service = max(0.0, current_rev_interval - (self.last_saved_odo - self.last_revision_odo))
 
@@ -62,7 +50,7 @@ class TripStatsService(BaseService):
         self._last_raw_fuel = None
         self._absolute_fuel_session = 0.0
 
-        # --- Le Dictionnaire Public ---
+        # --- Le Dictionnaire Public (Sans le "gear") ---
         self.stats = {
             "is_active": False, "distance_km": 0.0,
             "session_fuel_l": 0.0,
@@ -73,7 +61,6 @@ class TripStatsService(BaseService):
             # Global & Persistant
             "trip_a": init_trip_a, "trip_b": init_trip_b,
             "inst_cons": 0.0, "avg_cons_b": init_avg_cons, "autonomy": 0.0,
-            "gear": "N",
             "km_before_service": init_km_service, "service_warning": False,
 
             # Télémétrie
@@ -115,7 +102,7 @@ class TripStatsService(BaseService):
         self.fuel_b_accumulated = 0.0
         if self.storage:
             self.storage.set("trips.b.marker", current_odo)
-            self.storage.set("trips.b.fuel", 0.0)  # Correction de l'ancien chemin
+            self.storage.set("trips.b.fuel", 0.0)
         self.stats["trip_b"] = 0.0
         self.stats["avg_cons_b"] = 0.0
 
@@ -213,25 +200,8 @@ class TripStatsService(BaseService):
         accel = data.get('accel_pos', 0.0)
         brake = data.get('brake', False)
         clutch = data.get('clutch', False)
-        reverse = data.get('reverse_engaged', False)
 
-        if reverse:
-            self.stats["gear"] = "R"
-        elif clutch or current_speed < 3.0:
-            self.stats["gear"] = "N"
-        else:
-            if abs(rpm - self._last_gear_rpm) > 50 or abs(current_speed - self._last_gear_speed) > 1.0:
-                current_ratio = rpm / current_speed if current_speed > 0 else 0
-                best_gear, smallest_diff = "N", float('inf')
-                for gear_name, target_ratio in self._gear_ratios.items():
-                    diff = abs(current_ratio - target_ratio)
-                    if diff <= self._gear_tolerance and diff < smallest_diff:
-                        smallest_diff, best_gear = diff, gear_name
-
-                self.stats["gear"] = best_gear
-                self._last_gear_rpm = rpm
-                self._last_gear_speed = current_speed
-
+        # Calcul consommation instantanée
         if perfect_fuel is not None and self.last_fuel_inst is not None:
             dt_inst = current_time - self.last_time_inst
             if dt_inst >= 0.2:
@@ -253,6 +223,7 @@ class TripStatsService(BaseService):
         elif perfect_fuel is not None:
             self.last_fuel_inst = perfect_fuel
 
+        # Calculs Télémétrie & Conduite
         if self.stats["is_active"]:
             self._session_distance_km += current_speed * (dt / 3600.0)
             if rpm > 0:
@@ -264,6 +235,7 @@ class TripStatsService(BaseService):
             elif current_speed > 5.0 and not brake:
                 self._coasting_dist += current_speed * (dt / 3600.0)
 
+            # Statistiques du temps de passage des rapports (Basé sur la pédale d'embrayage)
             if clutch and not self._is_shifting:
                 self._is_shifting, self._shift_start = True, current_time
             elif not clutch and self._is_shifting:
@@ -273,6 +245,7 @@ class TripStatsService(BaseService):
                     self._shift_time_sum += duration
                     self._shift_count += 1
 
+            # Calcul G-Force longitudinal
             now = time.time()
             dt_g = now - self._last_g_time
             if dt_g >= 0.1:
@@ -297,15 +270,7 @@ class TripStatsService(BaseService):
                     self.fuel_b_accumulated += delta
             self.last_fuel_avg = perfect_fuel
 
-        self.stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
-                                         1) if trip_b_dist > 0.05 else 0.0
-
-        # --- LECTURE DYNAMIQUE DE LA CAPACITÉ DU RÉSERVOIR ---
-        tank_cap = self._params["tank_capacity"]["value"]
-        fuel_level_pct = self.api._data.get("fuel_level", 100.0)
-        remaining_l = (fuel_level_pct / 100.0) * tank_cap
-        safe_cons = self.stats["avg_cons_b"] if self.stats["avg_cons_b"] > 0.5 else 6.0
-        self.stats["autonomy"] = round((remaining_l / safe_cons) * 100.0)
+        self.stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0, 1) if trip_b_dist > 0.05 else 0.0
 
         # --- LECTURE DYNAMIQUE DES ALERTES MAINTENANCE ---
         rev_interval = self._params["revision_interval"]["value"]
@@ -321,10 +286,8 @@ class TripStatsService(BaseService):
             self.stats["distance_km"] = round(self._session_distance_km, 1)
             self.stats["avg_rpm"] = int(self._rpm_sum / self._rpm_count) if self._rpm_count > 0 else 0
             self.stats["coasting_km"] = round(self._coasting_dist, 1)
-            self.stats["aggressivity_pct"] = round(self._accel_sum / self._accel_count,
-                                                   1) if self._accel_count > 0 else 0.0
-            self.stats["shift_time_sec"] = round(self._shift_time_sum / self._shift_count,
-                                                 2) if self._shift_count > 0 else 0.0
+            self.stats["aggressivity_pct"] = round(self._accel_sum / self._accel_count, 1) if self._accel_count > 0 else 0.0
+            self.stats["shift_time_sec"] = round(self._shift_time_sum / self._shift_count, 2) if self._shift_count > 0 else 0.0
 
         if current_odo - self.last_saved_odo >= 1.0:
             if self.storage:
