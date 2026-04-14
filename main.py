@@ -33,10 +33,23 @@ from src.services.dynamics_service import DynamicsService
 from src.cli_debug import ui_loop
 
 
+# ==========================================
+# GESTION DE LA VERSION (SSOT)
+# ==========================================
+def load_system_version(root_dir: str) -> str:
+    """Lit la version du système depuis le fichier maître 'VERSION'."""
+    version_file = os.path.join(root_dir, 'VERSION')
+    try:
+        with open(version_file, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        print("[ATTENTION] Fichier VERSION introuvable. Version fixée sur 'unknown'.")
+        return "unknown"
+
+
 def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir, storage_dir):
     """Initialise et enregistre tous les services via une boucle propre."""
 
-    # 1. Instanciation des dépendances croisées (Diag et CAN)
     diag_service = DiagnosticService(api, can_provider)
     can_service = CanService(
         name="CAN_Moteur",
@@ -47,16 +60,12 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         obd_callback=diag_service.receive_obd_frame
     )
 
-    # 2. Instanciation des services complexes (avec dépendances)
     led_service = BleLedController(storage)
     stats_service = TripStatsService(api, vehicle_config, storage)
     dynamics_service = DynamicsService(api, vehicle_config, storage)
     gear_calib_service = GearCalibrationService(api, storage, profile_manager, dynamics_service)
-
-    # NOUVEAU : On passe storage_dir pour qu'il sache où créer le dossier des logs
     session_manager = TripSessionManager(api, storage, stats_service, storage_dir)
 
-    # 3. Tableau de configuration
     services_to_register = [
         (can_service, "services.Can.enabled", True),
         (diag_service, "services.Diag.enabled", True),
@@ -68,14 +77,14 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         (CabinNoiseService(api, storage), "services.Noise.enabled", True),
         (led_service, "services.Leds.enabled", True),
         (PowerManagementService(api, storage, orchestrator), "services.PowerManager.enabled", True),
-        (session_manager, "services.SessionManager.enabled", True),  # Ajout ici
+        (session_manager, "services.SessionManager.enabled", True),
     ]
 
-    # 4. Enregistrement dynamique
     for service, storage_key, default_state in services_to_register:
         orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
 
     return led_service, stats_service, diag_service, gear_calib_service, session_manager
+
 
 def main():
     # --- 1. Arguments & Environnement ---
@@ -99,6 +108,12 @@ def main():
 
     storage = PersistentStorage(profile_manager.get_save_path())
     api = VehicleAPI(storage)
+
+    # --- NOUVEAU : Chargement et injection de la version système ---
+    app_version = load_system_version(BASE_DIR)
+    api._data["system_version"] = app_version
+    print(f"\n[INFO] 🚀 Démarrage de ClOS (Version : {app_version})")
+
     api.run_startup_sequence(duration_sec=1.5)
 
     orchestrator = SystemOrchestrator()

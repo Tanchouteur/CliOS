@@ -7,7 +7,7 @@ import "components"
 
 ApplicationWindow {
     id: appWindow
-    property string version: "1.15.0"
+    property string version: bridge.data !== undefined && bridge.data.system_version !== undefined ? bridge.data.system_version : "?.?.?"
     visible: true
     width: 1980
     height: 720
