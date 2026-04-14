@@ -1,12 +1,11 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import "../../style" as T
+import "../style" as T
+import "../components" as C
 
 Item {
     id: root
-    // L'Item prendra automatiquement la place offerte par le StackView
 
-    // --- VARIABLES DE COULEUR ---
     property real currentHue: 0.05
     property real currentBrightness: 1.0
     property color selectedColor: Qt.hsva(currentHue, 1.0, currentBrightness, 1.0)
@@ -24,65 +23,19 @@ Item {
     }
 
     // ----------------------------------------------------
-    // 1. HEADER STRICTEMENT ANCRÉ EN HAUT
+    // HEADER (Instanciation du composant)
     // ----------------------------------------------------
-    Item {
+    C.PageHeader {
         id: header
-        anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-            topMargin: 20
-            leftMargin: 30
-            rightMargin: 30
-        }
-        height: 50
+        title: "ÉCLAIRAGE & AMBIANCE"
 
-        // Bouton Retour (Gauche)
-        MouseArea {
-            id: backBtn
-            width: 150
-            anchors {
-                left: parent.left
-                top: parent.top
-                bottom: parent.bottom
-            }
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.StackView.view.pop()
-
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 12
-                Text {
-                    text: "〈 "
-                    color: backBtn.pressed ? T.Theme.unselected : T.Theme.textMain
-                    font.pixelSize: 26
-                    font.bold: true
-                    transform: Translate { x: backBtn.containsMouse ? -4 : 0 }
-                    Behavior on transform { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
-                }
-                Text {
-                    text: "Retour"
-                    color: backBtn.pressed ? T.Theme.unselected : T.Theme.textMain
-                    font.pixelSize: 20
-                    font.bold: true
-                }
-            }
-        }
-
-        // Titre (Centre)
-        Text {
-            anchors.centerIn: parent
-            text: "ÉCLAIRAGE & AMBIANCE"
-            color: T.Theme.textMain
-            font.pixelSize: 22
-            font.bold: true
-            font.letterSpacing: 2
+        onBackClicked: {
+            root.StackView.view.pop()
         }
     }
 
     // ----------------------------------------------------
-    // 2. ZONE DES CARTES
+    // ZONE DES CARTES
     // ----------------------------------------------------
     Row {
         id: cardContainer
@@ -96,7 +49,6 @@ Item {
         }
         spacing: 30
 
-        // --- CARTE GAUCHE : COULEUR PRINCIPALE ---
         Rectangle {
             width: (cardContainer.width - cardContainer.spacing) / 2
             height: parent.height
@@ -104,7 +56,6 @@ Item {
             radius: 16
             border.color: Qt.rgba(1, 1, 1, 0.05)
 
-            // Contenu centré verticalement et horizontalement
             Column {
                 anchors.centerIn: parent
                 spacing: 40
@@ -117,7 +68,6 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
 
-                // --- ROUE CHROMATIQUE (Taille fixe absolue) ---
                 Item {
                     id: wheelBox
                     width: 240
@@ -160,19 +110,15 @@ Item {
                         onReleased: bridge.save_setting("theme.main", root.selectedColor.toString())
                     }
 
-                    // Curseur tournant (sur le rayon de 100)
                     Rectangle {
                         width: 32; height: 32; radius: 16
                         color: "transparent"
                         border.color: "white"
                         border.width: 4
-
-                        // Centre X/Y = 120. Rayon = 100.
                         x: 120 + 100 * Math.cos(root.currentHue * 2 * Math.PI) - width / 2
                         y: 120 + 100 * Math.sin(root.currentHue * 2 * Math.PI) - height / 2
                     }
 
-                    // Aperçu central
                     Rectangle {
                         anchors.centerIn: parent
                         width: 90; height: 90; radius: 45
@@ -182,7 +128,6 @@ Item {
                     }
                 }
 
-                // --- SLIDER (Taille fixe absolue) ---
                 Column {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 15
@@ -196,7 +141,7 @@ Item {
 
                     Slider {
                         id: brightnessSlider
-                        width: 250 // Largeur fixe blindée
+                        width: 250
                         height: 40
                         from: 0.1
                         to: 1.0
@@ -210,7 +155,6 @@ Item {
                         Rectangle {
                             x: brightnessSlider.leftPadding
                             y: brightnessSlider.topPadding + brightnessSlider.availableHeight / 2 - height / 2
-
                             width: brightnessSlider.availableWidth
                             height: 6
                             radius: 3
@@ -228,8 +172,6 @@ Item {
                         Rectangle {
                             x: brightnessSlider.leftPadding + brightnessSlider.visualPosition * (brightnessSlider.availableWidth - width)
                             y: brightnessSlider.topPadding + brightnessSlider.availableHeight / 2 - height / 2
-
-
                             width: 26
                             height: 26
                             radius: 13
@@ -243,7 +185,6 @@ Item {
             }
         }
 
-        // --- CARTE DROITE : COULEUR SECONDAIRE (Bientôt) ---
         Rectangle {
             width: (cardContainer.width - cardContainer.spacing) / 2
             height: parent.height

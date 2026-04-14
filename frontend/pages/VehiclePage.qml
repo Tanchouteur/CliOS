@@ -1,10 +1,11 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import "../../style" as T
+import "../style" as T
+import "../components" as C
 
 Item {
-    id: vehicleMenuPage
+    id: root
 
     // Modèle des sous-options du menu Véhicule
     readonly property var menuItems: [
@@ -12,52 +13,26 @@ Item {
         { label: "Coûts & Statistiques", desc: "Prix du carburant et suivi de maintenance", icon: "⛽", source: "VehicleStats.qml" }
     ]
 
+    C.PageHeader {
+        id: header
+        title: "VHEICULE"
+
+        onBackClicked: {
+            root.StackView.view.pop()
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 20
         spacing: 20
-
-        // --- HEADER ---
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 15
-
-            Rectangle {
-                width: 40; height: 40; radius: 20
-                color: backMouse.pressed ? T.Theme.main : (backMouse.containsMouse ? T.Theme.main : T.Theme.bgDimmed)
-                border.color: Qt.rgba(1, 1, 1, 0.1)
-                border.width: 1
-
-                Text {
-                    text: "〈"
-                    color: backMouse.pressed || backMouse.containsMouse ? T.Theme.bgMain : T.Theme.textMain
-                    font.pixelSize: 20; font.bold: true
-                    anchors.centerIn: parent
-                    transform: Translate { x: -2 }
-                }
-
-                MouseArea {
-                    id: backMouse
-                    anchors.fill: parent
-                    hoverEnabled: true // Gardé pour les tests sur PC, inoffensif sur tactile
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: vehicleMenuPage.StackView.view.pop()
-                }
-            }
-
-            Text {
-                text: "VÉHICULE"
-                color: T.Theme.textMain
-                font.pixelSize: 22; font.bold: true
-                font.letterSpacing: 2
-            }
-        }
+        anchors.topMargin: header.height + 50
 
         // --- LISTE DES OPTIONS ---
         ListView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            model: vehicleMenuPage.menuItems
+            model: root.menuItems
             spacing: 12
             clip: true
 
@@ -122,7 +97,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: vehicleMenuPage.StackView.view.push(Qt.resolvedUrl(modelData.source))
+                    onClicked: root.StackView.view.push(Qt.resolvedUrl(modelData.source))
                 }
             }
         }
