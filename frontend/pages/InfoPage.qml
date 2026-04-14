@@ -21,9 +21,8 @@ Item {
         id: header
         title: "INFORMATIONS SYSTÈME"
         onBackClicked: {
-            if (StackView.view) {
-                StackView.view.pop()
-            }
+            root.StackView.view.pop()
+
         }
     }
 

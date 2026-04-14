@@ -6,7 +6,7 @@ import "../style" as T
 import "../components" as C
 
 Item {
-    id: systemPage
+    id: root
 
     property var serviceKeys: (bridge !== undefined && bridge.systemHealth !== undefined) ? Object.keys(bridge.systemHealth) : []
 
@@ -29,7 +29,7 @@ Item {
         ListView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            model: systemPage.serviceKeys
+            model: root.serviceKeys
             spacing: 12
             clip: true
 
