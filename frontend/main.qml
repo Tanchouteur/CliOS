@@ -1,16 +1,20 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Window
 import "views"
 import "style"
 import "components"
 
 ApplicationWindow {
     id: appWindow
-    property string version: "1.12.0"
+    property string version: "1.15.0"
     visible: true
-    width: 2000
-    height: 700
+    width: 1980
+    height: 720
     title: "CliOS v" + version
+
+    visibility: "Maximized"
+    flags: Qt.FramelessWindowHint | Qt.Window | Qt.MSWindowsFixedSizeDialogHint
 
     // Application de la couleur de fond via le Thème
     color: Theme.bgMain

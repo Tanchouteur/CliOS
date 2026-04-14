@@ -8,8 +8,6 @@ Item {
 
     property string sessionState: bridge.data !== undefined && bridge.data.session_state !== undefined ? bridge.data.session_state : "IDLE"
 
-    // --- MODE TEST SUR MAC (Raccourci Clavier) ---
-    // Appuie sur 'T' pour simuler la coupure du contact sans utiliser le mock python !
     focus: true
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_T) {
