@@ -14,7 +14,10 @@ Item {
 
     // Définition de seuils pour colorer les barres en rouge si danger
     property color cpuColor: cpuUsage > 80.0 ? T.Theme.danger : T.Theme.main
-    property color ramColor: ramUsage > 800.0 ? T.Theme.danger : T.Theme.main // Exemple: Alerte à 800MB
+    property color ramColor: ramUsage > 800.0 ? T.Theme.danger : T.Theme.main
+
+    property var health: bridge && bridge.systemHealth !== undefined ? bridge.systemHealth : {}
+
 
     // --- EN-TÊTE ---
     C.PageHeader {
@@ -59,6 +62,7 @@ Item {
 
                 RowLayout {
                     width: parent.width
+                    spacing: 20
                     Text {
                         text: root.cpuUsage.toFixed(1) + " %"
                         color: T.Theme.textMain; font.pixelSize: 42; font.bold: true
@@ -67,9 +71,9 @@ Item {
 
                     // Barre de progression custom
                     Rectangle {
-                        Layout.fillWidth: true
                         height: 12
                         radius: 6
+                        width: parent.width/2 - 10
                         color: Qt.rgba(0, 0, 0, 0.4)
 
                         Rectangle {
@@ -157,6 +161,7 @@ Item {
                     columnSpacing: 60
                     rowSpacing: 15
 
+
                     Text {
                         text: "Version de l'Interface :"
                         color: T.Theme.unselected
@@ -174,10 +179,10 @@ Item {
                     Text { text: "Actif (Mock GT3)"; color: T.Theme.main; font.pixelSize: 20; font.bold: true }
 
                     Text { text: "Connexion CAN Bus :"; color: T.Theme.unselected; font.pixelSize: 20 }
-                    Text { text: "Déconnecté"; color: T.Theme.danger; font.pixelSize: 20; font.bold: true }
+                    Text { text: ""; color: T.Theme.danger; font.pixelSize: 20; font.bold: true }
                 }
 
-                Item { Layout.fillHeight: true } // Pousse tout vers le haut
+                Item { Layout.fillHeight: true }
             }
         }
     }
