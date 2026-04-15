@@ -71,47 +71,37 @@ class CanService(BaseService):
         super().start(stop_event, implemented=True)
 
     def _run(self, stop_event: threading.Event):
-        # 1. On génère la liste des filtres
         hardware_filters = self._generate_filters()
 
-        # 2. Configuration du "métronome" 70Hz (1 trame toutes les ~14.2 ms)
-        loop_interval = 1.0 / 70.0
-
         while not stop_event.is_set():
-            loop_start = time.time()
-
             if not self.provider.is_connected:
                 try:
-                    # On injecte les filtres au module DSD Tech !
                     self.provider.connect(can_filters=hardware_filters)
-                    self.set_ok(f"Connecté sur {self.provider.channel} (Filtres activés).")
+                    self.set_ok(f"Connecté sur {self.provider.channel}.")
                 except Exception as e:
                     self.set_error(f"Échec de connexion : {str(e)}")
                     stop_event.wait(2.0)
                     continue
 
             try:
-                # Timeout très court (10ms) pour ne pas bloquer le métronome
                 frame = self.provider.read_frame(timeout=0.01)
 
-                if frame:
-                    if getattr(self.api, 'is_starting_up', False):
-                        pass
-                    elif 0x7E8 <= frame.arbitration_id <= 0x7EF and self.obd_callback:
-                        self.obd_callback(frame)
-                    else:
-                        self.dispatcher.dispatch(frame)
+                if frame is None:
+                    time.sleep(0.001)
+                    continue
+
+                if getattr(self.api, 'is_starting_up', False):
+                    continue
+
+                if 0x7E8 <= frame.arbitration_id <= 0x7EF and self.obd_callback:
+                    self.obd_callback(frame)
+                else:
+                    self.dispatcher.dispatch(frame)
 
             except Exception as e:
                 self.set_error(f"Rupture de la liaison série : {str(e)}")
                 self.provider.close()
                 stop_event.wait(1.0)
-
-            elapsed = time.time() - loop_start
-            time_to_sleep = loop_interval - elapsed
-
-            if time_to_sleep > 0:
-                time.sleep(time_to_sleep)
 
     def stop(self):
         self.provider.close()
