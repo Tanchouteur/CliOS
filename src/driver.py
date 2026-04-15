@@ -11,8 +11,9 @@ class Slcan:
         self.bus = None
         self.is_connected = False
 
-    def connect(self) -> bool:
-        """Tente d'établir la liaison série sans bloquer l'exécution en cas d'échec."""
+    # --- MODIFICATION : Ajout de can_filters ---
+    def connect(self, can_filters: list = None) -> bool:
+        """Tente d'établir la liaison série avec filtres matériels optionnels."""
         if self.is_connected:
             return True
 
@@ -20,7 +21,8 @@ class Slcan:
             self.bus = can.interface.Bus(
                 bustype="slcan",
                 channel=self.channel,
-                bitrate=self.baudrate
+                bitrate=self.baudrate,
+                can_filters=can_filters # Le module hardware recevra la liste ici
             )
             self.is_connected = True
             return True
@@ -58,7 +60,6 @@ class Slcan:
             return False
 
         try:
-            # Création du message avec l'ID (ex: 0x7DF) et les octets de données
             msg = can.Message(
                 arbitration_id=can_id,
                 data=data,

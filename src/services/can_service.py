@@ -23,32 +23,40 @@ class CanService(BaseService):
         self.dispatcher = CanDispatcher(self.parser, self.processor, self.api)
         self.provider = provider
 
-        # --- 1. DÉTECTION DYNAMIQUE DES PORTS ---
-        # On scanne les ports COM/USB disponibles sur la machine
         available_ports = [port.device for port in serial.tools.list_ports.comports()]
         if not available_ports:
-            # Fallback visuel si rien n'est branché
             available_ports = ["Aucun modem détecté", "/dev/ttyUSB0", "COM3"]
 
-            # --- 2. DÉCLARATION DES PARAMÈTRES ---
         self.register_param("modem_port", "Port du Modem", "list", available_ports[0], persistent=True,
                             options=available_ports)
         self.register_param("baudrate", "Vitesse (Bauds)", "list", 500000, persistent=True,
                             options=[125000, 250000, 500000, 1000000])
 
-        # On force le provider à utiliser les valeurs (soit par défaut, soit celles du save.json)
         self.provider.channel = self._params["modem_port"]["value"]
         self.provider.baudrate = self._params["baudrate"]["value"]
 
-    # --- 3. RÉACTION AU CHANGEMENT DEPUIS LE FRONTEND ---
+    def _generate_filters(self):
+        """Compile les ID du parser et OBD2 en filtres matériels."""
+        filters = []
+        try:
+            # Ton DbcParser a déjà converti les clés hexadécimales en entiers dans 'optimized_db'
+            if hasattr(self.parser, 'optimized_db'):
+                for can_id_int in self.parser.optimized_db.keys():
+                    filters.append({"can_id": can_id_int, "can_mask": 0x7FF, "extended": False})
+
+            # On ajoute la plage OBD2 (0x7E8 à 0x7EF)
+            filters.append({"can_id": 0x7E8, "can_mask": 0x7F8, "extended": False})
+        except Exception as e:
+            self.print_message(f"[Attention] Erreur génération filtres matériels : {e}")
+
+        return filters if filters else None
+
     def on_param_changed(self, key: str, value):
         if key == "modem_port":
-            self.print_message(f"Changement de port demandé : {value}")
             self.provider.channel = value
             self.provider.close()
 
         elif key == "baudrate":
-            self.print_message(f"Changement de vitesse demandé : {value}")
             self.provider.baudrate = int(value)
             self.provider.close()
 
@@ -63,28 +71,33 @@ class CanService(BaseService):
         super().start(stop_event, implemented=True)
 
     def _run(self, stop_event: threading.Event):
+        # 1. On génère la liste des filtres
+        hardware_filters = self._generate_filters()
+
+        # 2. Configuration du "métronome" 70Hz (1 trame toutes les ~14.2 ms)
+        loop_interval = 1.0 / 70.0
+
         while not stop_event.is_set():
+            loop_start = time.time()
+
             if not self.provider.is_connected:
                 try:
-                    self.provider.connect()
-                    self.set_ok(f"Connecté avec succès sur {self.provider.channel}.")
+                    # On injecte les filtres au module DSD Tech !
+                    self.provider.connect(can_filters=hardware_filters)
+                    self.set_ok(f"Connecté sur {self.provider.channel} (Filtres activés).")
                 except Exception as e:
                     self.set_error(f"Échec de connexion : {str(e)}")
-                    stop_event.wait(2.0)  # On évite de spammer les tentatives si ça foire
-                    continue  # On passe au tour de boucle suivant
+                    stop_event.wait(2.0)
+                    continue
 
             try:
-                frame = self.provider.read_frame(timeout=0.1)
-
-                if frame is None:
-                    time.sleep(0.005)
-                    continue
+                # Timeout très court (10ms) pour ne pas bloquer le métronome
+                frame = self.provider.read_frame(timeout=0.01)
 
                 if frame:
                     if getattr(self.api, 'is_starting_up', False):
-                        continue
-
-                    if 0x7E8 <= frame.arbitration_id <= 0x7EF and self.obd_callback:
+                        pass
+                    elif 0x7E8 <= frame.arbitration_id <= 0x7EF and self.obd_callback:
                         self.obd_callback(frame)
                     else:
                         self.dispatcher.dispatch(frame)
@@ -93,6 +106,12 @@ class CanService(BaseService):
                 self.set_error(f"Rupture de la liaison série : {str(e)}")
                 self.provider.close()
                 stop_event.wait(1.0)
+
+            elapsed = time.time() - loop_start
+            time_to_sleep = loop_interval - elapsed
+
+            if time_to_sleep > 0:
+                time.sleep(time_to_sleep)
 
     def stop(self):
         self.provider.close()

@@ -1,6 +1,5 @@
 import json
 
-
 class DbcParser:
     def __init__(self, filepath: str):
         with open(filepath, 'r') as f:
@@ -13,7 +12,6 @@ class DbcParser:
 
             if "signals" in definition:
                 for sig_name, sig_def in definition["signals"].items():
-                    # --- FIX: Valeurs par défaut critiques ---
                     sig_def.setdefault("factor", 1.0)
                     sig_def.setdefault("offset", 0.0)
                     sig_def.setdefault("shift", 0)
