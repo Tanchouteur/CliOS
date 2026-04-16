@@ -8,6 +8,7 @@ class DashboardBridge(QObject):
     """Pont de communication sécurisé (Thread-Safe)."""
 
     dataChanged = Signal(dict)
+    diagDataChanged = Signal()
     configChanged = Signal(dict)
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
     statsChanged = Signal(dict)
@@ -70,6 +71,7 @@ class DashboardBridge(QObject):
 
             self._data = safe_qml_data
             self.dataChanged.emit(self._data)
+            self.diagDataChanged.emit()
 
     def _update_stats(self):
         if self.stats_service:
@@ -118,17 +120,17 @@ class DashboardBridge(QObject):
             self.diag_service.request_scan()
 
     # --- CORRECTION DE FUITE : On lit self._data (local) et non self.api._data (risqué) ---
-    @Property(bool, notify=dataChanged)
+    @Property(bool, notify=diagDataChanged)
     def isScanning(self):
-        return self._data.get("diag_scanning", False)
+        return bool(self._data.get("diag_scanning", False))
 
-    @Property(bool, notify=dataChanged)
+    @Property(bool, notify=diagDataChanged)
     def hasScanned(self):
-        return self._data.get("diag_has_scanned", False)
+        return bool(self._data.get("diag_has_scanned", False))
 
-    @Property('QVariantList', notify=dataChanged)
+    @Property('QVariantList', notify=diagDataChanged)
     def diagnosticCodes(self):
-        return self._data.get("diag_codes", [])
+        return list(self._data.get("diag_codes", []))
 
     @Slot()
     def resetTripB(self):
