@@ -111,7 +111,7 @@ def main():
 
     # --- NOUVEAU : Chargement et injection de la version système ---
     app_version = load_system_version(BASE_DIR)
-    api._data["system_version"] = app_version
+    api.update({"system_version": app_version})
     print(f"\n[INFO] 🚀 Démarrage de ClOS (Version : {app_version})")
 
     api.run_startup_sequence(duration_sec=1.5)
