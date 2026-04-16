@@ -3,7 +3,7 @@ import threading
 import time
 from src.parser import DbcParser
 from src.services.base_service import BaseService
-from src.signal_processor import SignalProcessor, RawFrame
+from src.signal_processor import SignalProcessor
 
 
 class CanService(BaseService):
@@ -88,8 +88,8 @@ class CanService(BaseService):
                             # On décode directement avec le bytearray (Optimisation du Processor)
                             decoded = processor_decode(frame.data, db[msg_id])
                             if decoded:
-                                # On ajoute les données au carton au lieu d'appeler l'API
-                                batch_data.update(decoded)
+                                # Normalisation défensive: seulement des types Python simples dans l'API.
+                                batch_data.update({k: self._sanitize_value(v) for k, v in decoded.items()})
 
                 # 3. Livraison synchronisée (60 Hz)
                 if now - last_ui_update >= ui_refresh_rate:
@@ -102,6 +102,20 @@ class CanService(BaseService):
                 self.set_error(f"Perte de l'interface réseau : {str(e)}")
                 self.provider.close()
                 stop_event.wait(1.0)
+
+    def _sanitize_value(self, value):
+        if isinstance(value, bool):
+            return 1 if value else 0
+        if value is None or isinstance(value, (int, float, str)):
+            return value
+        if hasattr(value, "item"):
+            try:
+                return self._sanitize_value(value.item())
+            except Exception:
+                pass
+        if isinstance(value, (bytes, bytearray)):
+            return list(value)
+        return str(value)
 
     def stop(self):
         self.provider.close()

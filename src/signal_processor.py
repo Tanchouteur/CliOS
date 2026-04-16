@@ -1,17 +1,6 @@
-from dataclasses import dataclass
-
-
-@dataclass
-class RawFrame:
-    id: int
-    data: bytearray
-    timestamp: float
-
-
 class SignalProcessor:
-    def decode(self, frame: RawFrame, definition: dict) -> dict:
+    def decode(self, frame_data: bytearray, definition: dict) -> dict:
         results = {}
-        frame_data = frame.data
         data_len = len(frame_data)
 
         for sig_name, sig_def in definition["signals"].items():
@@ -31,7 +20,8 @@ class SignalProcessor:
                 combined_bits = int.from_bytes(raw_bytes, byteorder=endian)
 
                 for bit_name, bit_pos in sig_def["bits"].items():
-                    results[bit_name] = bool((combined_bits >> bit_pos) & 1)
+                    # On renvoie un entier (0/1) pour éviter des conversions bool fragiles côté Qt.
+                    results[bit_name] = (combined_bits >> bit_pos) & 1
 
             # --- Valeurs numériques ---
             else:
