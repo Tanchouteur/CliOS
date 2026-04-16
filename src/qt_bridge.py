@@ -5,7 +5,7 @@ from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplica
 
 
 class DashboardBridge(QObject):
-    """Pont de communication optimisé par Polling Asymétrique."""
+    """Pont de communication sécurisé (Thread-Safe)."""
 
     dataChanged = Signal(dict)
     configChanged = Signal(dict)
@@ -52,7 +52,9 @@ class DashboardBridge(QObject):
 
     # --- LES SOUS-ROUTINES ---
     def _update_fast_data(self):
-        new_data = self.api._data.copy()
+        # --- NOUVEAU : Appel sécurisé (Thread-Safe) ---
+        new_data = self.api.get_display_data()
+
         if new_data != self._data:
             self._data = new_data
             self.dataChanged.emit(self._data)
@@ -91,17 +93,18 @@ class DashboardBridge(QObject):
         if self.diag_service:
             self.diag_service.request_scan()
 
+    # --- CORRECTION DE FUITE : On lit self._data (local) et non self.api._data (risqué) ---
     @Property(bool, notify=dataChanged)
     def isScanning(self):
-        return self.api._data.get("diag_scanning", False)
+        return self._data.get("diag_scanning", False)
 
     @Property(bool, notify=dataChanged)
     def hasScanned(self):
-        return self.api._data.get("diag_has_scanned", False)
+        return self._data.get("diag_has_scanned", False)
 
     @Property('QVariantList', notify=dataChanged)
     def diagnosticCodes(self):
-        return self.api._data.get("diag_codes", [])
+        return self._data.get("diag_codes", [])
 
     @Slot()
     def resetTripB(self):
@@ -143,7 +146,6 @@ class DashboardBridge(QObject):
 
     @Slot(str, bool)
     def toggleService(self, service_name: str, enable: bool):
-        #print(f"[INFO] IHM : Bascule du service {service_name} -> {'ON' if enable else 'OFF'}")
         storage_key = f"services.{service_name}.enabled"
         if hasattr(self, 'storage'):
             self.storage.set(storage_key, enable)
@@ -180,52 +182,41 @@ class DashboardBridge(QObject):
 
     @Slot(result='QVariantList')
     def getAvailableProfiles(self):
-        """Renvoie la liste des identifiants de profils existants."""
         if self.profile_manager:
             return self.profile_manager.get_available_profiles()
         return []
 
     @Slot(result=str)
     def getActiveProfile(self):
-        """Renvoie l'identifiant du profil actuellement chargé."""
         if self.profile_manager:
             return self.profile_manager.active_profile_id
         return ""
 
     @Slot(result='QVariantList')
     def getAvailableCanFiles(self):
-        """Renvoie la liste des fichiers .json dans le dossier can/"""
         if self.profile_manager:
             return self.profile_manager.get_available_can_files()
         return []
 
     @Slot(result='QVariantList')
     def getAvailableConfigFiles(self):
-        """Renvoie la liste des fichiers .json dans le dossier config/"""
         if self.profile_manager:
             return self.profile_manager.get_available_config_files()
         return []
 
     @Slot(str, str, str, str, str, result=bool)
     def createNewProfile(self, profile_id: str, name: str, can_file: str, config_file: str, save_file: str):
-        """Crée un nouveau profil et génère un fichier de config vierge si besoin."""
         if not self.profile_manager:
             return False
-
-        # 1. On s'assure que le fichier de config existe ou on en crée un vierge
         self.profile_manager.create_new_config(config_file)
-
-        # 2. On ajoute le profil au trousseau
         self.profile_manager.add_profile(profile_id, name, can_file, config_file, save_file)
         print(f"[INFO] Nouveau profil créé : {name} ({profile_id})")
         return True
 
     @Slot(str, result=bool)
     def setActiveProfile(self, profile_id: str):
-        """Change le profil actif pour le prochain redémarrage."""
         if not self.profile_manager:
             return False
-
         success = self.profile_manager.set_active_profile(profile_id)
         if success:
             print(f"[INFO] Changement de profil programmé : {profile_id}. Redémarrage nécessaire.")
@@ -235,20 +226,17 @@ class DashboardBridge(QObject):
 
     @Slot()
     def restartApplication(self):
-        """Demande un redémarrage complet du système."""
         print("[INFO] Ordre de redémarrage reçu depuis l'IHM.")
         self.needs_restart = True
         QCoreApplication.instance().quit()
 
     @Slot()
     def startGearCalibration(self):
-        """Lance la capture des rapports de boîte."""
         if self.gear_calib_service:
             self.gear_calib_service.start_calibration()
 
     @Slot(result=bool)
     def stopGearCalibration(self):
-        """Stoppe la capture et sauvegarde les rapports dans la config."""
         if self.gear_calib_service:
             return self.gear_calib_service.stop_and_save_calibration()
         return False

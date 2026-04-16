@@ -9,14 +9,17 @@ class VehicleAPI:
         self.storage = storage
         last_odo = storage.get("last_odometer", 0.0)
 
-        # 1. LA VRAIE RÉALITÉ PHYSIQUE (Lue par tes services)
+        # --- NOUVEAU : Le Cadenas Anti-Crash ---
+        self.data_lock = threading.Lock()
+
+        # 1. LA VRAIE RÉALITÉ PHYSIQUE
         self._data = {
             "fuel_level": 100.0,
             "engine_light": "OFF",
             "odometer": last_odo
         }
 
-        # 2. L'ILLUSION VISUELLE (Lue par le QML pendant le démarrage)
+        # 2. L'ILLUSION VISUELLE
         self._ui_data = self._data.copy()
 
         # Indicateurs d'état système
@@ -24,25 +27,27 @@ class VehicleAPI:
         self.critical_engine_error = False
 
     def get_display_data(self):
-        """Méthode que le Bridge doit appeler pour alimenter l'interface."""
-        if self.is_starting_up:
-            return self._ui_data
-        return self._data
+        """Fournit une copie 100% sécurisée au Bridge sans bloquer le CAN."""
+        with self.data_lock:
+            if self.is_starting_up:
+                return self._ui_data.copy()
+            return self._data.copy()
 
     def update(self, new_data: dict):
-        """Intègre les nouvelles données brutes du bus CAN en temps réel."""
-        # On met à jour la vraie réalité en permanence, même pendant l'animation !
-        self._data.update(new_data)
+        """Intègre les nouvelles données sous haute protection."""
+        # On verrouille le dictionnaire juste le temps de l'écriture
+        with self.data_lock:
+            self._data.update(new_data)
 
-        rpm = self._data.get("rpm", 0)
-        ignition = self._data.get("ignition_on", False) or self._data.get("key_run", False)
+            rpm = self._data.get("rpm", 0)
+            ignition = self._data.get("ignition_on", False) or self._data.get("key_run", False)
 
-        if self.critical_engine_error:
-            self._data["engine_light"] = "RED"
-        elif ignition and rpm < 300:
-            self._data["engine_light"] = "ORANGE"
-        else:
-            self._data["engine_light"] = "OFF"
+            if self.critical_engine_error:
+                self._data["engine_light"] = "RED"
+            elif ignition and rpm < 300:
+                self._data["engine_light"] = "ORANGE"
+            else:
+                self._data["engine_light"] = "OFF"
 
     # --- Séquences d'Initialisation ---
 
@@ -50,8 +55,8 @@ class VehicleAPI:
         """Exécute la routine de vérification matérielle visuelle (Sweep)."""
         self.is_starting_up = True
 
-        # On synchronise l'illusion avec la réalité avant de commencer
-        self._ui_data = self._data.copy()
+        with self.data_lock:
+            self._ui_data = self._data.copy()
 
         def sequence():
             time.sleep(1.0)
@@ -66,37 +71,38 @@ class VehicleAPI:
                 "stop_warning", "service_warning"
             ]
 
-            # Phase d'activation maximale (On modifie UNIQUEMENT l'illusion visuelle)
-            self._ui_data.update(dict.fromkeys(voyants_booleens, True))
-            self._ui_data.update({"brightness": 100.0, "gear": "8", "engine_light": "RED"})
+            # On verrouille à chaque mise à jour de l'animation
+            with self.data_lock:
+                self._ui_data.update(dict.fromkeys(voyants_booleens, True))
+                self._ui_data.update({"brightness": 100.0, "gear": "8", "engine_light": "RED"})
 
             steps = 50
             sleep_time = (duration_sec / 2.0) / steps
 
-            # Interpolation linéaire montante
             for i in range(steps + 1):
                 fraction = i / steps
-                self._ui_data.update({
-                    "rpm": fraction * 7000.0,
-                    "speed": fraction * 200.0,
-                    "accel_pos": fraction * 100.0,
-                    "engine_temp": -20.0 + (fraction * 150.0),
-                    "inst_cons": fraction * 30.0
-                })
+                with self.data_lock:
+                    self._ui_data.update({
+                        "rpm": fraction * 7000.0,
+                        "speed": fraction * 200.0,
+                        "accel_pos": fraction * 100.0,
+                        "engine_temp": -20.0 + (fraction * 150.0),
+                        "inst_cons": fraction * 30.0
+                    })
                 time.sleep(sleep_time)
 
             time.sleep(0.3)
 
-            # Interpolation linéaire descendante
             for i in range(steps, -1, -1):
                 fraction = i / steps
-                self._ui_data.update({
-                    "rpm": fraction * 7000.0,
-                    "speed": fraction * 200.0,
-                    "accel_pos": fraction * 100.0,
-                    "engine_temp": -20.0 + (fraction * 150.0),
-                    "inst_cons": fraction * 30.0
-                })
+                with self.data_lock:
+                    self._ui_data.update({
+                        "rpm": fraction * 7000.0,
+                        "speed": fraction * 200.0,
+                        "accel_pos": fraction * 100.0,
+                        "engine_temp": -20.0 + (fraction * 150.0),
+                        "inst_cons": fraction * 30.0
+                    })
                 time.sleep(sleep_time)
 
             self.is_starting_up = False
