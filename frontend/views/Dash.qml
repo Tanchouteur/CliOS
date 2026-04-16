@@ -271,7 +271,20 @@ Item {
             }
             Row {
                 visible: bottomBar.currentScreenIndex === 2; anchors.verticalCenter: parent.verticalCenter
-                Text { text: bridge.stats !== undefined && bridge.stats.km_before_service !== undefined ? "Service dans : " + bridge.stats.km_before_service.toFixed(0) + " km" : "Service : ---"; color: (bridge.data !== undefined && bridge.data.service_warning) ? Theme.danger : Theme.textMain; font.pixelSize: 22; font.bold: (bridge.data !== undefined && bridge.data.service_warning); font.family: "Arial"; opacity: 0.9 }
+                Text {
+                    text: (bridge.stats && bridge.stats.km_before_service !== undefined) ? "Service dans : " + bridge.stats.km_before_service.toFixed(0) + " km" : "Service : ---"
+
+                    // Correction ici : On utilise !! pour garantir un booléen et on vérifie l'existence
+                    color: (bridge.data && !!bridge.data.service_warning) ? Theme.danger : Theme.textMain
+
+                    font.pixelSize: 22
+
+                    // Correction ici : Idem pour font.bold
+                    font.bold: !!(bridge.data && bridge.data.service_warning)
+
+                    font.family: "Arial"
+                    opacity: 0.9
+                }
             }
         }
         Row {

@@ -12,7 +12,7 @@ Item {
     property bool hasScanned: bridge.hasScanned !== undefined ? bridge.hasScanned : false
     property bool hasErrors: codes.length > 0
 
-    property bool isIgnitionOn: bridge.data !== undefined && bridge.data["key_run"]
+    property bool isIgnitionOn: !!(bridge.data && bridge.data["key_run"])
     property bool isServiceReady: bridge.systemHealth !== undefined &&
                                   bridge.systemHealth["Diag"] !== undefined &&
                                   bridge.systemHealth["Diag"].status !== "ERROR"
