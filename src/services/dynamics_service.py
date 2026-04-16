@@ -62,7 +62,6 @@ class DynamicsService(BaseService):
             slip_mult = 1.0 + (self._params["slip_margin"]["value"] / 100.0)
             lock_mult = self._params["lock_margin"]["value"] / 100.0
 
-            # --- CORRECTION : Préparation du dictionnaire de mise à jour ---
             updates = {}
 
             if v_ref > min_v:

@@ -52,18 +52,42 @@ class DashboardBridge(QObject):
 
     # --- LES SOUS-ROUTINES ---
     def _update_fast_data(self):
-        # --- NOUVEAU : Appel sécurisé (Thread-Safe) ---
+        # 1. On récupère la copie sécurisée de l'API
         new_data = self.api.get_display_data()
 
-        if new_data != self._data:
-            self._data = new_data
+        # 2. On vérifie s'il y a un changement par rapport à la dernière émission
+        if new_data != getattr(self, '_last_raw_data', {}):
+            self._last_raw_data = new_data
+
+            # 3. Bouclier Anti-Crash : Conversion Booléen -> Entier
+            # Cette étape protège la mémoire C++ de PySide6
+            safe_qml_data = {}
+            for k, v in new_data.items():
+                if isinstance(v, bool):
+                    safe_qml_data[k] = 1 if v else 0
+                else:
+                    safe_qml_data[k] = v
+
+            self._data = safe_qml_data
             self.dataChanged.emit(self._data)
 
     def _update_stats(self):
         if self.stats_service:
-            new_stats = self.stats_service.stats.copy()
-            if new_stats != self._stats:
-                self._stats = new_stats
+            # On utilise la propriété .stats qui est déjà thread-safe
+            new_stats = self.stats_service.stats
+
+            if new_stats != getattr(self, '_last_raw_stats', {}):
+                self._last_raw_stats = new_stats
+
+                # Application du bouclier pour les stats
+                safe_stats = {}
+                for k, v in new_stats.items():
+                    if isinstance(v, bool):
+                        safe_stats[k] = 1 if v else 0
+                    else:
+                        safe_stats[k] = v
+
+                self._stats = safe_stats
                 self.statsChanged.emit(self._stats)
 
     def _update_health(self):

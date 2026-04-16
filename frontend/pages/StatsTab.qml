@@ -32,7 +32,7 @@ Item {
             // Indicateur d'enregistrement actif
             Row {
                 spacing: 8
-                visible: trip.is_active === true
+                visible: trip.is_active
                 Layout.alignment: Qt.AlignRight
 
                 Rectangle {

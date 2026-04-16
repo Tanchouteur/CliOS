@@ -19,7 +19,8 @@
         "Can": {
             "params": {
                 "modem_port": "/dev/cu.usbmodem207B3949534B1"
-            }
+            },
+            "enabled": true
         },
         "Dynamics": {
             "params": {

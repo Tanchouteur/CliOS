@@ -271,7 +271,7 @@ Item {
             }
             Row {
                 visible: bottomBar.currentScreenIndex === 2; anchors.verticalCenter: parent.verticalCenter
-                Text { text: bridge.stats !== undefined && bridge.stats.km_before_service !== undefined ? "Service dans : " + bridge.stats.km_before_service.toFixed(0) + " km" : "Service : ---"; color: (bridge.data !== undefined && bridge.data.service_warning === true) ? Theme.danger : Theme.textMain; font.pixelSize: 22; font.bold: (bridge.data !== undefined && bridge.data.service_warning === true); font.family: "Arial"; opacity: 0.9 }
+                Text { text: bridge.stats !== undefined && bridge.stats.km_before_service !== undefined ? "Service dans : " + bridge.stats.km_before_service.toFixed(0) + " km" : "Service : ---"; color: (bridge.data !== undefined && bridge.data.service_warning) ? Theme.danger : Theme.textMain; font.pixelSize: 22; font.bold: (bridge.data !== undefined && bridge.data.service_warning); font.family: "Arial"; opacity: 0.9 }
             }
         }
         Row {
