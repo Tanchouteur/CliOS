@@ -1,9 +1,8 @@
-from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QPushButton, QLabel, QSlider, QVBoxLayout, QWidget, QHBoxLayout, QComboBox
 import threading
 import time
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QPushButton, QLabel, QSlider, QVBoxLayout, QWidget, QHBoxLayout, QComboBox
+from PySide6.QtCore import QTimer  # <-- NOUVEL IMPORT OBLIGATOIRE
 
 
 class MockControlPanel(QWidget):
@@ -46,7 +45,7 @@ class MockControlPanel(QWidget):
         # --- LIGNE DE SÉPARATION VISUELLE ---
         layout.addWidget(QLabel("─" * 40))
 
-        # --- NOUVEAU : BOUTON PILOTE AUTO ---
+        # --- BOUTON PILOTE AUTO ---
         self.btn_autopilot = QPushButton("🤖 Lancer Pilote Automatique (Test UI)")
         self.btn_autopilot.setStyleSheet("background-color: #2d5b88; color: white; font-weight: bold; padding: 5px;")
         self.btn_autopilot.clicked.connect(self.run_auto_pilot)
@@ -67,13 +66,17 @@ class MockControlPanel(QWidget):
         self.slider_throttle.setValue(0)
         self.slider_brake.setValue(0)
 
+    # --- NOUVELLE FONCTION SÉCURISÉE ---
+    def _restore_button(self):
+        """Exécutée par le Main Thread pour réactiver l'UI en toute sécurité."""
+        self.btn_autopilot.setEnabled(True)
+        self.btn_autopilot.setText("🤖 Lancer Pilote Automatique (Test UI)")
+
     # ==========================================
     # SÉQUENCE DU PILOTE VIRTUEL
     # ==========================================
     def run_auto_pilot(self):
-        """Prend le contrôle des inputs du mock physics pour simuler un trajet."""
-
-        # On désactive le bouton pour éviter de lancer 2 pilotes en même temps
+        # Ceci est exécuté dans le Main Thread, donc pas de problème !
         self.btn_autopilot.setEnabled(False)
         self.btn_autopilot.setText("🤖 Conduite en cours...")
 
@@ -90,13 +93,13 @@ class MockControlPanel(QWidget):
 
             print("[MOCK PILOT] ⚙️ 3. Passage en 2ème vitesse...")
             self.mock.throttle = 0.0
-            time.sleep(0.5)  # Petit temps mort pour simuler l'embrayage
+            time.sleep(0.5)
             self.mock.gear = 2
             self.mock.throttle = 40.0
             time.sleep(4.0)
 
             print("[MOCK PILOT] 🛣️ 4. Vitesse de croisière...")
-            self.mock.throttle = 15.0  # Maintien de la vitesse
+            self.mock.throttle = 15.0
             time.sleep(6.0)
 
             print("[MOCK PILOT] 🛑 5. Freinage progressif...")
@@ -109,15 +112,12 @@ class MockControlPanel(QWidget):
             self.mock.gear = 0
             time.sleep(1.0)
 
-            # C'est ÇA qui va déclencher l'animation "PAUSED" dans ton QML !
             self.mock.api.update({"key_run": False})
             self.mock.brake = 0.0
 
             print("[MOCK PILOT] ✅ Fin du trajet simulé. Vérifiez l'interface QML !")
 
-            # On réactive le bouton pour le prochain test
-            self.btn_autopilot.setEnabled(True)
-            self.btn_autopilot.setText("🤖 Lancer Pilote Automatique (Test UI)")
+            # --- CORRECTION : On demande au Main Thread de modifier le bouton ---
+            QTimer.singleShot(0, self._restore_button)
 
-        # On lance la séquence dans un thread pour que la fenêtre PyQt ne freeze pas
         threading.Thread(target=sequence, daemon=True).start()
