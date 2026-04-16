@@ -3,28 +3,28 @@ import threading
 
 
 class PhysicsMockProvider:
-    """Moteur physique temps réel avec simulation dynamique et boîte manuelle."""
+    """Moteur physique temps reel avec simulation dynamique et boite manuelle."""
 
     def __init__(self, api):
         self.api = api
         self.is_connected = False
         self._running = False
 
-        # --- COMMANDES (Inputs du joueur) ---
-        self.throttle = 0.0  # 0 à 100 %
-        self.brake = 0.0  # 0 à 100 %
-        self.gear = 0  # 0 = N, 1-5 = Vitesses
+        # Commandes (Inputs du joueur)
+        self.throttle = 0.0
+        self.brake = 0.0
+        self.gear = 0
 
-        # --- ÉTAT PHYSIQUE (Outputs) ---
+        # Etat physique (Outputs)
         self.speed_kmh = 0.0
         self.rpm = 800.0
-        self.torque_request = 0.0  # NOUVEAU : Simule la charge moteur (Load)
+        self.torque_request = 0.0
 
     def connect(self) -> bool:
         self.is_connected = True
         self._running = True
         threading.Thread(target=self._physics_loop, daemon=True, name="PhysicsMock").start()
-        print("[INFO] Moteur Physique (Mock) connecté et en route.")
+        print("[INFO] Moteur Physique (Mock) connecte et en route.")
         return True
 
     def close(self):
@@ -32,15 +32,18 @@ class PhysicsMockProvider:
         self._running = False
 
     def read_frame(self, timeout=0.1):
-        """Méthode factice pour que le CanService boucle sagement."""
+        """Methode factice pour que le CanService boucle sagement."""
         time.sleep(timeout)
         return None
 
     def _physics_loop(self):
         last_time = time.time()
 
-        self.api._data["ignition_on"] = True
-        self.api._data["key_run"] = True
+        # Ecriture initiale securisee
+        self.api.update({
+            "ignition_on": True,
+            "key_run": True
+        })
 
         ratios = {0: 0, 1: 14.5, 2: 8.2, 3: 5.4, 4: 3.9, 5: 3.1}
 
@@ -49,15 +52,12 @@ class PhysicsMockProvider:
             dt = now - last_time
             last_time = now
 
-            # --- NOUVEAU : Calcul du Torque Request (Charge ECU) ---
+            # Calcul du Torque Request (Charge ECU)
             if self.gear == 0:
-                # Au point mort, le moteur ne force pas (15% max)
                 target_torque = self.throttle * 0.15
             else:
-                # En prise, la demande de couple suit la pédale
                 target_torque = self.throttle
 
-            # Lissage pour imiter l'inertie du papillon des gaz et du calculateur
             self.torque_request += (target_torque - self.torque_request) * 5.0 * dt
 
             # 1. Calcul de la Force Motrice sur les roues
@@ -108,22 +108,29 @@ class PhysicsMockProvider:
             else:
                 gear_raw = 100
 
-            # 5. Injection de la télémétrie dans l'API
-            current_odo = self.api._data.get("odometer", 10000.0)
-            current_fuel = self.api._data.get("fuel_used", 0.0)
+            # 5. Lecture securisee pour incrementation
+            safe_data = self.api.get_display_data()
+            current_odo = safe_data.get("odometer", 10000.0)
+            current_fuel = safe_data.get("fuel_used", 0.0)
+
             fuel_rate = 0.001 + (self.throttle * 0.0005)
 
-            self.api._data["speed"] = round(self.speed_kmh, 1)
-            self.api._data["rpm"] = int(self.rpm)
-            self.api._data["wheel_speed_fl"] = round(front_speed, 1)
-            self.api._data["wheel_speed_fr"] = round(front_speed, 1)
-            self.api._data["wheel_speed_rl"] = round(rear_speed, 1)
-            self.api._data["wheel_speed_rr"] = round(rear_speed, 1)
-            self.api._data["gear_raw"] = gear_raw
-            self.api._data["odometer"] = current_odo + (self.speed_kmh * (dt / 3600.0))
-            self.api._data["fuel_used"] = current_fuel + (fuel_rate * dt)
-            self.api._data["accel_pos"] = self.throttle
-            self.api._data["brake"] = self.brake > 0
-            self.api._data["driver_torque_request"] = round(self.torque_request, 1)
+            # 6. Injection globale et securisee
+            updates = {
+                "speed": round(self.speed_kmh, 1),
+                "rpm": int(self.rpm),
+                "wheel_speed_fl": round(front_speed, 1),
+                "wheel_speed_fr": round(front_speed, 1),
+                "wheel_speed_rl": round(rear_speed, 1),
+                "wheel_speed_rr": round(rear_speed, 1),
+                "gear_raw": gear_raw,
+                "odometer": current_odo + (self.speed_kmh * (dt / 3600.0)),
+                "fuel_used": current_fuel + (fuel_rate * dt),
+                "accel_pos": self.throttle,
+                "brake": self.brake > 0,
+                "driver_torque_request": round(self.torque_request, 1)
+            }
+
+            self.api.update(updates)
 
             time.sleep(0.02)

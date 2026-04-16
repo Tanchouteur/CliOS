@@ -13,9 +13,12 @@ class DiagnosticService(BaseService):
         self.thread = None
         self._scan_requested = threading.Event()
 
-        self.api._data["diag_codes"] = []
-        self.api._data["diag_scanning"] = False
-        self.api._data["diag_has_scanned"] = False
+        # --- CORRECTION : Écriture sécurisée initiale ---
+        self.api.update({
+            "diag_codes": [],
+            "diag_scanning": False,
+            "diag_has_scanned": False
+        })
 
         self._last_obd_response = None
 
@@ -30,30 +33,33 @@ class DiagnosticService(BaseService):
         super().start(stop_event, implemented=True)
 
     def request_scan(self):
-        if self.api._data.get("key_run", False):
+        # --- CORRECTION : Lecture sécurisée ---
+        if self.api.get_display_data().get("key_run", False):
             self._scan_requested.set()
 
     def receive_obd_frame(self, frame):
         hex_data = " ".join([f"{b:02X}" for b in frame.data])
-        #print(f"[DIAG] Trame interceptée (ID: 0x{frame.arbitration_id:03X}) -> [{hex_data}]")
+        # print(f"[DIAG] Trame interceptée (ID: 0x{frame.arbitration_id:03X}) -> [{hex_data}]")
         self._last_obd_response = frame
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            # 1. Analyse de l'état matériel et du véhicule
-            is_connected = self.provider.is_connected
-            ignition_on = self.api._data.get("key_run", False)
+            # --- CORRECTION : Lecture sécurisée ---
+            safe_data = self.api.get_display_data()
 
-            # Mise à jour pour le QML
-            self.api._data["diag_ignition_on"] = ignition_on
+            is_connected = self.provider.is_connected
+            ignition_on = safe_data.get("key_run", False)
+
+            # --- CORRECTION : Écriture sécurisée ---
+            self.api.update({"diag_ignition_on": ignition_on})
 
             # 2. Gestion des états avec set_warning
             if not is_connected:
                 self.set_error("Adaptateur CAN non détecté")
-            elif not ignition_on :
+            elif not ignition_on:
                 self.set_warning("Contact requis pour le diagnostic")
             else:
-                if not self.api._data.get("diag_scanning", False):
+                if not safe_data.get("diag_scanning", False):
                     self.set_ok("Prêt pour scan")
 
             # 3. Gestion de la demande de scan
@@ -62,15 +68,15 @@ class DiagnosticService(BaseService):
                     try:
                         self._perform_scan()
                     except Exception as e:
-                        self.set_error("Erreur pendant le scan : "+str(e))
-                #else:
-                #    print("[DIAG] Abandon : Conditions non réunies (Contact/Connexion).")
+                        self.set_error("Erreur pendant le scan : " + str(e))
                 self._scan_requested.clear()
 
     def _perform_scan(self):
-        #print("\n[DIAG] Démarrage de la séquence de diagnostic OBD2...")
-        self.api._data["diag_scanning"] = True
-        self.api._data["diag_codes"] = []
+        # --- CORRECTION : Écriture sécurisée groupée ---
+        self.api.update({
+            "diag_scanning": True,
+            "diag_codes": []
+        })
         self._last_obd_response = None
         self.set_ok("Scan OBD2 en cours...")
 
@@ -81,7 +87,6 @@ class DiagnosticService(BaseService):
             if not self.provider.send_frame(0x7DF, req_data):
                 raise Exception("Erreur d'envoi matériel sur le bus CAN.")
 
-            #print("[DIAG] En attente de la réponse du calculateur (Timeout: 2s)...")
             timeout = time.time() + 2.0
 
             while time.time() < timeout:
@@ -95,15 +100,17 @@ class DiagnosticService(BaseService):
                 print("[DIAG] TIMEOUT : L'ECU n'a rien répondu.")
                 self.set_warning("Aucune réponse du calculateur (0x7E8)")
             else:
-                nb_defauts = len(self.api._data['diag_codes'])
+                # --- CORRECTION : Lecture sécurisée ---
+                nb_defauts = len(self.api.get_display_data().get('diag_codes', []))
                 print(f"[DIAG] Scan terminé avec succès. {nb_defauts} défaut(s) trouvé(s).")
                 self.set_ok("Scan terminé.")
-                self.api._data["diag_has_scanned"] = True
+                self.api.update({"diag_has_scanned": True})
 
         except Exception as e:
-            self.set_error("Erreur critique pendant le scan : "+str(e))
+            self.set_error("Erreur critique pendant le scan : " + str(e))
         finally:
-            self.api._data["diag_scanning"] = False
+            # --- CORRECTION : Écriture sécurisée ---
+            self.api.update({"diag_scanning": False})
 
     def _decode_dtc_response(self, data):
         if len(data) < 3 or data[1] != 0x43:
@@ -125,4 +132,5 @@ class DiagnosticService(BaseService):
 
             codes.append(f"{letter}{second}{third}{fourth}{fifth}".upper())
 
-        self.api._data["diag_codes"] = codes
+        # --- CORRECTION : Écriture sécurisée ---
+        self.api.update({"diag_codes": codes})
