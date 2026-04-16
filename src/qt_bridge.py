@@ -7,11 +7,11 @@ from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplica
 class DashboardBridge(QObject):
     """Pont de communication sécurisé (Thread-Safe)."""
 
-    dataChanged = Signal(dict)
+    dataChanged = Signal()
     diagDataChanged = Signal()
-    configChanged = Signal(dict)
+    configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
-    statsChanged = Signal(dict)
+    statsChanged = Signal()
     systemHealthChanged = Signal()
 
     def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
@@ -55,42 +55,51 @@ class DashboardBridge(QObject):
     def _update_fast_data(self):
         # 1. On récupère la copie sécurisée de l'API
         new_data = self.api.get_display_data()
+        safe_qml_data = self._to_qml_safe(new_data)
 
         # 2. On vérifie s'il y a un changement par rapport à la dernière émission
-        if new_data != getattr(self, '_last_raw_data', {}):
-            self._last_raw_data = new_data
-
-            # 3. Bouclier Anti-Crash : Conversion Booléen -> Entier
-            # Cette étape protège la mémoire C++ de PySide6
-            safe_qml_data = {}
-            for k, v in new_data.items():
-                if isinstance(v, bool):
-                    safe_qml_data[k] = 1 if v else 0
-                else:
-                    safe_qml_data[k] = v
+        if safe_qml_data != getattr(self, '_last_raw_data', {}):
+            self._last_raw_data = safe_qml_data
 
             self._data = safe_qml_data
-            self.dataChanged.emit(self._data)
+            self.dataChanged.emit()
             self.diagDataChanged.emit()
 
     def _update_stats(self):
         if self.stats_service:
             # On utilise la propriété .stats qui est déjà thread-safe
-            new_stats = self.stats_service.stats
+            new_stats = self._to_qml_safe(self.stats_service.stats)
 
             if new_stats != getattr(self, '_last_raw_stats', {}):
                 self._last_raw_stats = new_stats
+                self._stats = new_stats
+                self.statsChanged.emit()
 
-                # Application du bouclier pour les stats
-                safe_stats = {}
-                for k, v in new_stats.items():
-                    if isinstance(v, bool):
-                        safe_stats[k] = 1 if v else 0
-                    else:
-                        safe_stats[k] = v
+    def _to_qml_safe(self, value):
+        """Normalise les types pour éviter les conversions fragiles côté Shiboken/Qt."""
+        if isinstance(value, bool):
+            return 1 if value else 0
 
-                self._stats = safe_stats
-                self.statsChanged.emit(self._stats)
+        if value is None or isinstance(value, (int, float, str)):
+            return value
+
+        if isinstance(value, dict):
+            return {str(k): self._to_qml_safe(v) for k, v in value.items()}
+
+        if isinstance(value, (list, tuple, set)):
+            return [self._to_qml_safe(v) for v in value]
+
+        # Support défensif pour numpy scalars et objets avec .item().
+        if hasattr(value, "item"):
+            try:
+                return self._to_qml_safe(value.item())
+            except Exception:
+                pass
+
+        if isinstance(value, (bytes, bytearray)):
+            return list(value)
+
+        return str(value)
 
     def _update_health(self):
         new_health = self.orchestrator.get_system_health()
@@ -152,7 +161,7 @@ class DashboardBridge(QObject):
             current_dict = current_dict[k]
 
         current_dict[keys[-1]] = value
-        self.configChanged.emit(self._config)
+        self.configChanged.emit()
 
         def write_worker():
             try:
