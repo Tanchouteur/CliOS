@@ -6,6 +6,7 @@ class VehicleAPI:
     """Couche d'Abstraction Matérielle (HAL). Gère les données brutes du bus CAN."""
 
     def __init__(self, storage):
+        self._data = None
         self.storage = storage
         last_odo = storage.get("last_odometer", 0.0)
 
@@ -13,13 +14,12 @@ class VehicleAPI:
         self.data_lock = threading.Lock()
 
         # 1. LA VRAIE RÉALITÉ PHYSIQUE
-        self._data = {
+        self.update({
             "fuel_level": 100.0,
             "engine_light": "OFF",
             "odometer": last_odo
-        }
+        })
 
-        # 2. L'ILLUSION VISUELLE
         self._ui_data = self._data.copy()
 
         # Indicateurs d'état système

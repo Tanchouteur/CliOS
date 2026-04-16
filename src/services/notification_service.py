@@ -5,7 +5,7 @@ import traceback
 from src.services.base_service import BaseService
 
 class NotificationService(BaseService):
-    def __init__(self, bridge, storage=None): # NOUVEAU : On ajoute le storage
+    def __init__(self, bridge, storage=None):
         super().__init__("Notification", storage)
         self.bridge = bridge
         self._states = {
@@ -15,7 +15,6 @@ class NotificationService(BaseService):
         }
         self._thread = None
 
-        # --- DÉCLARATION DES PARAMÈTRES DYNAMIQUES ---
         self.register_param("enable_clutch_warn", "Alerte Embrayage", "toggle", True)
         self.register_param("clutch_time_limit", "Temps Limite (s)", "slider", 5.0, min_val=2.0, max_val=15.0)
         self.register_param("min_speed", "Vitesse Min. (km/h)", "slider", 15.0, min_val=0.0, max_val=50.0)
@@ -33,7 +32,8 @@ class NotificationService(BaseService):
         if not data:
             return
         current_time = time.time()
-        self._check_clutch_pressed(data.get('clutch', False), current_time)
+        # On passe le dictionnaire sécurisé (data) à la méthode
+        self._check_clutch_pressed(data.get('clutch', False), current_time, data)
 
     def _run(self, stop_event):
         time.sleep(1.0)
@@ -41,7 +41,8 @@ class NotificationService(BaseService):
         while not stop_event.is_set():
             try:
                 if self.bridge and hasattr(self.bridge, 'api'):
-                    self.check_data(self.bridge.api._data)
+                    safe_data = self.bridge.api.get_display_data()
+                    self.check_data(safe_data)
                 else:
                     self.print_message("[ERREUR] Le bridge ou l'API n'est pas accessible.")
             except Exception as e:
@@ -49,23 +50,21 @@ class NotificationService(BaseService):
                 traceback.print_exc()
                 self.set_error(f"Crash inattendu : {str(e)}")
 
-            time.sleep(1.0)
+            stop_event.wait(1.0) # Optimisation CPU
 
-    def _check_clutch_pressed(self, clutch_pressed: bool, current_time):
-        # 1. On vérifie si l'alerte est activée par l'utilisateur
+    def _check_clutch_pressed(self, clutch_pressed: bool, current_time, safe_data: dict):
         if not self._params["enable_clutch_warn"]["value"]:
             self._states["clutch_start_time"] = None
             self._states["clutch_warned"] = False
             return
 
-        # 2. Lecture des paramètres en temps réel
         time_limit = self._params["clutch_time_limit"]["value"]
         min_speed = self._params["min_speed"]["value"]
         duration = int(self._params["notif_duration"]["value"])
 
         if clutch_pressed:
-            # --- LA CORRECTION EST ICI (Lecture avant le if/elif) ---
-            current_speed = self.bridge.api._data.get("speed", 0.0)
+            # --- CORRECTION : On utilise le dictionnaire sécurisé ---
+            current_speed = safe_data.get("speed", 0.0)
 
             if self._states["clutch_start_time"] is None:
                 self._states["clutch_start_time"] = current_time
