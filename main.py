@@ -115,6 +115,8 @@ def main():
                         help="Ignore l'API et pousse un payload statique minimal dans bridge.data.")
     parser.add_argument('--diag-emit-channel', choices=['both', 'data', 'diag'], default='both',
                         help="Canal de notify fast à émettre: both/data/diag.")
+    parser.add_argument('--diag-qml', choices=['full', 'minimal', 'minimal-data'], default='full',
+                        help="Choix du frontend QML pour isoler les bindings: full/minimal/minimal-data.")
     args = parser.parse_args()
 
     include_keys = [k.strip() for k in args.diag_keys.split(',') if k.strip()]
@@ -130,6 +132,7 @@ def main():
         "signal_only": args.diag_signal_only,
         "static_payload": args.diag_static_payload,
         "emit_channel": args.diag_emit_channel,
+        "qml_mode": args.diag_qml,
     }
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -211,6 +214,7 @@ def main():
                 print(f"[DIAG] fast_timer_ms={diag_cfg['fast_timer_ms']} disable_fast_emit={diag_cfg['disable_fast_emit']}")
                 print(f"[DIAG] disable_can_api_update={diag_cfg['disable_can_api_update']} include_keys={diag_cfg['include_keys']}")
                 print(f"[DIAG] emit_channel={diag_cfg['emit_channel']} signal_only={diag_cfg['signal_only']} static_payload={diag_cfg['static_payload']}")
+                print(f"[DIAG] qml_mode={diag_cfg['qml_mode']}")
 
             # Outils de Mock
             mock_panel = None
@@ -218,8 +222,40 @@ def main():
                 mock_panel = MockControlPanel(can_provider)
                 mock_panel.show()
 
-            # Lancement QML
-            engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
+            # Lancement QML (mode complet ou harnais minimal de diagnostic)
+            if diag_cfg["qml_mode"] == "minimal":
+                engine.loadData(b'''
+import QtQuick
+import QtQuick.Window
+Window {
+    width: 800
+    height: 480
+    visible: true
+    title: "Diag Minimal"
+}
+''')
+            elif diag_cfg["qml_mode"] == "minimal-data":
+                engine.loadData(b'''
+import QtQuick
+import QtQuick.Window
+Window {
+    width: 800
+    height: 480
+    visible: true
+    title: "Diag Minimal Data"
+    Rectangle {
+        anchors.fill: parent
+        color: "#202020"
+        Text {
+            anchors.centerIn: parent
+            color: "white"
+            text: "speed=" + (bridge.data.speed !== undefined ? bridge.data.speed : "na")
+        }
+    }
+}
+''')
+            else:
+                engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
             if not engine.rootObjects():
                 sys.exit(-1)
 
