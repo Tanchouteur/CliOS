@@ -1,5 +1,6 @@
 import os
 
+
 def ui_loop(api, stop_event):
     """Interface de débogage en ligne de commande (CLI)."""
     while not stop_event.is_set():
@@ -10,7 +11,7 @@ def ui_loop(api, stop_event):
         print("   CONSOLE DE DEBUG TELEMETRIQUE (CLIOS)")
         print("=" * 45)
 
-        data_dict = api._data.copy()
+        data_dict = api.get_display_data()
 
         if not data_dict:
             print("\nEn attente du flux de donnees...")
@@ -26,4 +27,9 @@ def ui_loop(api, stop_event):
                     print(f" {key:<25} : {val}")
 
         print("\n[Ctrl+C pour interrompre le processus]")
-        stop_event.wait(0.1)
+
+        # On gère l'interruption clavier proprement
+        try:
+            stop_event.wait(0.1)
+        except KeyboardInterrupt:
+            break

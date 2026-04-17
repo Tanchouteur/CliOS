@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import argparse
+import threading
 
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
@@ -137,7 +138,8 @@ def main():
     try:
         if args.ui == 'cli':
             orchestrator.start_all()
-            ui_loop(api, orchestrator.stop_event)
+            cli_stop_event = threading.Event()
+            ui_loop(api, cli_stop_event)
 
         elif args.ui == 'gui':
             QQuickStyle.setStyle("Basic")
