@@ -107,6 +107,8 @@ def main():
                         help="Log les changements de type des clés CAN.")
     parser.add_argument('--diag-log-bridge', action='store_true',
                         help="Log le rythme d'émission du bridge.")
+    parser.add_argument('--diag-log-api', action='store_true',
+                        help="Log la fréquence des update() API et les changements de type par clé.")
     args = parser.parse_args()
 
     include_keys = [k.strip() for k in args.diag_keys.split(',') if k.strip()]
@@ -118,6 +120,7 @@ def main():
         "include_keys": include_keys,
         "log_type_changes": args.diag_log_types,
         "log_bridge": args.diag_log_bridge,
+        "log_api": args.diag_log_api,
     }
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -134,7 +137,7 @@ def main():
         vehicle_config = json.load(f)
 
     storage = PersistentStorage(profile_manager.get_save_path())
-    api = VehicleAPI(storage)
+    api = VehicleAPI(storage, diag_cfg)
 
     # --- NOUVEAU : Chargement et injection de la version système ---
     app_version = load_system_version(BASE_DIR)

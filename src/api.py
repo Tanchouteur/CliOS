@@ -5,8 +5,9 @@ import time
 class VehicleAPI:
     """Couche d'Abstraction Matérielle (HAL). Gère les données brutes du bus CAN."""
 
-    def __init__(self, storage):
+    def __init__(self, storage, diag=None):
         self.storage = storage
+        self.diag = diag or {}
         last_odo = storage.get("last_odometer", 0.0)
 
         # --- NOUVEAU : Le Cadenas Anti-Crash ---
@@ -26,6 +27,13 @@ class VehicleAPI:
         self.is_starting_up = False
         self.critical_engine_error = False
 
+        # Diagnostic runtime: permet d'identifier qui pousse des updates et avec quels types.
+        self._diag_log_api = bool(self.diag.get("log_api", False))
+        self._diag_api_last = time.time()
+        self._diag_api_updates = 0
+        self._diag_api_sources = {}
+        self._diag_api_key_types = {}
+
     def get_display_data(self):
         """Fournit une copie 100% sécurisée au Bridge sans bloquer le CAN."""
         with self.data_lock:
@@ -35,6 +43,9 @@ class VehicleAPI:
 
     def update(self, new_data: dict):
         """Intègre les nouvelles données sous haute protection."""
+        if self._diag_log_api:
+            self._diag_update_stats(new_data)
+
         # On verrouille le dictionnaire juste le temps de l'écriture
         with self.data_lock:
             self._data.update(new_data)
@@ -48,6 +59,30 @@ class VehicleAPI:
                 self._data["engine_light"] = "ORANGE"
             else:
                 self._data["engine_light"] = "OFF"
+
+    def _diag_update_stats(self, new_data: dict):
+        self._diag_api_updates += 1
+        source = threading.current_thread().name
+        self._diag_api_sources[source] = self._diag_api_sources.get(source, 0) + 1
+
+        for key, value in new_data.items():
+            t_name = type(value).__name__
+            prev = self._diag_api_key_types.get(key)
+            if prev is None:
+                self._diag_api_key_types[key] = t_name
+            elif prev != t_name:
+                print(f"[DIAG][API][TYPE] '{key}' : {prev} -> {t_name} (source={source})")
+                self._diag_api_key_types[key] = t_name
+
+        now = time.time()
+        if now - self._diag_api_last >= 2.0:
+            top_sources = ", ".join(
+                f"{name}:{count}" for name, count in sorted(self._diag_api_sources.items(), key=lambda x: x[1], reverse=True)
+            )
+            print(f"[DIAG][API] updates={self._diag_api_updates} sources=[{top_sources}]")
+            self._diag_api_last = now
+            self._diag_api_updates = 0
+            self._diag_api_sources = {}
 
     # --- Séquences d'Initialisation ---
 
