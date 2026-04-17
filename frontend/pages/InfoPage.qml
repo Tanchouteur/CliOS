@@ -71,9 +71,9 @@ Item {
 
                     // Barre de progression custom
                     Rectangle {
+                        Layout.fillWidth: true
                         height: 12
                         radius: 6
-                        width: parent.width/2 - 10
                         color: Qt.rgba(0, 0, 0, 0.4)
 
                         Rectangle {

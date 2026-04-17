@@ -7,10 +7,11 @@ from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplica
 class DashboardBridge(QObject):
     """Pont de communication sécurisé (Thread-Safe)."""
 
-    dataChanged = Signal(dict)
-    configChanged = Signal(dict)
+    dataChanged = Signal()
+    diagDataChanged = Signal()
+    configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
-    statsChanged = Signal(dict)
+    statsChanged = Signal()
     systemHealthChanged = Signal()
 
     def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
@@ -52,25 +53,49 @@ class DashboardBridge(QObject):
 
     # --- LES SOUS-ROUTINES ---
     def _update_fast_data(self):
-        # --- NOUVEAU : Appel sécurisé (Thread-Safe) ---
-        new_data = self.api.get_display_data()
+        new_data = self._sanitize_for_qml(self.api.get_display_data())
 
         if new_data != self._data:
             self._data = new_data
-            self.dataChanged.emit(self._data)
+            self.dataChanged.emit()
+            self.diagDataChanged.emit()
 
     def _update_stats(self):
         if self.stats_service:
-            new_stats = self.stats_service.stats.copy()
+            new_stats = self._sanitize_for_qml(self.stats_service.stats.copy())
             if new_stats != self._stats:
                 self._stats = new_stats
-                self.statsChanged.emit(self._stats)
+                self.statsChanged.emit()
 
     def _update_health(self):
-        new_health = self.orchestrator.get_system_health()
+        new_health = self._sanitize_for_qml(self.orchestrator.get_system_health())
         if new_health != self._system_health:
             self._system_health = new_health
             self.systemHealthChanged.emit()
+
+    def _sanitize_for_qml(self, value):
+        if isinstance(value, bool):
+            return 1 if value else 0
+
+        if value is None or isinstance(value, (int, float, str)):
+            return value
+
+        if isinstance(value, dict):
+            return {str(k): self._sanitize_for_qml(v) for k, v in value.items()}
+
+        if isinstance(value, (list, tuple, set)):
+            return [self._sanitize_for_qml(v) for v in value]
+
+        if hasattr(value, "item"):
+            try:
+                return self._sanitize_for_qml(value.item())
+            except Exception:
+                pass
+
+        if isinstance(value, (bytes, bytearray)):
+            return list(value)
+
+        return str(value)
 
     @Property('QVariant', notify=dataChanged)
     def data(self):
@@ -94,17 +119,17 @@ class DashboardBridge(QObject):
             self.diag_service.request_scan()
 
     # --- CORRECTION DE FUITE : On lit self._data (local) et non self.api._data (risqué) ---
-    @Property(bool, notify=dataChanged)
+    @Property(bool, notify=diagDataChanged)
     def isScanning(self):
-        return self._data.get("diag_scanning", False)
+        return bool(self._data.get("diag_scanning", False))
 
-    @Property(bool, notify=dataChanged)
+    @Property(bool, notify=diagDataChanged)
     def hasScanned(self):
-        return self._data.get("diag_has_scanned", False)
+        return bool(self._data.get("diag_has_scanned", False))
 
-    @Property('QVariantList', notify=dataChanged)
+    @Property('QVariantList', notify=diagDataChanged)
     def diagnosticCodes(self):
-        return self._data.get("diag_codes", [])
+        return list(self._data.get("diag_codes", []))
 
     @Slot()
     def resetTripB(self):
@@ -126,7 +151,7 @@ class DashboardBridge(QObject):
             current_dict = current_dict[k]
 
         current_dict[keys[-1]] = value
-        self.configChanged.emit(self._config)
+        self.configChanged.emit()
 
         def write_worker():
             try:
