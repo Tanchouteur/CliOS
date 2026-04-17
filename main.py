@@ -48,7 +48,8 @@ def load_system_version(root_dir: str) -> str:
         return "unknown"
 
 
-def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir, storage_dir):
+def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir, storage_dir,
+                   diag_cfg=None):
     """Initialise et enregistre tous les services via une boucle propre."""
 
     diag_service = DiagnosticService(api, can_provider)
@@ -58,7 +59,8 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         storage=storage,
         dbc_path=profile_manager.get_can_path(),
         provider=can_provider,
-        obd_callback=diag_service.receive_obd_frame
+        obd_callback=diag_service.receive_obd_frame,
+        diag=diag_cfg
     )
 
     led_service = BleLedController(storage)
@@ -92,7 +94,31 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ui', choices=['cli', 'gui'], default='gui')
     parser.add_argument('--mock', action='store_true')
+    parser.add_argument('--diag', action='store_true', help="Active les options de diagnostic crash GUI/CAN.")
+    parser.add_argument('--diag-no-can-api', action='store_true',
+                        help="Le CAN décode mais n'écrit plus dans l'API (isole CAN->API).")
+    parser.add_argument('--diag-no-fast-emit', action='store_true',
+                        help="Le bridge met à jour son cache mais n'émet plus dataChanged (isole Bridge->QML).")
+    parser.add_argument('--diag-fast-ms', type=int, default=16,
+                        help="Période du timer fast du bridge en ms (défaut: 16).")
+    parser.add_argument('--diag-keys', default="",
+                        help="Liste CSV de clés autorisées vers QML et API (ex: speed,rpm,clutch).")
+    parser.add_argument('--diag-log-types', action='store_true',
+                        help="Log les changements de type des clés CAN.")
+    parser.add_argument('--diag-log-bridge', action='store_true',
+                        help="Log le rythme d'émission du bridge.")
     args = parser.parse_args()
+
+    include_keys = [k.strip() for k in args.diag_keys.split(',') if k.strip()]
+    diag_cfg = {
+        "enabled": args.diag,
+        "disable_can_api_update": args.diag_no_can_api,
+        "disable_fast_emit": args.diag_no_fast_emit,
+        "fast_timer_ms": max(5, int(args.diag_fast_ms)),
+        "include_keys": include_keys,
+        "log_type_changes": args.diag_log_types,
+        "log_bridge": args.diag_log_bridge,
+    }
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     STORAGE_DIR = os.path.join(BASE_DIR, "data")
@@ -130,7 +156,7 @@ def main():
 
     # --- 4. Branchement des Services ---
     led_srv, stats_srv, diag_srv, gear_calib_srv, session_manager = setup_services(
-        api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR
+        api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR, diag_cfg
     )
 
     # --- 5. Lancement de l'Application ---
@@ -156,7 +182,8 @@ def main():
                 diag_service=diag_srv,
                 profile_manager=profile_manager,
                 gear_calib_service=gear_calib_srv,
-                session_manager=session_manager
+                session_manager=session_manager,
+                diag=diag_cfg
             )
             bridge.storage = storage
             engine.rootContext().setContextProperty("bridge", bridge)
@@ -166,6 +193,11 @@ def main():
             orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
 
             orchestrator.start_all()
+
+            if diag_cfg["enabled"]:
+                print("[DIAG] Mode diagnostic actif")
+                print(f"[DIAG] fast_timer_ms={diag_cfg['fast_timer_ms']} disable_fast_emit={diag_cfg['disable_fast_emit']}")
+                print(f"[DIAG] disable_can_api_update={diag_cfg['disable_can_api_update']} include_keys={diag_cfg['include_keys']}")
 
             # Outils de Mock
             mock_panel = None

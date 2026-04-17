@@ -9,12 +9,22 @@ from src.signal_processor import SignalProcessor
 class CanService(BaseService):
     """Service autonome gérant le bus CAN via SocketCAN (0% CPU overhead)."""
 
-    def __init__(self, name: str, api, storage, dbc_path: str, provider, obd_callback=None):
+    def __init__(self, name: str, api, storage, dbc_path: str, provider, obd_callback=None, diag=None):
         super().__init__("Can", storage)
         self.name = name
         self.api = api
         self.thread = None
         self.obd_callback = obd_callback
+        self.diag = diag or {}
+
+        self._diag_disable_api_update = bool(self.diag.get("disable_can_api_update", False))
+        self._diag_include_keys = set(self.diag.get("include_keys", []))
+        self._diag_log_type_changes = bool(self.diag.get("log_type_changes", False))
+        self._diag_enabled = bool(self.diag.get("enabled", False))
+        self._diag_seen_types = {}
+        self._diag_last_print = time.time()
+        self._diag_frames = 0
+        self._diag_batches = 0
 
         self.parser = DbcParser(dbc_path)
         self.processor = SignalProcessor()
@@ -88,14 +98,31 @@ class CanService(BaseService):
                             # On décode directement avec le bytearray (Optimisation du Processor)
                             decoded = processor_decode(frame.data, db[msg_id])
                             if decoded:
+                                self._diag_frames += 1
+
+                                if self._diag_include_keys:
+                                    decoded = {k: v for k, v in decoded.items() if k in self._diag_include_keys}
+
                                 # Normalisation défensive: seulement des types Python simples dans l'API.
-                                batch_data.update({k: self._sanitize_value(v) for k, v in decoded.items()})
+                                sanitized = {k: self._sanitize_value(v) for k, v in decoded.items()}
+
+                                if self._diag_log_type_changes:
+                                    self._track_type_changes(sanitized)
+
+                                batch_data.update(sanitized)
 
                 # 3. Livraison synchronisée (60 Hz)
                 if now - last_ui_update >= ui_refresh_rate:
                     if batch_data:
-                        api_update(batch_data)
+                        self._diag_batches += 1
+                        if not self._diag_disable_api_update:
+                            api_update(batch_data)
                         batch_data.clear()
+
+                    if self._diag_enabled and (now - self._diag_last_print) >= 2.0:
+                        print(f"[DIAG][CAN] frames={self._diag_frames} batches={self._diag_batches} "
+                              f"api_update={'OFF' if self._diag_disable_api_update else 'ON'}")
+                        self._diag_last_print = now
                     last_ui_update = now
 
             except Exception as e:
@@ -116,6 +143,17 @@ class CanService(BaseService):
         if isinstance(value, (bytes, bytearray)):
             return list(value)
         return str(value)
+
+    def _track_type_changes(self, decoded: dict):
+        for key, value in decoded.items():
+            t_name = type(value).__name__
+            previous = self._diag_seen_types.get(key)
+            if previous is None:
+                self._diag_seen_types[key] = t_name
+                continue
+            if previous != t_name:
+                print(f"[DIAG][CAN][TYPE] '{key}' : {previous} -> {t_name}")
+                self._diag_seen_types[key] = t_name
 
     def stop(self):
         self.provider.close()

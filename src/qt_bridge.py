@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
 
@@ -15,7 +16,7 @@ class DashboardBridge(QObject):
     systemHealthChanged = Signal()
 
     def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
-                 profile_manager=None, gear_calib_service=None, session_manager=None):
+                 profile_manager=None, gear_calib_service=None, session_manager=None, diag=None):
         super().__init__()
         self.session_manager = session_manager
         self.api = api
@@ -30,6 +31,12 @@ class DashboardBridge(QObject):
         self._data = {}
         self._stats = {}
         self._system_health = {}
+        self.diag = diag or {}
+        self._diag_disable_fast_emit = bool(self.diag.get("disable_fast_emit", False))
+        self._diag_include_keys = set(self.diag.get("include_keys", []))
+        self._diag_log_bridge = bool(self.diag.get("log_bridge", False))
+        self._diag_last_print = time.time()
+        self._diag_emit_count = 0
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
@@ -37,7 +44,7 @@ class DashboardBridge(QObject):
         # 1. Voie Ultra-Rapide (60 Hz / 16ms)
         self.timer_fast = QTimer()
         self.timer_fast.timeout.connect(self._update_fast_data)
-        self.timer_fast.start(16)
+        self.timer_fast.start(max(5, int(self.diag.get("fast_timer_ms", 16))))
 
         # 2. Voie Moyenne (2 Hz / 500ms)
         self.timer_medium = QTimer()
@@ -55,6 +62,10 @@ class DashboardBridge(QObject):
     def _update_fast_data(self):
         # 1. On récupère la copie sécurisée de l'API
         new_data = self.api.get_display_data()
+
+        if self._diag_include_keys:
+            new_data = {k: v for k, v in new_data.items() if k in self._diag_include_keys}
+
         safe_qml_data = self._to_qml_safe(new_data)
 
         # 2. On vérifie s'il y a un changement par rapport à la dernière émission
@@ -62,8 +73,18 @@ class DashboardBridge(QObject):
             self._last_raw_data = safe_qml_data
 
             self._data = safe_qml_data
-            self.dataChanged.emit()
-            self.diagDataChanged.emit()
+
+            if not self._diag_disable_fast_emit:
+                self.dataChanged.emit()
+                self.diagDataChanged.emit()
+                self._diag_emit_count += 1
+
+        if self._diag_log_bridge:
+            now = time.time()
+            if now - self._diag_last_print >= 2.0:
+                print(f"[DIAG][BRIDGE] emits={self._diag_emit_count} fast_emit={'OFF' if self._diag_disable_fast_emit else 'ON'} "
+                      f"keys={len(self._data)}")
+                self._diag_last_print = now
 
     def _update_stats(self):
         if self.stats_service:
