@@ -109,6 +109,10 @@ def main():
                         help="Log le rythme d'émission du bridge.")
     parser.add_argument('--diag-log-api', action='store_true',
                         help="Log la fréquence des update() API et les changements de type par clé.")
+    parser.add_argument('--diag-signal-only', action='store_true',
+                        help="Émet dataChanged sans rafraîchir bridge.data (isole notify/signal pur).")
+    parser.add_argument('--diag-static-payload', action='store_true',
+                        help="Ignore l'API et pousse un payload statique minimal dans bridge.data.")
     args = parser.parse_args()
 
     include_keys = [k.strip() for k in args.diag_keys.split(',') if k.strip()]
@@ -121,6 +125,8 @@ def main():
         "log_type_changes": args.diag_log_types,
         "log_bridge": args.diag_log_bridge,
         "log_api": args.diag_log_api,
+        "signal_only": args.diag_signal_only,
+        "static_payload": args.diag_static_payload,
     }
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))

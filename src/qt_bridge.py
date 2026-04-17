@@ -35,8 +35,11 @@ class DashboardBridge(QObject):
         self._diag_disable_fast_emit = bool(self.diag.get("disable_fast_emit", False))
         self._diag_include_keys = set(self.diag.get("include_keys", []))
         self._diag_log_bridge = bool(self.diag.get("log_bridge", False))
+        self._diag_signal_only = bool(self.diag.get("signal_only", False))
+        self._diag_static_payload = bool(self.diag.get("static_payload", False))
         self._diag_last_print = time.time()
         self._diag_emit_count = 0
+        self._diag_tick = 0
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
@@ -60,8 +63,27 @@ class DashboardBridge(QObject):
 
     # --- LES SOUS-ROUTINES ---
     def _update_fast_data(self):
+        self._diag_tick += 1
+
+        # Mode d'isolation: on stresse le chemin notify/signal sans toucher au map data.
+        if self._diag_signal_only:
+            if not self._diag_disable_fast_emit:
+                self.dataChanged.emit()
+                self.diagDataChanged.emit()
+                self._diag_emit_count += 1
+
+            if self._diag_log_bridge:
+                now = time.time()
+                if now - self._diag_last_print >= 2.0:
+                    print(f"[DIAG][BRIDGE] mode=signal_only emits={self._diag_emit_count}")
+                    self._diag_last_print = now
+            return
+
         # 1. On récupère la copie sécurisée de l'API
-        new_data = self.api.get_display_data()
+        if self._diag_static_payload:
+            new_data = {"diag_tick": self._diag_tick, "speed": 0.0, "rpm": 800}
+        else:
+            new_data = self.api.get_display_data()
 
         if self._diag_include_keys:
             new_data = {k: v for k, v in new_data.items() if k in self._diag_include_keys}
@@ -82,7 +104,8 @@ class DashboardBridge(QObject):
         if self._diag_log_bridge:
             now = time.time()
             if now - self._diag_last_print >= 2.0:
-                print(f"[DIAG][BRIDGE] emits={self._diag_emit_count} fast_emit={'OFF' if self._diag_disable_fast_emit else 'ON'} "
+                mode = "static_payload" if self._diag_static_payload else "normal"
+                print(f"[DIAG][BRIDGE] mode={mode} emits={self._diag_emit_count} fast_emit={'OFF' if self._diag_disable_fast_emit else 'ON'} "
                       f"keys={len(self._data)}")
                 self._diag_last_print = now
 
