@@ -113,6 +113,8 @@ def main():
                         help="Émet dataChanged sans rafraîchir bridge.data (isole notify/signal pur).")
     parser.add_argument('--diag-static-payload', action='store_true',
                         help="Ignore l'API et pousse un payload statique minimal dans bridge.data.")
+    parser.add_argument('--diag-emit-channel', choices=['both', 'data', 'diag'], default='both',
+                        help="Canal de notify fast à émettre: both/data/diag.")
     args = parser.parse_args()
 
     include_keys = [k.strip() for k in args.diag_keys.split(',') if k.strip()]
@@ -127,6 +129,7 @@ def main():
         "log_api": args.diag_log_api,
         "signal_only": args.diag_signal_only,
         "static_payload": args.diag_static_payload,
+        "emit_channel": args.diag_emit_channel,
     }
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -207,6 +210,7 @@ def main():
                 print("[DIAG] Mode diagnostic actif")
                 print(f"[DIAG] fast_timer_ms={diag_cfg['fast_timer_ms']} disable_fast_emit={diag_cfg['disable_fast_emit']}")
                 print(f"[DIAG] disable_can_api_update={diag_cfg['disable_can_api_update']} include_keys={diag_cfg['include_keys']}")
+                print(f"[DIAG] emit_channel={diag_cfg['emit_channel']} signal_only={diag_cfg['signal_only']} static_payload={diag_cfg['static_payload']}")
 
             # Outils de Mock
             mock_panel = None

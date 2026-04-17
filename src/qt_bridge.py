@@ -37,8 +37,11 @@ class DashboardBridge(QObject):
         self._diag_log_bridge = bool(self.diag.get("log_bridge", False))
         self._diag_signal_only = bool(self.diag.get("signal_only", False))
         self._diag_static_payload = bool(self.diag.get("static_payload", False))
+        self._diag_emit_channel = self.diag.get("emit_channel", "both")
         self._diag_last_print = time.time()
         self._diag_emit_count = 0
+        self._diag_data_emit_count = 0
+        self._diag_diag_emit_count = 0
         self._diag_tick = 0
 
         with open(config_path, 'r') as f:
@@ -68,14 +71,13 @@ class DashboardBridge(QObject):
         # Mode d'isolation: on stresse le chemin notify/signal sans toucher au map data.
         if self._diag_signal_only:
             if not self._diag_disable_fast_emit:
-                self.dataChanged.emit()
-                self.diagDataChanged.emit()
-                self._diag_emit_count += 1
+                self._emit_fast_signals(diag_changed=True)
 
             if self._diag_log_bridge:
                 now = time.time()
                 if now - self._diag_last_print >= 2.0:
-                    print(f"[DIAG][BRIDGE] mode=signal_only emits={self._diag_emit_count}")
+                    print(f"[DIAG][BRIDGE] mode=signal_only emits_total={self._diag_emit_count} "
+                          f"data={self._diag_data_emit_count} diag={self._diag_diag_emit_count}")
                     self._diag_last_print = now
             return
 
@@ -91,23 +93,49 @@ class DashboardBridge(QObject):
         safe_qml_data = self._to_qml_safe(new_data)
 
         # 2. On vérifie s'il y a un changement par rapport à la dernière émission
-        if safe_qml_data != getattr(self, '_last_raw_data', {}):
+        data_changed = safe_qml_data != getattr(self, '_last_raw_data', {})
+        diag_snapshot = {
+            "diag_scanning": safe_qml_data.get("diag_scanning", 0),
+            "diag_has_scanned": safe_qml_data.get("diag_has_scanned", 0),
+            "diag_codes": list(safe_qml_data.get("diag_codes", [])),
+        }
+        diag_changed = diag_snapshot != getattr(self, '_last_diag_snapshot', {})
+
+        if data_changed:
             self._last_raw_data = safe_qml_data
+            self._last_diag_snapshot = diag_snapshot
 
             self._data = safe_qml_data
 
             if not self._diag_disable_fast_emit:
-                self.dataChanged.emit()
-                self.diagDataChanged.emit()
-                self._diag_emit_count += 1
+                self._emit_fast_signals(diag_changed=diag_changed)
+        elif diag_changed:
+            # Ne déclenche diagDataChanged que si les clés diagnostics changent réellement.
+            self._last_diag_snapshot = diag_snapshot
+            if not self._diag_disable_fast_emit:
+                self._emit_fast_signals(data_changed=False, diag_changed=True)
 
         if self._diag_log_bridge:
             now = time.time()
             if now - self._diag_last_print >= 2.0:
                 mode = "static_payload" if self._diag_static_payload else "normal"
-                print(f"[DIAG][BRIDGE] mode={mode} emits={self._diag_emit_count} fast_emit={'OFF' if self._diag_disable_fast_emit else 'ON'} "
+                print(f"[DIAG][BRIDGE] mode={mode} emits_total={self._diag_emit_count} data={self._diag_data_emit_count} "
+                      f"diag={self._diag_diag_emit_count} fast_emit={'OFF' if self._diag_disable_fast_emit else 'ON'} "
                       f"keys={len(self._data)}")
                 self._diag_last_print = now
+
+    def _emit_fast_signals(self, data_changed=True, diag_changed=False):
+        channel = self._diag_emit_channel
+
+        if channel in ("both", "data") and data_changed:
+            self.dataChanged.emit()
+            self._diag_emit_count += 1
+            self._diag_data_emit_count += 1
+
+        if channel in ("both", "diag") and diag_changed:
+            self.diagDataChanged.emit()
+            self._diag_emit_count += 1
+            self._diag_diag_emit_count += 1
 
     def _update_stats(self):
         if self.stats_service:
