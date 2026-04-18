@@ -118,8 +118,10 @@ class TripStatsService(BaseService):
         self.trip_b_marker = current_odo
         self.fuel_b_accumulated = 0.0
         if self.storage:
-            self.storage.set("trips.b.marker", current_odo)
-            self.storage.set("trips.b.fuel", 0.0)
+            self.storage.set_many({
+                "trips.b.marker": current_odo,
+                "trips.b.fuel": 0.0
+            })
         with self._stats_lock:
             self._stats["trip_b"] = 0.0
             self._stats["avg_cons_b"] = 0.0
@@ -153,8 +155,10 @@ class TripStatsService(BaseService):
         try:
             current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
             if self.storage:
-                self.storage.set("vehicle.last_odometer", current_odo)
-                self.storage.set("trips.b.fuel", self.fuel_b_accumulated)
+                self.storage.set_many({
+                    "vehicle.last_odometer": current_odo,
+                    "trips.b.fuel": self.fuel_b_accumulated
+                })
             self.print_message("Sauvegarde finale effectuée avec succès.")
         except Exception as e:
             self.set_error(f"Échec de la sauvegarde finale : {str(e)}")
@@ -316,6 +320,8 @@ class TripStatsService(BaseService):
 
         if current_odo - self.last_saved_odo >= 1.0:
             if self.storage:
-                self.storage.set("vehicle.last_odometer", current_odo)
-                self.storage.set("trips.b.fuel", self.fuel_b_accumulated)
+                self.storage.set_many({
+                    "vehicle.last_odometer": current_odo,
+                    "trips.b.fuel": self.fuel_b_accumulated
+                })
             self.last_saved_odo = current_odo

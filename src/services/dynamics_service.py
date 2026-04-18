@@ -51,10 +51,11 @@ class DynamicsService(BaseService):
             # --- CORRECTION : Lecture sécurisée de l'API ---
             safe_data = self.api.get_display_data()
 
-            w_fl = safe_data.get("wheel_fl_speed", 0.0)
-            w_fr = safe_data.get("wheel_fr_speed", 0.0)
-            w_rl = safe_data.get("wheel_rl_speed", 0.0)
-            w_rr = safe_data.get("wheel_rr_speed", 0.0)
+            # Compatibilité: supporte wheel_speed_fl et wheel_fl_speed selon la source.
+            w_fl = safe_data.get("wheel_speed_fl", safe_data.get("wheel_fl_speed", 0.0))
+            w_fr = safe_data.get("wheel_speed_fr", safe_data.get("wheel_fr_speed", 0.0))
+            w_rl = safe_data.get("wheel_speed_rl", safe_data.get("wheel_rl_speed", 0.0))
+            w_rr = safe_data.get("wheel_speed_rr", safe_data.get("wheel_rr_speed", 0.0))
 
             v_ref = safe_data.get("speed", (w_fl + w_fr + w_rl + w_rr) / 4.0)
 

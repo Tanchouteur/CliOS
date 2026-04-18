@@ -3,7 +3,7 @@ import threading
 import time
 from src.parser import DbcParser
 from src.services.base_service import BaseService
-from src.signal_processor import SignalProcessor, RawFrame
+from src.signal_processor import SignalProcessor
 
 
 class CanService(BaseService):
@@ -21,6 +21,8 @@ class CanService(BaseService):
         self.provider = provider
         self._last_frame_ts = None
         self._stale_timeout_s = 1.5
+        self._decode_errors = 0
+        self._last_decode_log_ts = 0.0
 
         # Recherche des interfaces reseau CAN
         available_interfaces = []
@@ -97,10 +99,13 @@ class CanService(BaseService):
                             decoded = processor_decode(frame, db[msg_id])
                             if decoded:
                                 batch_data.update(decoded)
-                    except Exception:
-                        # Une erreur de parsing (ex: bytearray invalide) est attrapee ici.
-                        # On l'ignore silencieusement pour proteger l'API et le QML.
-                        pass
+                    except Exception as e:
+                        self._decode_errors += 1
+                        if now - self._last_decode_log_ts >= 2.0:
+                            self._last_decode_log_ts = now
+                            self.print_message(
+                                f"Erreurs de décodage CAN: {self._decode_errors} (dernier ID 0x{msg_id:03X}, {e})"
+                            )
 
             # Le service n'est nominal que si des trames récentes arrivent réellement.
             if self._last_frame_ts is None:
@@ -115,6 +120,7 @@ class CanService(BaseService):
             # --- BLOC 3 : LIVRAISON SYNCHRONISEE (60 Hz) ---
             if now - last_ui_update >= ui_refresh_rate:
                 if batch_data:
+                    batch_data["can_decode_errors"] = self._decode_errors
                     api_update(batch_data)
                     batch_data.clear()
                 last_ui_update = now

@@ -127,6 +127,12 @@ class DashboardBridge(QObject):
         if self.diag_service:
             self.diag_service.request_scan()
 
+    @Slot(str)
+    def setSessionState(self, state: str):
+        allowed = {"IDLE", "RUNNING", "PAUSED", "WAITING_IGNITION", "ENDED"}
+        if state in allowed:
+            self.api.update({"session_state": state})
+
     # --- CORRECTION DE FUITE : On lit self._data (local) et non self.api._data (risqué) ---
     @Property(bool, notify=diagDataChanged)
     def isScanning(self):

@@ -13,9 +13,9 @@ Item {
         if (event.key === Qt.Key_T) {
             console.log("Touche T pressée : Bascule de l'état de session")
             if (root.sessionState === "RUNNING" || root.sessionState === "IDLE") {
-                bridge.data.session_state = "PAUSED"
+                bridge.setSessionState("PAUSED")
             } else {
-                bridge.data.session_state = "RUNNING"
+                bridge.setSessionState("RUNNING")
             }
         }
     }

@@ -3,7 +3,6 @@ numpy~=2.4.4
 sounddevice~=0.5.5
 pyo~=1.0.5
 psutil~=7.2.2
-can~=0.0.0
 python-can~=4.6.1
 PySide6==6.8.2.1
 pyserial

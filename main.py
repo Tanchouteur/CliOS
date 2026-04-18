@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import argparse
+import threading
 
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
@@ -171,8 +172,9 @@ def main():
     needs_restart = False
     try:
         if args.ui == 'cli':
+            cli_stop_event = threading.Event()
             orchestrator.start_all()
-            ui_loop(api, orchestrator.stop_event)
+            ui_loop(api, cli_stop_event)
 
         elif args.ui == 'gui':
             QQuickStyle.setStyle("Basic")
@@ -220,6 +222,8 @@ def main():
         # --- 6. Nettoyage et Arrêt ---
         print("[INFO] Extinction de l'orchestrateur et libération des ports...")
         orchestrator.stop_all()
+        if hasattr(storage, "close"):
+            storage.close()
 
     # --- 7. Redémarrage Kiosk ---
     if needs_restart:

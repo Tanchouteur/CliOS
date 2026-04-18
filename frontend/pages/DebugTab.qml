@@ -6,6 +6,7 @@ import "../style" as T
 Item {
     id: root
     anchors.fill: parent
+    property string lastKeySignature: ""
 
     ListModel {
         id: debugModel
@@ -13,15 +14,17 @@ Item {
 
     // --- LE MOTEUR DE RAFRAICHISSEMENT---
     Timer {
-        interval: 200
-        running: true
+        interval: 500
+        running: root.visible
         repeat: true
         onTriggered: {
             if (!bridge || bridge.data === undefined) return;
 
             let currentKeys = Object.keys(bridge.data).sort();
+            let signature = currentKeys.join("|");
 
-            if (currentKeys.length !== debugModel.count) {
+            if (signature !== root.lastKeySignature) {
+                root.lastKeySignature = signature;
                 debugModel.clear();
                 for (let i = 0; i < currentKeys.length; i++) {
                     let k = currentKeys[i];

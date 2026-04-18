@@ -73,8 +73,7 @@ class BaseService:
 
     def set_ok(self, message: str = ""):
         """Remet le service en état nominal (Vert)."""
-        # On évite de spammer la console si c'était déjà OK
-        if self.status != ServiceStatus.OK:
+        if self.status != ServiceStatus.OK or self.status_msg != message:
             # On colore le [INFO] en bleu
             print(f"{Color.BLUE}[INFO]{Color.RESET} {self.service_name} : Rétablissement du service. {message}")
             self.status = ServiceStatus.OK
@@ -82,7 +81,7 @@ class BaseService:
 
     def set_warning(self, message: str = ""):
         """Passe le service en avertissement (Jaune)."""
-        if self.status != ServiceStatus.WARNING:
+        if self.status != ServiceStatus.WARNING or self.status_msg != message:
             # On colore le [WARNING] en jaune
             print(f"{Color.YELLOW}[WARNING]{Color.RESET} {self.service_name} : {message}")
             self.status = ServiceStatus.WARNING
@@ -90,7 +89,7 @@ class BaseService:
 
     def set_error(self, message: str):
         """Passe le service en erreur et enregistre le pourquoi (Rouge)."""
-        if self.status != ServiceStatus.ERROR:
+        if self.status != ServiceStatus.ERROR or self.status_msg != message:
             # On colore le [ERREUR] en rouge
             print(f"{Color.RED}[ERREUR]{Color.RESET} {self.service_name} : {message}")
             self.status = ServiceStatus.ERROR

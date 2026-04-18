@@ -54,12 +54,26 @@ Item {
             }
             clip: true
 
+            Loader {
+                id: tabLoader
+                anchors.fill: parent
+                sourceComponent: {
+                    switch (root.currentIndex) {
+                    case 0: return raceTabComponent
+                    case 1: return statsTabComponent
+                    case 2: return diagTabComponent
+                    case 3: return settingsTabComponent
+                    case 4: return debugTabComponent
+                    default: return statsTabComponent
+                    }
+                }
+            }
 
-            RaceTab     { visible: root.currentIndex === 0; anchors.fill: parent; enabled: visible}
-            StatsTab    { visible: root.currentIndex === 1; anchors.fill: parent; enabled: visible }
-            DiagTab     { visible: root.currentIndex === 2; anchors.fill: parent; enabled: visible }
-            SettingsTab { visible: root.currentIndex === 3; anchors.fill: parent; enabled: visible }
-            DebugTab    { visible: root.currentIndex === 4; anchors.fill: parent; enabled: visible }
+            Component { id: raceTabComponent; RaceTab { anchors.fill: parent } }
+            Component { id: statsTabComponent; StatsTab { anchors.fill: parent } }
+            Component { id: diagTabComponent; DiagTab { anchors.fill: parent } }
+            Component { id: settingsTabComponent; SettingsTab { anchors.fill: parent } }
+            Component { id: debugTabComponent; DebugTab { anchors.fill: parent } }
         }
     }
 

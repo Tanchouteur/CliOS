@@ -10,7 +10,7 @@ def ui_loop(api, stop_event):
         print("   CONSOLE DE DEBUG TELEMETRIQUE (CLIOS)")
         print("=" * 45)
 
-        data_dict = api._data.copy()
+        data_dict = api.get_display_data()
 
         if not data_dict:
             print("\nEn attente du flux de donnees...")
