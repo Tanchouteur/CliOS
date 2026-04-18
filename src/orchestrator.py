@@ -1,5 +1,7 @@
 import threading
 
+from src.logging_runtime import get_logger
+
 
 class SystemOrchestrator:
     """Gestionnaire centralisé et dynamique du cycle de vie des services."""
@@ -8,6 +10,7 @@ class SystemOrchestrator:
         # Structure : { objet_service: {"event": threading.Event() ou None, "enabled": bool} }
         self.services = {}
         self.is_running = False
+        self.logger = get_logger("Orchestrator")
 
     def add_service(self, service, enabled=True):
         """Enregistre un service dans le tableau électrique."""
@@ -27,7 +30,7 @@ class SystemOrchestrator:
                     srv.start(data["event"])
                     #print(f"[INFO] Orchestrateur : {service_name} ALLUMÉ.")
                 return
-        print(f"[ATTENTION] Orchestrateur : Impossible d'allumer {service_name} (Introuvable).")
+        self.logger.warning(f"Service introuvable au demarrage: {service_name}", extra={"error_code": "SERVICE_NOT_FOUND"})
 
     def stop_service(self, service_name: str):
         """Coupe le courant d'un service sans le supprimer de la mémoire."""

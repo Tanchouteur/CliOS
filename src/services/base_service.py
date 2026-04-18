@@ -1,6 +1,8 @@
 import threading
 from enum import Enum
 
+from src.logging_runtime import get_logger
+
 class Color:
     BLUE = '\033[94m'
     GREEN = '\033[92m'
@@ -22,18 +24,19 @@ class BaseService:
         self.status_msg = ""
         self._params = {}
         self.storage = storage
+        self.logger = get_logger(f"Service.{self.service_name}")
         #print(f"{Color.GREEN}[INIT]{Color.RESET} Service '{self.service_name}' initialisé avec succès.")
 
     def start(self, stop_event: threading.Event, implemented=False):
         """Doit être implémentée par l'enfant. Lance le thread."""
-        print(f"{Color.GREEN}[START]{Color.RESET} Démarrage du service '{self.service_name}'...")
+        self.logger.info("Demarrage du service", extra={"error_code": "SERVICE_START"})
 
         if not implemented:
             raise NotImplementedError("La méthode start() doit être redéfinie !")
 
     def stop(self):
         """Méthode optionnelle pour un arrêt propre."""
-        print(f"{Color.YELLOW}[STOP]{Color.RESET} Service '{self.service_name}' arrêté.")
+        self.logger.info("Arret du service", extra={"error_code": "SERVICE_STOP"})
 
     def register_param(self, key: str, label: str, param_type: str, default_val, persistent=True, **kwargs):
         """Enregistre un paramètre. Si persistent=True, le service gère sa propre sauvegarde."""
@@ -58,8 +61,10 @@ class BaseService:
 
             if self._params[key]["persistent"] and self.storage:
                 self.storage.set(f"services.{self.service_name}.params.{key}", value)
-                print(
-                    f"{Color.BLUE}[INFO]{Color.RESET} {self.service_name} : Paramètre '{key}' sauvegardé sur le disque.")
+                self.logger.info(
+                    "Parametre persiste",
+                    extra={"error_code": "SERVICE_PARAM_SAVED"}
+                )
 
             self.on_param_changed(key, value)
 
@@ -74,24 +79,21 @@ class BaseService:
     def set_ok(self, message: str = ""):
         """Remet le service en état nominal (Vert)."""
         if self.status != ServiceStatus.OK or self.status_msg != message:
-            # On colore le [INFO] en bleu
-            print(f"{Color.BLUE}[INFO]{Color.RESET} {self.service_name} : Rétablissement du service. {message}")
+            self.logger.info(f"Retablissement du service. {message}", extra={"error_code": "SERVICE_OK"})
             self.status = ServiceStatus.OK
             self.status_msg = message
 
     def set_warning(self, message: str = ""):
         """Passe le service en avertissement (Jaune)."""
         if self.status != ServiceStatus.WARNING or self.status_msg != message:
-            # On colore le [WARNING] en jaune
-            print(f"{Color.YELLOW}[WARNING]{Color.RESET} {self.service_name} : {message}")
+            self.logger.warning(message, extra={"error_code": "SERVICE_WARNING"})
             self.status = ServiceStatus.WARNING
             self.status_msg = message
 
     def set_error(self, message: str):
         """Passe le service en erreur et enregistre le pourquoi (Rouge)."""
         if self.status != ServiceStatus.ERROR or self.status_msg != message:
-            # On colore le [ERREUR] en rouge
-            print(f"{Color.RED}[ERREUR]{Color.RESET} {self.service_name} : {message}")
+            self.logger.error(message, extra={"error_code": "SERVICE_ERROR"})
             self.status = ServiceStatus.ERROR
             self.status_msg = message
 
@@ -103,4 +105,4 @@ class BaseService:
         }
 
     def print_message(self, message: str):
-        print(f"{Color.BLUE}[INFO]{Color.RESET} {self.service_name} : {message}")
+        self.logger.info(message)

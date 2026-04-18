@@ -103,8 +103,9 @@ class CanService(BaseService):
                         self._decode_errors += 1
                         if now - self._last_decode_log_ts >= 2.0:
                             self._last_decode_log_ts = now
-                            self.print_message(
-                                f"Erreurs de décodage CAN: {self._decode_errors} (dernier ID 0x{msg_id:03X}, {e})"
+                            self.logger.warning(
+                                f"Erreurs de décodage CAN: {self._decode_errors} (dernier ID 0x{msg_id:03X}, {e})",
+                                extra={"error_code": "CAN_DECODE_ERROR"}
                             )
 
             # Le service n'est nominal que si des trames récentes arrivent réellement.

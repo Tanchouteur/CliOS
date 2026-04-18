@@ -1,11 +1,14 @@
 import threading
 import time
 
+from src.logging_runtime import get_logger
+
 
 class VehicleAPI:
     """Couche d'Abstraction Matérielle (HAL). Gère les données brutes du bus CAN."""
 
     def __init__(self, storage):
+        self.logger = get_logger("VehicleAPI")
         self.storage = storage
         last_odo = storage.get("last_odometer", 0.0)
 
@@ -35,6 +38,10 @@ class VehicleAPI:
 
     def update(self, new_data: dict):
         """Intègre les nouvelles données sous haute protection."""
+        if not isinstance(new_data, dict):
+            self.logger.warning("Payload API invalide ignore", extra={"error_code": "API_INVALID_PAYLOAD"})
+            return
+
         # On verrouille le dictionnaire juste le temps de l'écriture
         with self.data_lock:
             self._data.update(new_data)
