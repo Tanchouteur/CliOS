@@ -2,6 +2,7 @@ import os
 import threading
 import time
 from pyo import Server, SfPlayer, Mix, Biquad, Tone, Disto, SigTo, Sine, PinkNoise
+import sounddevice as sd
 from src.services.base_service import BaseService
 
 
@@ -54,6 +55,31 @@ class EngineSoundService(BaseService):
         self.last_boost_target = 0.0
         self.wg_timer = 0.0
 
+    def _has_audio_output(self) -> bool:
+        """Vérifie qu'une sortie audio exploitable est présente avant de démarrer pyo."""
+        try:
+            devices = sd.query_devices()
+        except Exception:
+            return False
+
+        output_devices = [d for d in devices if d.get("max_output_channels", 0) > 0]
+        if not output_devices:
+            return False
+
+        try:
+            default_dev = sd.default.device
+            out_index = default_dev[1] if isinstance(default_dev, (list, tuple)) else default_dev
+            if isinstance(out_index, int) and out_index >= 0:
+                out_info = sd.query_devices(out_index)
+                if out_info.get("max_output_channels", 0) > 0:
+                    return True
+        except Exception:
+            pass
+
+        # Si le périphérique par défaut est invalide, on autorise tout de même le démarrage
+        # si au moins une sortie physique est détectée.
+        return True
+
     def on_param_changed(self, key: str, value):
         if key == "sound_model" and self.server:
             self._load_sound_model()
@@ -102,6 +128,11 @@ class EngineSoundService(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
+
+        if not self._has_audio_output():
+            self.set_error("No audio output")
+            return
+
         try:
             self.server = Server(duplex=0).boot()
             self.server.start()
@@ -147,7 +178,10 @@ class EngineSoundService(BaseService):
             self._load_sound_model()
 
         except Exception as e:
-            self.set_error(f"Echec pyo : {e}")
+            self.set_error("No audio output")
+            self.print_message(f"Audio backend init failed: {e}")
+            self.server = None
+            return
 
         threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
 
@@ -295,5 +329,10 @@ class EngineSoundService(BaseService):
     def stop(self):
         super().stop()
         if self.server:
-            self.server.stop()
-            self.server.shutdown()
+            try:
+                self.server.stop()
+                self.server.shutdown()
+            except Exception:
+                pass
+            finally:
+                self.server = None
