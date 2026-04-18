@@ -66,15 +66,15 @@ Item {
                     Text {
                         text: root.cpuUsage.toFixed(1) + " %"
                         color: T.Theme.textMain; font.pixelSize: 42; font.bold: true
-                        Layout.preferredWidth: 120
+                        Layout.minimumWidth: 160
                     }
 
-                    // Barre de progression custom
                     Rectangle {
                         Layout.fillWidth: true
                         height: 12
                         radius: 6
                         color: Qt.rgba(0, 0, 0, 0.4)
+                        clip: true
 
                         Rectangle {
                             width: parent.width * (Math.min(root.cpuUsage, 100) / 100.0)
@@ -100,19 +100,28 @@ Item {
             border.color: Qt.rgba(1, 1, 1, 0.05)
             border.width: 1
 
+            // NOUVEAU : Calcul dynamique du plafond de RAM
+            property real ramMax: Math.max(1024, Math.ceil(root.ramUsage / 512) * 512)
+
             Column {
                 anchors.fill: parent
                 anchors.margins: 25
                 spacing: 15
 
-                Text { text: "MÉMOIRE VIVE (RAM)"; color: T.Theme.unselected; font.pixelSize: 16; font.bold: true }
+                RowLayout {
+                    width: parent.width
+                    Text { text: "MÉMOIRE VIVE (RAM)"; color: T.Theme.unselected; font.pixelSize: 16; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    Text { text: "Max: " + parent.parent.ramMax + " MB"; color: T.Theme.unselected; font.pixelSize: 12 }
+                }
 
                 RowLayout {
                     width: parent.width
+                    spacing: 20
                     Text {
                         text: root.ramUsage.toFixed(0) + " MB"
                         color: T.Theme.textMain; font.pixelSize: 42; font.bold: true
-                        Layout.preferredWidth: 150
+                        Layout.minimumWidth: 160
                     }
 
                     Rectangle {
@@ -120,10 +129,10 @@ Item {
                         height: 12
                         radius: 6
                         color: Qt.rgba(0, 0, 0, 0.4)
+                        clip: true
 
                         Rectangle {
-                            // On base le 100% sur 1024 MB (1 GB) pour l'affichage visuel
-                            width: parent.width * (Math.min(root.ramUsage, 1024) / 1024.0)
+                            width: parent.width * (Math.min(root.ramUsage, parent.parent.parent.ramMax) / parent.parent.parent.ramMax)
                             height: parent.height
                             radius: 6
                             color: root.ramColor
@@ -139,7 +148,7 @@ Item {
         // CARTE 3 : LOGICIEL & VÉHICULE
         // ==========================================
         Rectangle {
-            Layout.columnSpan: 2 // Prend toute la largeur en bas
+            Layout.columnSpan: 2
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: T.Theme.bgDimmed
@@ -154,7 +163,7 @@ Item {
 
                 Text { text: "INFORMATIONS LOGICIELLES"; color: T.Theme.unselected; font.pixelSize: 16; font.bold: true }
 
-                Item { Layout.preferredHeight: 10 } // Espaceur
+                Item { Layout.preferredHeight: 10 }
 
                 GridLayout {
                     columns: 2
@@ -168,7 +177,6 @@ Item {
                         font.pixelSize: 20
                     }
                     Text {
-                        // Utilisation dynamique de la donnee injectee par le backend
                         text: bridge.data !== undefined && bridge.data.system_version !== undefined ? "ClOS v" + bridge.data.system_version : "ClOS v?.?.?"
                         color: T.Theme.textMain
                         font.pixelSize: 20

@@ -15,6 +15,7 @@ class SystemMonitorService(BaseService):
         self.process = psutil.Process(os.getpid())
         self.last_thread_times = {}
         self.last_time = time.time()
+        self.num_cores = psutil.cpu_count() or 1
 
         self.register_param("refresh_rate", "Rafraîchissement (s)", "slider", 1.0, min_val=0.5, max_val=10.0)
         self.register_param("cpu_alert", "Alerte CPU (%)", "slider", 80.0, min_val=20.0, max_val=100.0)
@@ -48,7 +49,9 @@ class SystemMonitorService(BaseService):
             self.last_time = now
 
             try:
-                cpu_total = round(self.process.cpu_percent(), 1)
+                cpu_process_raw = self.process.cpu_percent()
+                cpu_total = round(cpu_process_raw / self.num_cores, 1)
+
                 ram_mb = round(self.process.memory_info().rss / (1024 * 1024), 1)
 
                 # Preparation du dictionnaire de mise a jour
