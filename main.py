@@ -93,7 +93,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     session_manager = TripSessionManager(api, storage, stats_service, storage_dir)
 
     services_to_register = [
-        (can_service, "services.CAN_Moteur.enabled", True),
+        (can_service, "services.Can_M.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
         (dynamics_service, "services.Dynamics.enabled", True),
@@ -107,10 +107,10 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     ]
 
     # Rétrocompatibilité: anciennes sauvegardes utilisaient services.Can.enabled
-    can_enabled = storage.get("services.CAN_Moteur.enabled", storage.get("services.Can.enabled", True))
+    can_enabled = storage.get("services.Can_M.enabled", storage.get("services.Can.enabled", True))
 
     for service, storage_key, default_state in services_to_register:
-        if service.service_name == "CAN_Moteur":
+        if service.service_name == "Can_M":
             orchestrator.add_service(service, enabled=can_enabled)
         else:
             orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
