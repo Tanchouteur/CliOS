@@ -30,6 +30,8 @@ from src.storage import PersistentStorage
 from src.api import VehicleAPI
 from src.qt_bridge import DashboardBridge
 from src.services.dynamics_service import DynamicsService
+from src.logging_runtime import init_logging, set_global_context, shutdown_logging, get_logger
+from src.crash_hooks import install_crash_hooks
 
 # Import de notre outil de debug externalisé
 from src.cli_debug import ui_loop
@@ -79,7 +81,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
 
     diag_service = DiagnosticService(api, can_provider)
     can_service = CanService(
-        name="Can_M",
+        name="CAN_Moteur",
         api=api,
         storage=storage,
         dbc_path=profile_manager.get_can_path(),
@@ -94,7 +96,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     session_manager = TripSessionManager(api, storage, stats_service, storage_dir)
 
     services_to_register = [
-        (can_service, "services.Can_M.enabled", True),
+        (can_service, "services.CAN_Moteur.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
         (dynamics_service, "services.Dynamics.enabled", True),
@@ -108,10 +110,10 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     ]
 
     # Rétrocompatibilité: anciennes sauvegardes utilisaient services.Can.enabled
-    can_enabled = storage.get("services.Can_M.enabled", storage.get("services.Can.enabled", True))
+    can_enabled = storage.get("services.CAN_Moteur.enabled", storage.get("services.Can.enabled", True))
 
     for service, storage_key, default_state in services_to_register:
-        if service.service_name == "Can_M":
+        if service.service_name == "CAN_Moteur":
             orchestrator.add_service(service, enabled=can_enabled)
         else:
             orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
@@ -125,12 +127,19 @@ def main():
     parser.add_argument('--ui', choices=['cli', 'gui'], default='gui')
     parser.add_argument('--mock', action='store_true')
     parser.add_argument('--allow-unsupported-pyside', action='store_true')
+    parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
     args = parser.parse_args()
 
     ensure_supported_pyside(is_gui=(args.ui == 'gui'), allow_unsupported=args.allow_unsupported_pyside)
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     STORAGE_DIR = os.path.join(BASE_DIR, "data")
+    LOG_DIR = os.path.join(STORAGE_DIR, "logs")
+
+    init_logging(LOG_DIR, level=args.log_level, console_level="WARNING")
+    install_crash_hooks(LOG_DIR)
+    set_global_context(ui=args.ui, mock=args.mock)
+    logger = get_logger("Main")
     CAN_DIR = os.path.join(STORAGE_DIR, "can")
     CONFIG_DIR = os.path.join(STORAGE_DIR, "config")
     SAVE_DASH_DIR = os.path.join(STORAGE_DIR, "dash_save")
@@ -147,8 +156,9 @@ def main():
 
     # --- NOUVEAU : Chargement et injection de la version système ---
     app_version = load_system_version(BASE_DIR)
+    set_global_context(app_version=app_version)
     api.update({"system_version": app_version})
-    print(f"\n[INFO] 🚀 Démarrage de ClOS (Version : {app_version})")
+    logger.info("Demarrage de ClOS", extra={"error_code": "APP_START"})
 
     api.run_startup_sequence(duration_sec=1.5)
 
@@ -217,17 +227,18 @@ def main():
             needs_restart = bridge.needs_restart
 
     except KeyboardInterrupt:
-        print("\n[INFO] Interruption manuelle détectée.")
+        logger.warning("Interruption manuelle detectee", extra={"error_code": "APP_KEYBOARD_INTERRUPT"})
     finally:
         # --- 6. Nettoyage et Arrêt ---
-        print("[INFO] Extinction de l'orchestrateur et libération des ports...")
+        logger.info("Extinction de l'orchestrateur", extra={"error_code": "APP_SHUTDOWN"})
         orchestrator.stop_all()
         if hasattr(storage, "close"):
             storage.close()
+        shutdown_logging()
 
     # --- 7. Redémarrage Kiosk ---
     if needs_restart:
-        print("[INFO] >>> REDÉMARRAGE DU SYSTÈME <<<")
+        logger.warning("Redemarrage demande", extra={"error_code": "APP_RESTART"})
         os.execv(sys.executable, ['python'] + sys.argv)
 
 

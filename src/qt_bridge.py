@@ -1,7 +1,10 @@
 import json
+import os
 import threading
 
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
+from src.logging_runtime import get_logger, get_recent_events
+from src.diagnostic_bundle import create_diagnostic_bundle
 
 
 class DashboardBridge(QObject):
@@ -17,6 +20,7 @@ class DashboardBridge(QObject):
     def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None):
         super().__init__()
+        self.logger = get_logger("DashboardBridge")
         self.session_manager = session_manager
         self.api = api
         self.led_service = led_service
@@ -148,7 +152,7 @@ class DashboardBridge(QObject):
 
     @Slot()
     def resetTripB(self):
-        print("[INFO] Signal IHM reçu : Réinitialisation du Trip B.")
+        self.logger.info("Reset Trip B demande", extra={"error_code": "UI_RESET_TRIP_B"})
         if self.stats_service:
             self.stats_service.reset_trip_b()
 
@@ -172,9 +176,9 @@ class DashboardBridge(QObject):
             try:
                 with open(self._config_path, "w") as f:
                     json.dump(self._config, f, indent=4)
-                print(f"[INFO] Paramètre sauvegardé : {key_path} = {value}")
+                self.logger.info(f"Parametre sauvegarde: {key_path}", extra={"error_code": "CONFIG_SAVED"})
             except Exception as e:
-                print(f"[ERREUR] Échec de la sauvegarde de {key_path} : {e}")
+                self.logger.error(f"Echec sauvegarde config {key_path}: {e}", extra={"error_code": "CONFIG_SAVE_ERROR"})
 
         threading.Thread(target=write_worker, daemon=True).start()
 
@@ -182,7 +186,7 @@ class DashboardBridge(QObject):
     def updateFuelPrice(self, new_price: float):
         if self.stats_service:
             self.stats_service.set_fuel_price(new_price)
-            print(f"[BRIDGE] Prix du carburant mis à jour : {new_price} €/L")
+            self.logger.info(f"Prix carburant mis a jour: {new_price}", extra={"error_code": "FUEL_PRICE_UPDATE"})
 
     @Slot(str, bool)
     def toggleService(self, service_name: str, enable: bool):
@@ -250,7 +254,7 @@ class DashboardBridge(QObject):
             return False
         self.profile_manager.create_new_config(config_file)
         self.profile_manager.add_profile(profile_id, name, can_file, config_file, save_file)
-        print(f"[INFO] Nouveau profil créé : {name} ({profile_id})")
+        self.logger.info(f"Nouveau profil cree: {profile_id}", extra={"error_code": "PROFILE_CREATED"})
         return True
 
     @Slot(str, result=bool)
@@ -259,16 +263,40 @@ class DashboardBridge(QObject):
             return False
         success = self.profile_manager.set_active_profile(profile_id)
         if success:
-            print(f"[INFO] Changement de profil programmé : {profile_id}. Redémarrage nécessaire.")
+            self.logger.info(f"Changement profil programme: {profile_id}", extra={"error_code": "PROFILE_CHANGED"})
             self.send_notification("info", f"Profil '{profile_id}' sélectionné. Veuillez redémarrer l'application.",
                                    4000)
         return success
 
     @Slot()
     def restartApplication(self):
-        print("[INFO] Ordre de redémarrage reçu depuis l'IHM.")
+        self.logger.warning("Ordre de redemarrage recu", extra={"error_code": "APP_RESTART_REQUEST"})
         self.needs_restart = True
         QCoreApplication.instance().quit()
+
+    @Slot(int, result=str)
+    def getRecentLogs(self, limit: int = 100) -> str:
+        limit = max(1, min(limit, 300))
+        return json.dumps(get_recent_events(limit=limit))
+
+    @Slot(result=str)
+    def exportDiagnosticBundle(self) -> str:
+        try:
+            data_dir = os.path.dirname(os.path.dirname(self._config_path))
+            log_dir = os.path.join(data_dir, "logs")
+            output_dir = os.path.join(data_dir, "diagnostics")
+            bundle_path = create_diagnostic_bundle(
+                output_dir=output_dir,
+                log_dir=log_dir,
+                config_path=self._config_path,
+                system_health=self.orchestrator.get_system_health(),
+                extra={"active_profile": self.getActiveProfile()},
+            )
+            self.logger.info(f"Bundle diagnostic exporte: {bundle_path}", extra={"error_code": "DIAG_BUNDLE_EXPORTED"})
+            return bundle_path
+        except Exception as e:
+            self.logger.error(f"Echec export bundle: {e}", extra={"error_code": "DIAG_BUNDLE_ERROR"})
+            return ""
 
     @Slot()
     def startGearCalibration(self):
