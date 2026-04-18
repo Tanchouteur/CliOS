@@ -175,9 +175,6 @@ Item {
                         font.bold: true
                     }
 
-                    Text { text: "Moteur Physique :"; color: T.Theme.unselected; font.pixelSize: 20 }
-                    Text { text: "Actif (Mock GT3)"; color: T.Theme.main; font.pixelSize: 20; font.bold: true }
-
                     Text { text: "Connexion CAN Bus :"; color: T.Theme.unselected; font.pixelSize: 20 }
                     Text { text: ""; color: T.Theme.danger; font.pixelSize: 20; font.bold: true }
                 }

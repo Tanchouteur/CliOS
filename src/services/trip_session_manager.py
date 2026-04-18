@@ -92,7 +92,6 @@ class TripSessionManager(BaseService):
     # CYCLE DE VIE
     # ==========================================
     def stop(self):
-        # --- CORRECTION : Lecture sécurisée ---
         state = self.api.get_display_data().get("session_state")
         if state in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
             self.print_message("Arrêt système détecté : Sauvegarde automatique du trajet.")
@@ -101,16 +100,16 @@ class TripSessionManager(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="SessionManager").start()
+        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            # --- CORRECTION : Lecture sécurisée de l'API ---
             safe_data = self.api.get_display_data()
 
             ignition = safe_data.get("key_run", False)
             state = safe_data.get("session_state")
             current_time = time.time()
+            current_speed = safe_data.get("speed", 0.0)
 
             # 1. NOUVEAU TRAJET (Démarrage à froid ou après avoir validé le trajet précédent)
             if ignition and state in ["IDLE", "ENDED"]:
@@ -121,9 +120,9 @@ class TripSessionManager(BaseService):
                 self.set_ok("Enregistrement en cours")
 
             # 1b. REPRISE DU TRAJET (Après avoir cliqué sur "Continuer" et remis le contact)
-            elif ignition and state == "WAITING_IGNITION":
+            elif (ignition or current_speed > 3.0) and state in ["WAITING_IGNITION", "PAUSED"]:
                 self.api.update({"session_state": "RUNNING"})
-                self.set_ok("Reprise de l'enregistrement")
+                self.set_ok("Reprise automatique (mouvement detecte)")
 
             # 2. MISE EN PAUSE AUTOMATIQUE
             elif not ignition and state == "RUNNING":
