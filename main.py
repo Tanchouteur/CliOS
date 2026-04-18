@@ -78,7 +78,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
 
     diag_service = DiagnosticService(api, can_provider)
     can_service = CanService(
-        name="CAN_Moteur",
+        name="Can_M",
         api=api,
         storage=storage,
         dbc_path=profile_manager.get_can_path(),

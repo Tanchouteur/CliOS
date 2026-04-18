@@ -18,9 +18,8 @@ class SignalProcessor:
             start = sig_def["start_byte"]
             size = sig_def["size"]
 
-            # --- FIX: Vérification de la taille (évite l'erreur 'size') ---
             if start + size > data_len:
-                continue  # On ignore ce signal si la trame est trop courte
+                continue
 
             endian = sig_def["endian"]
 
