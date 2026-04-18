@@ -14,7 +14,7 @@ ApplicationWindow {
     title: "CliOS v" + version
 
     visibility: "Maximized"
-    //flags: Qt.FramelessWindowHint | Qt.Window | Qt.MSWindowsFixedSizeDialogHint
+    flags: Qt.FramelessWindowHint | Qt.Window | Qt.MSWindowsFixedSizeDialogHint
 
     // Application de la couleur de fond via le Thème
     color: Theme.bgMain
