@@ -25,7 +25,7 @@ StackView {
         { label: "Ambiance", desc: "Éclairage LED, couleurs et thèmes visuels", source: "AmbiancePage.qml" },
         { label: "Audio",    desc: "Volumes, égaliseur et sources multimédias", source: "NonBuildPage.qml" },
         { label: "Véhicule", desc: "Etat vehicule, config et alertes",          source: "VehiclePage.qml" },
-        { label: "Système",  desc: "Services, ",                                source: "SystemePage.qml" }
+        { label: "Système",  desc: "Services, Infos",                           source: "SystemePage.qml" }
     ]
 
     // 2. LA PAGE PRINCIPALE (Grille)
