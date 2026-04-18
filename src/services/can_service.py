@@ -19,6 +19,8 @@ class CanService(BaseService):
         self.parser = DbcParser(dbc_path)
         self.processor = SignalProcessor()
         self.provider = provider
+        self._last_frame_ts = None
+        self._stale_timeout_s = 1.5
 
         # Recherche des interfaces reseau CAN
         available_interfaces = []
@@ -64,7 +66,8 @@ class CanService(BaseService):
             if not self.provider.is_connected:
                 try:
                     self.provider.connect()
-                    self.set_ok(f"Connecté sur {self.provider.channel}.")
+                    self._last_frame_ts = None
+                    self.set_warning(f"Connecté sur {self.provider.channel}, en attente de trames CAN.")
                 except Exception as e:
                     self.set_error(f"Échec : {str(e)}")
                     stop_event.wait(2.0)
@@ -82,6 +85,7 @@ class CanService(BaseService):
 
             # --- BLOC 2 : DECODAGE ISOLE ---
             if frame is not None:
+                self._last_frame_ts = now
                 msg_id = frame.arbitration_id
 
                 if msg_id in valid_ids and not getattr(self.api, 'is_starting_up', False):
@@ -90,13 +94,23 @@ class CanService(BaseService):
                             if obd_call:
                                 obd_call(frame)
                         else:
-                            decoded = processor_decode(frame.data, db[msg_id])
+                            decoded = processor_decode(frame, db[msg_id])
                             if decoded:
                                 batch_data.update(decoded)
                     except Exception:
                         # Une erreur de parsing (ex: bytearray invalide) est attrapee ici.
                         # On l'ignore silencieusement pour proteger l'API et le QML.
                         pass
+
+            # Le service n'est nominal que si des trames récentes arrivent réellement.
+            if self._last_frame_ts is None:
+                self.set_warning("Connecté mais aucune trame CAN reçue.")
+            else:
+                frame_age = now - self._last_frame_ts
+                if frame_age > self._stale_timeout_s:
+                    self.set_warning(f"Aucune trame CAN depuis {frame_age:.1f}s.")
+                else:
+                    self.set_ok(f"Trames CAN reçues sur {self.provider.channel}.")
 
             # --- BLOC 3 : LIVRAISON SYNCHRONISEE (60 Hz) ---
             if now - last_ui_update >= ui_refresh_rate:

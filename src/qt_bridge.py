@@ -30,6 +30,7 @@ class DashboardBridge(QObject):
         self._data = {}
         self._stats = {}
         self._system_health = {}
+        self._diag_state = (False, False, ())
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
@@ -58,7 +59,17 @@ class DashboardBridge(QObject):
         if new_data != self._data:
             self._data = new_data
             self.dataChanged.emit()
-            self.diagDataChanged.emit()
+
+            new_diag_state = self._extract_diag_state(new_data)
+            if new_diag_state != self._diag_state:
+                self._diag_state = new_diag_state
+                self.diagDataChanged.emit()
+
+    def _extract_diag_state(self, data: dict) -> tuple:
+        scanning = bool(data.get("diag_scanning", False))
+        has_scanned = bool(data.get("diag_has_scanned", False))
+        codes = tuple(data.get("diag_codes", []))
+        return scanning, has_scanned, codes
 
     def _update_stats(self):
         if self.stats_service:

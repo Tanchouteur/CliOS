@@ -6,6 +6,7 @@ import argparse
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6 import __version__ as pyside_version
 
 from src.profile_manager import ProfileManager
 from src.driver import Slcan
@@ -31,6 +32,31 @@ from src.services.dynamics_service import DynamicsService
 
 # Import de notre outil de debug externalisé
 from src.cli_debug import ui_loop
+
+
+def ensure_supported_pyside(is_gui: bool, allow_unsupported: bool) -> None:
+    """Bloque les versions PySide6 connues instables en mode GUI."""
+    if not is_gui:
+        return
+
+    def parse_version(version_str: str):
+        parts = []
+        for token in str(version_str).split('.'):
+            if token.isdigit():
+                parts.append(int(token))
+            else:
+                break
+        return tuple(parts)
+
+    installed = parse_version(str(pyside_version))
+    minimum_stable = (6, 8, 2, 1)
+
+    if installed < minimum_stable and not allow_unsupported:
+        print(
+            f"[ERREUR] PySide6 {pyside_version} est instable pour cette UI (segfault/bool_dealloc connus)."
+        )
+        print("[ERREUR] Mettez à jour vers PySide6 6.8.2.1+ ou lancez avec --allow-unsupported-pyside.")
+        sys.exit(2)
 
 
 # ==========================================
@@ -67,7 +93,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     session_manager = TripSessionManager(api, storage, stats_service, storage_dir)
 
     services_to_register = [
-        (can_service, "services.Can.enabled", True),
+        (can_service, "services.CAN_Moteur.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
         (dynamics_service, "services.Dynamics.enabled", True),
@@ -80,8 +106,14 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         (session_manager, "services.SessionManager.enabled", True),
     ]
 
+    # Rétrocompatibilité: anciennes sauvegardes utilisaient services.Can.enabled
+    can_enabled = storage.get("services.CAN_Moteur.enabled", storage.get("services.Can.enabled", True))
+
     for service, storage_key, default_state in services_to_register:
-        orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
+        if service.service_name == "CAN_Moteur":
+            orchestrator.add_service(service, enabled=can_enabled)
+        else:
+            orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
 
     return led_service, stats_service, diag_service, gear_calib_service, session_manager
 
@@ -91,7 +123,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ui', choices=['cli', 'gui'], default='gui')
     parser.add_argument('--mock', action='store_true')
+    parser.add_argument('--allow-unsupported-pyside', action='store_true')
     args = parser.parse_args()
+
+    ensure_supported_pyside(is_gui=(args.ui == 'gui'), allow_unsupported=args.allow_unsupported_pyside)
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     STORAGE_DIR = os.path.join(BASE_DIR, "data")
