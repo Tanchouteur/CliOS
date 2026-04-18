@@ -42,7 +42,7 @@ class DynamicsService(BaseService):
         self.print_message(f"Rapports de boîte rechargés ({len(self._gear_ratios)} rapports).")
 
     def start(self, stop_event: threading.Event):
-        self.thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="DynamicsService")
+        self.thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name)
         self.thread.start()
         super().start(stop_event, implemented=True)
 
@@ -62,7 +62,6 @@ class DynamicsService(BaseService):
             slip_mult = 1.0 + (self._params["slip_margin"]["value"] / 100.0)
             lock_mult = self._params["lock_margin"]["value"] / 100.0
 
-            # --- CORRECTION : Préparation du dictionnaire de mise à jour ---
             updates = {}
 
             if v_ref > min_v:

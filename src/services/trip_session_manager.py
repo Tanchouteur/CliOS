@@ -119,8 +119,13 @@ class TripSessionManager(BaseService):
                 self.trip_trace = []
                 self.set_ok("Enregistrement en cours")
 
-            # 1b. REPRISE DU TRAJET (Après avoir cliqué sur "Continuer" et remis le contact)
-            elif (ignition or current_speed > 3.0) and state in ["WAITING_IGNITION", "PAUSED"]:
+            # 1b. REPRISE MANUELLE (En attente suite a une action sur l'interface)
+            elif state == "WAITING_IGNITION" and (ignition or current_speed > 3.0):
+                self.api.update({"session_state": "RUNNING"})
+                self.set_ok("Reprise de l'enregistrement")
+
+            # 1c. REPRISE AUTOMATIQUE (Declenchement exclusif par le mouvement du vehicule)
+            elif state == "PAUSED" and current_speed > 3.0:
                 self.api.update({"session_state": "RUNNING"})
                 self.set_ok("Reprise automatique (mouvement detecte)")
 

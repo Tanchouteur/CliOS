@@ -26,7 +26,7 @@ class DiagnosticService(BaseService):
         self.thread = threading.Thread(
             target=self._run,
             args=(stop_event,),
-            name="Thread-Diag",
+            name=self.service_name,
             daemon=True
         )
         self.thread.start()
@@ -50,7 +50,6 @@ class DiagnosticService(BaseService):
             is_connected = self.provider.is_connected
             ignition_on = safe_data.get("key_run", False)
 
-            # --- CORRECTION : Écriture sécurisée ---
             self.api.update({"diag_ignition_on": ignition_on})
 
             # 2. Gestion des états avec set_warning
@@ -72,7 +71,6 @@ class DiagnosticService(BaseService):
                 self._scan_requested.clear()
 
     def _perform_scan(self):
-        # --- CORRECTION : Écriture sécurisée groupée ---
         self.api.update({
             "diag_scanning": True,
             "diag_codes": []
@@ -132,5 +130,4 @@ class DiagnosticService(BaseService):
 
             codes.append(f"{letter}{second}{third}{fourth}{fifth}".upper())
 
-        # --- CORRECTION : Écriture sécurisée ---
         self.api.update({"diag_codes": codes})

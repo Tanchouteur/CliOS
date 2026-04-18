@@ -32,7 +32,7 @@ class BleLedController(BaseService):
         self._running = True
         self.stop_event = stop_event
 
-        self._thread = threading.Thread(target=self._run_event_loop, daemon=True, name="Leds_Worker")
+        self._thread = threading.Thread(target=self._run_event_loop, daemon=True, name=self.service_name)
         self._thread.start()
         super().start(stop_event, implemented=True)
 

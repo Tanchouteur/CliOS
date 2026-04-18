@@ -1,9 +1,8 @@
-from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QPushButton, QLabel, QSlider, QVBoxLayout, QWidget, QHBoxLayout, QComboBox
 import threading
 import time
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QPushButton, QLabel, QSlider, QVBoxLayout, QWidget, QHBoxLayout, QComboBox
+from PySide6.QtCore import QTimer
 
 
 class MockControlPanel(QWidget):
@@ -13,9 +12,18 @@ class MockControlPanel(QWidget):
         super().__init__()
         self.mock = physics_mock
         self.setWindowTitle("🎮 Contrôle Mock GT3")
-        self.resize(320, 300)
+        self.resize(320, 350)
 
         layout = QVBoxLayout()
+
+        # --- NOUVEAU : BOUTON DE CONTACT MANUEL ---
+        self.ignition_state = True  # Par défaut, le mock démarre avec le contact allumé
+        self.btn_ignition = QPushButton("🔑 Couper le contact")
+        self.btn_ignition.setStyleSheet("background-color: #d9534f; color: white; font-weight: bold; padding: 5px;")
+        self.btn_ignition.clicked.connect(self.toggle_ignition)
+        layout.addWidget(self.btn_ignition)
+
+        layout.addWidget(QLabel("─" * 40))
 
         # --- SÉLECTEUR DE BOÎTE DE VITESSES ---
         gear_layout = QHBoxLayout()
@@ -46,13 +54,34 @@ class MockControlPanel(QWidget):
         # --- LIGNE DE SÉPARATION VISUELLE ---
         layout.addWidget(QLabel("─" * 40))
 
-        # --- NOUVEAU : BOUTON PILOTE AUTO ---
+        # --- BOUTON PILOTE AUTO ---
         self.btn_autopilot = QPushButton("🤖 Lancer Pilote Automatique (Test UI)")
         self.btn_autopilot.setStyleSheet("background-color: #2d5b88; color: white; font-weight: bold; padding: 5px;")
         self.btn_autopilot.clicked.connect(self.run_auto_pilot)
         layout.addWidget(self.btn_autopilot)
 
         self.setLayout(layout)
+
+    # ==========================================
+    # CONTRÔLES MANUELS
+    # ==========================================
+    def toggle_ignition(self):
+        """Alterne l'état du contact et met à jour l'API et l'UI."""
+        self.ignition_state = not self.ignition_state
+
+        # Mise à jour sécurisée de l'API
+        self.mock.api.update({
+            "key_run": self.ignition_state,
+            "ignition_on": self.ignition_state
+        })
+
+        # Mise à jour visuelle du bouton
+        if self.ignition_state:
+            self.btn_ignition.setText("🔑 Couper le contact")
+            self.btn_ignition.setStyleSheet("background-color: #d9534f; color: white; font-weight: bold; padding: 5px;")
+        else:
+            self.btn_ignition.setText("🔑 Mettre le contact")
+            self.btn_ignition.setStyleSheet("background-color: #5cb85c; color: white; font-weight: bold; padding: 5px;")
 
     def update_throttle(self, value):
         self.mock.throttle = float(value)
@@ -67,19 +96,27 @@ class MockControlPanel(QWidget):
         self.slider_throttle.setValue(0)
         self.slider_brake.setValue(0)
 
+    def _restore_button(self):
+        """Exécutée par le Main Thread pour réactiver l'UI du Pilote Auto en toute sécurité."""
+        self.btn_autopilot.setEnabled(True)
+        self.btn_autopilot.setText("🤖 Lancer Pilote Automatique (Test UI)")
+
+        # On s'assure que le bouton de contact reflète l'état final du pilote auto (contact coupé)
+        self.ignition_state = False
+        self.btn_ignition.setText("🔑 Mettre le contact")
+        self.btn_ignition.setStyleSheet("background-color: #5cb85c; color: white; font-weight: bold; padding: 5px;")
+
     # ==========================================
     # SÉQUENCE DU PILOTE VIRTUEL
     # ==========================================
     def run_auto_pilot(self):
         """Prend le contrôle des inputs du mock physics pour simuler un trajet."""
-
-        # On désactive le bouton pour éviter de lancer 2 pilotes en même temps
         self.btn_autopilot.setEnabled(False)
         self.btn_autopilot.setText("🤖 Conduite en cours...")
 
         def sequence():
             print("\n[MOCK PILOT] 🔑 1. Mise du contact...")
-            self.mock.api.update({"key_run": True})
+            self.mock.api.update({"key_run": True, "ignition_on": True})
             time.sleep(1.0)
 
             print("[MOCK PILOT] ⚙️ 2. 1ère vitesse et grosse accélération...")
@@ -90,13 +127,13 @@ class MockControlPanel(QWidget):
 
             print("[MOCK PILOT] ⚙️ 3. Passage en 2ème vitesse...")
             self.mock.throttle = 0.0
-            time.sleep(0.5)  # Petit temps mort pour simuler l'embrayage
+            time.sleep(0.5)
             self.mock.gear = 2
             self.mock.throttle = 40.0
             time.sleep(4.0)
 
             print("[MOCK PILOT] 🛣️ 4. Vitesse de croisière...")
-            self.mock.throttle = 15.0  # Maintien de la vitesse
+            self.mock.throttle = 15.0
             time.sleep(6.0)
 
             print("[MOCK PILOT] 🛑 5. Freinage progressif...")
@@ -109,15 +146,12 @@ class MockControlPanel(QWidget):
             self.mock.gear = 0
             time.sleep(1.0)
 
-            # C'est ÇA qui va déclencher l'animation "PAUSED" dans ton QML !
-            self.mock.api.update({"key_run": False})
+            self.mock.api.update({"key_run": False, "ignition_on": False})
             self.mock.brake = 0.0
 
             print("[MOCK PILOT] ✅ Fin du trajet simulé. Vérifiez l'interface QML !")
 
-            # On réactive le bouton pour le prochain test
-            self.btn_autopilot.setEnabled(True)
-            self.btn_autopilot.setText("🤖 Lancer Pilote Automatique (Test UI)")
+            # On demande au Main Thread de réactiver l'UI
+            QTimer.singleShot(0, self._restore_button)
 
-        # On lance la séquence dans un thread pour que la fenêtre PyQt ne freeze pas
         threading.Thread(target=sequence, daemon=True).start()

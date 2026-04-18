@@ -21,7 +21,7 @@ class NotificationService(BaseService):
         self.register_param("notif_duration", "Durée Affichage (ms)", "slider", 4000.0, min_val=1000.0, max_val=10000.0)
 
     def start(self, stop_event):
-        self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="NotifWorker")
+        self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name)
         self._thread.start()
         super().start(stop_event, implemented=True)
 
