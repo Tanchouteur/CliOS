@@ -38,7 +38,11 @@ class Slcan:
             return None
 
         try:
-            return self.bus.recv(timeout)
+            msg = self.bus.recv(timeout)
+            if msg is not None and msg.is_error_frame:
+                return None
+
+            return msg
         except Exception:
             self.close()
             raise RuntimeError("Perte de communication avec la carte réseau CAN.")

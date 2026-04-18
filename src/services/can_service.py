@@ -7,7 +7,7 @@ from src.signal_processor import SignalProcessor, RawFrame
 
 
 class CanService(BaseService):
-    """Service autonome gérant le bus CAN via SocketCAN (0% CPU overhead)."""
+    """Service autonome gerant le bus CAN via SocketCAN."""
 
     def __init__(self, name: str, api, storage, dbc_path: str, provider, obd_callback=None):
         super().__init__(name, storage)
@@ -20,10 +20,9 @@ class CanService(BaseService):
         self.processor = SignalProcessor()
         self.provider = provider
 
-        # --- RECHERCHE DES CARTES RÉSEAUX CAN (Linux Natif) ---
+        # Recherche des interfaces reseau CAN
         available_interfaces = []
         try:
-            # On liste les interfaces comme "can0", "can1"
             available_interfaces = [iface for iface in os.listdir('/sys/class/net') if iface.startswith('can')]
         except Exception:
             pass
@@ -31,10 +30,10 @@ class CanService(BaseService):
         if not available_interfaces:
             available_interfaces = ["can0", "Aucun réseau CAN détecté"]
 
-        # On enregistre uniquement l'interface (plus de ports série, plus de vitesse !)
-        self.register_param("can_interface", "Interface Réseau", "list", available_interfaces[0], persistent=True, options=available_interfaces)
+        self.register_param("can_interface", "Interface Réseau", "list", available_interfaces[0], persistent=True,
+                            options=available_interfaces)
 
-        # On attribue "can0" au driver
+        # Assignation au driver
         self.provider.channel = self._params["can_interface"]["value"]
 
     def on_param_changed(self, key: str, value):
@@ -57,9 +56,9 @@ class CanService(BaseService):
         processor_decode = self.processor.decode
         obd_call = self.obd_callback
 
-        ui_refresh_rate = 1.0 / 60.0  # ~0.016 secondes
+        ui_refresh_rate = 1.0 / 60.0
         last_ui_update = time.time()
-        batch_data = {}  # Le "carton" de livraison
+        batch_data = {}
 
         while not stop_event.is_set():
             if not self.provider.is_connected:
@@ -71,37 +70,40 @@ class CanService(BaseService):
                     stop_event.wait(2.0)
                     continue
 
+            # --- BLOC 1 : LECTURE RESEAU SECURISEE ---
             try:
-                # 1. Lecture rapide du noyau Linux
                 frame = self.provider.read_frame(timeout=0.01)
                 now = time.time()
+            except Exception as e:
+                self.set_error(f"Perte de l'interface reseau : {str(e)}")
+                self.provider.close()
+                stop_event.wait(1.0)
+                continue
 
-                if frame is not None:
-                    msg_id = frame.arbitration_id
+            # --- BLOC 2 : DECODAGE ISOLE ---
+            if frame is not None:
+                msg_id = frame.arbitration_id
 
-                    # 2. Filtrage et Décodage
-                    if msg_id in valid_ids and not getattr(self.api, 'is_starting_up', False):
+                if msg_id in valid_ids and not getattr(self.api, 'is_starting_up', False):
+                    try:
                         if 0x7E8 <= msg_id <= 0x7EF:
                             if obd_call:
                                 obd_call(frame)
                         else:
-                            # On décode directement avec le bytearray (Optimisation du Processor)
                             decoded = processor_decode(frame.data, db[msg_id])
                             if decoded:
-                                # On ajoute les données au carton au lieu d'appeler l'API
                                 batch_data.update(decoded)
+                    except Exception:
+                        # Une erreur de parsing (ex: bytearray invalide) est attrapee ici.
+                        # On l'ignore silencieusement pour proteger l'API et le QML.
+                        pass
 
-                # 3. Livraison synchronisée (60 Hz)
-                if now - last_ui_update >= ui_refresh_rate:
-                    if batch_data:
-                        api_update(batch_data)
-                        batch_data.clear()
-                    last_ui_update = now
-
-            except Exception as e:
-                self.set_error(f"Perte de l'interface réseau : {str(e)}")
-                self.provider.close()
-                stop_event.wait(1.0)
+            # --- BLOC 3 : LIVRAISON SYNCHRONISEE (60 Hz) ---
+            if now - last_ui_update >= ui_refresh_rate:
+                if batch_data:
+                    api_update(batch_data)
+                    batch_data.clear()
+                last_ui_update = now
 
     def stop(self):
         self.provider.close()
