@@ -14,7 +14,7 @@ class GearCalibrationService(BaseService):
         self.is_calibrating = False
         self.collected_ratios = []
 
-        # --- CORRECTION : Écriture sécurisée initiale ---
+        # Initialise l'état de calibration visible par l'interface.
         self.api.update({
             "calibration_active": False,
             "calibration_ratio": 0.0,
@@ -34,19 +34,19 @@ class GearCalibrationService(BaseService):
         self.is_calibrating = True
         self.collected_ratios.clear()
 
-        # --- CORRECTION : Écriture sécurisée ---
+        # Active l'état de calibration dans l'API.
         self.api.update({
             "calibration_active": True,
             "calibration_count": 0
         })
 
         self.set_ok("Étalonnage en cours...")
-        print("[GEAR] Début de l'étalonnage. Roulez et passez tous les rapports.")
+        self.print_message("Début de l'étalonnage. Parcourez les rapports pour collecter les ratios.")
 
     def stop_and_save_calibration(self):
         self.is_calibrating = False
 
-        # --- CORRECTION : Écriture sécurisée ---
+        # Désactive l'état de calibration dans l'API.
         self.api.update({
             "calibration_active": False,
             "calibration_ratio": 0.0
@@ -86,7 +86,7 @@ class GearCalibrationService(BaseService):
             self.dynamics_service.reload_config(config_data)
 
             self.set_ok(f"Succès : {len(new_ratios)} rapports enregistrés.")
-            print(f"[GEAR] Nouveaux rapports : {new_ratios}")
+            self.print_message(f"Rapports recalibrés: {new_ratios}")
             return True
 
         except Exception as e:
@@ -101,7 +101,7 @@ class GearCalibrationService(BaseService):
         while not stop_event.is_set():
             if self.is_calibrating:
 
-                # --- CORRECTION : Lecture sécurisée ---
+                # Lecture snapshot des données véhicule.
                 safe_data = self.api.get_display_data()
                 speed = safe_data.get("speed", 0.0)
                 rpm = safe_data.get("rpm", 0.0)
@@ -112,14 +112,14 @@ class GearCalibrationService(BaseService):
                     current_ratio = rpm / speed
                     self.collected_ratios.append(current_ratio)
 
-                    # --- CORRECTION : Écriture groupée ---
+                    # Publie l'avancement de calibration.
                     self.api.update({
                         "calibration_ratio": round(current_ratio, 1),
                         "calibration_count": len(self.collected_ratios)
                     })
                 else:
-                    # --- CORRECTION : Écriture sécurisée ---
+                    # Réinitialise l'indicateur de ratio hors conditions valides.
                     self.api.update({"calibration_ratio": 0.0})
 
-            # --- OPTIMISATION ---
+            # Réduit la charge CPU du worker.
             stop_event.wait(0.05)

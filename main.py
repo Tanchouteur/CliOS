@@ -154,7 +154,7 @@ def main():
     storage = PersistentStorage(profile_manager.get_save_path())
     api = VehicleAPI(storage)
 
-    # --- NOUVEAU : Chargement et injection de la version système ---
+    # Charge la version applicative et l'expose à l'interface.
     app_version = load_system_version(BASE_DIR)
     set_global_context(app_version=app_version)
     api.update({"system_version": app_version})

@@ -8,18 +8,18 @@ Item {
     id: root
     anchors.fill: parent
 
-    // --- LIAISON AVEC LE PYTHON ---
+    // Données système exposées par le bridge.
     property real cpuUsage: bridge.data !== undefined && bridge.data.app_cpu_total_pct !== undefined ? bridge.data.app_cpu_total_pct : 0.0
     property real ramUsage: bridge.data !== undefined && bridge.data.app_ram_mb !== undefined ? bridge.data.app_ram_mb : 0.0
 
-    // Définition de seuils pour colorer les barres en rouge si danger
+    // Seuils visuels d'alerte.
     property color cpuColor: cpuUsage > 80.0 ? T.Theme.danger : T.Theme.main
     property color ramColor: ramUsage > 800.0 ? T.Theme.danger : T.Theme.main
 
     property var health: bridge && bridge.systemHealth !== undefined ? bridge.systemHealth : {}
 
 
-    // --- EN-TÊTE ---
+    // En-tête.
     C.PageHeader {
         id: header
         title: "INFORMATIONS SYSTÈME"
@@ -29,7 +29,7 @@ Item {
         }
     }
 
-    // --- CONTENU PRINCIPAL ---
+    // Contenu principal.
     GridLayout {
         anchors.top: header.bottom
         anchors.left: parent.left
@@ -42,9 +42,7 @@ Item {
         rowSpacing: 20
         columnSpacing: 20
 
-        // ==========================================
-        // CARTE 1 : CPU
-        // ==========================================
+        // Carte CPU.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 180
@@ -89,9 +87,7 @@ Item {
             }
         }
 
-        // ==========================================
-        // CARTE 2 : RAM
-        // ==========================================
+        // Carte RAM.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 180
@@ -100,7 +96,7 @@ Item {
             border.color: Qt.rgba(1, 1, 1, 0.05)
             border.width: 1
 
-            // NOUVEAU : Calcul dynamique du plafond de RAM
+            // Plafond RAM dynamique pour l'échelle de la jauge.
             property real ramMax: Math.max(1024, Math.ceil(root.ramUsage / 512) * 512)
 
             Column {
@@ -144,9 +140,7 @@ Item {
             }
         }
 
-        // ==========================================
-        // CARTE 3 : LOGICIEL & VÉHICULE
-        // ==========================================
+        // Carte informations logicielles.
         Rectangle {
             Layout.columnSpan: 2
             Layout.fillWidth: true

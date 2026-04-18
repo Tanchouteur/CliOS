@@ -32,7 +32,7 @@ class NotificationService(BaseService):
         if not data:
             return
         current_time = time.time()
-        # On passe le dictionnaire sécurisé (data) à la méthode
+        # Utilise le snapshot API reçu pour éviter les lectures concurrentes.
         self._check_clutch_pressed(data.get('clutch', False), current_time, data)
 
     def _run(self, stop_event):
@@ -50,7 +50,7 @@ class NotificationService(BaseService):
                 traceback.print_exc()
                 self.set_error(f"Crash inattendu : {str(e)}")
 
-            stop_event.wait(1.0) # Optimisation CPU
+            stop_event.wait(1.0)
 
     def _check_clutch_pressed(self, clutch_pressed: bool, current_time, safe_data: dict):
         if not self._params["enable_clutch_warn"]["value"]:
@@ -63,7 +63,6 @@ class NotificationService(BaseService):
         duration = int(self._params["notif_duration"]["value"])
 
         if clutch_pressed:
-            # --- CORRECTION : On utilise le dictionnaire sécurisé ---
             current_speed = safe_data.get("speed", 0.0)
 
             if self._states["clutch_start_time"] is None:

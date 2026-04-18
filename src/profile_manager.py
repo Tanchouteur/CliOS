@@ -13,7 +13,7 @@ class ProfileManager:
 
         self.profiles_path = os.path.join(self.config_dir, "profiles.json")
 
-        # --- ÉTAT DU PROFIL ---
+        # État de validation du profil actif.
         self.has_error = False
         self.error_message = ""
 
@@ -46,7 +46,7 @@ class ProfileManager:
         """Vérifie si les fichiers du profil actif existent. Sinon, force le fallback."""
         active_id = self.data.get("active_profile", "default")
 
-        # Si l'ID n'existe même pas dans le dictionnaire
+        # Vérifie que le profil actif existe dans la configuration.
         if active_id not in self.data.get("profiles", {}):
             self.has_error = True
             self.error_message = f"Le profil '{active_id}' n'existe pas. Chargement du profil par défaut."
@@ -54,7 +54,7 @@ class ProfileManager:
             self.save()
             return
 
-        # Vérification physique des fichiers
+        # Vérifie l'existence des fichiers associés au profil.
         info = self.data["profiles"][active_id]
         can_path = os.path.join(self.can_dir, info.get("can_file", ""))
         config_path = os.path.join(self.config_dir, info.get("config_file", ""))
@@ -84,7 +84,7 @@ class ProfileManager:
             return True
         return False
 
-    # --- RÉSOLUTION DES CHEMINS (Utilisés par main.py) ---
+    # Résolution des chemins utilisés par l'application.
     @property
     def active_profile_id(self) -> str:
         return self.data.get("active_profile", "default")
@@ -104,7 +104,7 @@ class ProfileManager:
             return os.path.join(self.save_dash_dir, "save_mock.json")
         return os.path.join(self.save_dash_dir, self.active_info.get("save_file", "save.json"))
 
-    # --- MÉTHODES POUR L'INTERFACE (QML / Bridge) ---
+    # Méthodes exposées à l'interface.
     def get_available_can_files(self) -> list:
         """Retourne la liste des fichiers CAN disponibles."""
         if not os.path.exists(self.can_dir): return []
@@ -119,9 +119,9 @@ class ProfileManager:
         """Crée une nouvelle configuration vierge (copie d'un modèle)."""
         target_path = os.path.join(self.config_dir, new_filename)
         if os.path.exists(target_path):
-            return False  # Le fichier existe déjà
+            return False
 
-        # On crée une config standard de base (tu la remplaceras par tes vraies valeurs)
+        # Crée une configuration minimale.
         base_config = {
             "dashboard": {
                 "max_rpm": 7000,

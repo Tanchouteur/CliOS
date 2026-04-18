@@ -100,13 +100,13 @@ class SystemMonitorService(BaseService):
 
                     print("\n" + "=" * 45)
                     print(
-                        f"🖥️  APP GLOBALE : {safe_data.get('app_cpu_total_pct', 0):>5.1f} % CPU  |  {safe_data.get('app_ram_mb', 0):>6.1f} MB RAM")
+                        f"APP GLOBALE : {safe_data.get('app_cpu_total_pct', 0):>5.1f} % CPU  |  {safe_data.get('app_ram_mb', 0):>6.1f} MB RAM")
                     print("-" * 45)
 
                     for cle, valeur in safe_data.items():
                         if cle.startswith("app_cpu_") and cle != "app_cpu_total_pct":
                             nom_propre = cle.replace("app_cpu_", "").upper()
-                            print(f" 🔹 {nom_propre:<20} : {valeur:>5.1f} %")
+                            print(f" - {nom_propre:<20} : {valeur:>5.1f} %")
 
                     print("=" * 45 + "\n")
 

@@ -20,7 +20,8 @@ class Slcan:
 
         try:
             self.bus = can.interface.Bus(
-                bustype="socketcan",  # <--- LE CHANGEMENT MAGIQUE EST ICI
+                # Utilise l'interface SocketCAN native du noyau Linux.
+                bustype="socketcan",
                 channel=self.channel,
                 can_filters=can_filters
             )

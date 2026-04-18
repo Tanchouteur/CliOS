@@ -21,7 +21,7 @@ class BleLedController(BaseService):
         self._running = False
         self._clients = {}
 
-        # --- DÉCLARATION DES PARAMÈTRES ---
+        # Paramètres runtime exposés à l'interface.
         self.register_param("dash_on", "Activer Dashboard", "toggle", True)
         self.register_param("foot_on", "Activer Plancher", "toggle", True)
         self.register_param("brightness", "Luminosité (%)", "slider", 100.0, min_val=0.0, max_val=100.0)
@@ -63,7 +63,7 @@ class BleLedController(BaseService):
         if len(hex_color) != 6:
             return (0, 0, 0)
 
-        # On lit le paramètre de luminosité (ex: 50% = 0.5)
+        # Applique le facteur de luminosité configuré.
         bright_factor = self._params["brightness"]["value"] / 100.0
 
         r = int(int(hex_color[0:2], 16) * bright_factor)
@@ -83,7 +83,8 @@ class BleLedController(BaseService):
         if not client or not client.is_connected:
             try:
                 client = BleakClient(mac)
-                await client.connect(timeout=3.0)  # Timeout réduit pour ne pas tout geler
+                # Timeout court pour limiter le blocage en cas de périphérique indisponible.
+                await client.connect(timeout=3.0)
                 self._clients[mac] = client
                 self.set_ok(f"Connecté au bandeau {mac}")
             except BleakError as e:
@@ -102,9 +103,7 @@ class BleLedController(BaseService):
             if hex_color is None:
                 break
 
-            # --- CORRECTION CRUCIALE : LA PURGE ---
-            # Si 20 couleurs sont en attente (à cause d'un glissement de slider), on jette
-            # les 19 premières et on ne garde que la toute dernière pour soulager le Bluetooth.
+            # Conserve uniquement la dernière couleur en file pour limiter la latence BLE.
             while not self._queue.empty():
                 try:
                     hex_color = self._queue.get_nowait()

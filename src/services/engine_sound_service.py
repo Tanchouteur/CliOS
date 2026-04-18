@@ -76,8 +76,8 @@ class EngineSoundService(BaseService):
         except Exception:
             pass
 
-        # Si le périphérique par défaut est invalide, on autorise tout de même le démarrage
-        # si au moins une sortie physique est détectée.
+        # Si le périphérique par défaut est invalide, autorise le démarrage
+        # dès qu'une sortie audio physique est détectée.
         return True
 
     def on_param_changed(self, key: str, value):
@@ -152,25 +152,25 @@ class EngineSoundService(BaseService):
 
             self.cabin_freq_ctrl = SigTo(value=1500.0, time=0.1)
 
-            # --- NOUVEAU TURBO & ADMISSION ---
+            # Chaîne de synthèse turbo/admission.
             self.turbo_freq_ctrl = SigTo(value=800.0, time=0.6)
             self.turbo_vol_ctrl = SigTo(value=0.0, time=0.6)
 
             self.turbo_whistle = Sine(freq=self.turbo_freq_ctrl, mul=self.turbo_vol_ctrl)
-            # Frequence harmonique reduite (x1.5 au lieu de x2) pour eviter le sifflement Dyson
+            # Harmonique limitée pour conserver un timbre naturel.
             self.turbo_harmonic = Sine(freq=self.turbo_freq_ctrl * 1.5, mul=self.turbo_vol_ctrl * 0.1)
 
             self.wind_freq_ctrl = SigTo(value=300.0, time=0.6)
             self.wind_vol_ctrl = SigTo(value=0.0, time=0.6)
             self.spool_noise = PinkNoise()
 
-            # Filtre Passe-Bas (type=0) avec resonance (q=1.2) pour l'effet tube creux
+            # Filtre passe-bas avec résonance pour modeler l'admission.
             self.spool_filter = Biquad(self.spool_noise, freq=self.wind_freq_ctrl, q=1.2, type=0,
                                        mul=self.wind_vol_ctrl)
 
             self.wg_vol_ctrl = SigTo(value=0.0, time=0.05)
             self.wg_noise = PinkNoise()
-            # Decharge assourdie pour correspondre a l'habitacle
+            # Décharge filtrée pour un rendu cockpit.
             self.wg_synth = Biquad(self.wg_noise, freq=1800.0, q=1.0, type=0, mul=self.wg_vol_ctrl)
 
             self.master_vol_ctrl = SigTo(value=0.0, time=0.1)
@@ -281,11 +281,11 @@ class EngineSoundService(BaseService):
                             self.turbo_freq_ctrl.time = decay_slow
                             self.wind_freq_ctrl.time = decay_slow
 
-                    # Frequences plafonnees pour le realisme habitacle
+                    # Plafonne les fréquences pour éviter un rendu agressif en habitacle.
                     self.turbo_freq_ctrl.value = 800.0 + (boost_target * 2000.0)
                     self.wind_freq_ctrl.value = 300.0 + (boost_target * 1200.0)
 
-                    # Baisse du sifflement, augmentation du corps du souffle
+                    # Pondération des composantes whistle/whoosh.
                     self.turbo_vol_ctrl.value = boost_target * 0.03 * t_vol
                     self.wind_vol_ctrl.value = boost_target * 0.8 * w_vol
 

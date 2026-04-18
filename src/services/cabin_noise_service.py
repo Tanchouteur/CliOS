@@ -15,13 +15,13 @@ class CabinNoiseService(BaseService):
 
         self._last_fft_time = 0
 
-        # --- CORRECTION : Écriture sécurisée de l'initialisation ---
+        # Initialise les métriques audio exposées à l'interface.
         self.api.update({
             "cabin_db_spl": 0.0,
             "cabin_freq_hz": 0
         })
 
-        # --- DÉCLARATION DES PARAMÈTRES DYNAMIQUES  ---
+        # Paramètres de calibration audio.
         self.register_param("calib_offset", "Calibration Micro (dB)", "slider", 87.0, min_val=50.0, max_val=120.0)
         self.register_param("fft_threshold", "Seuil de Silence (dB)", "slider", 40.0, min_val=20.0, max_val=80.0)
         self.register_param("fft_rate", "Rafraîchissement FFT (s)", "slider", 0.25, min_val=0.05, max_val=1.0)
@@ -42,10 +42,10 @@ class CabinNoiseService(BaseService):
             raw_db = 20 * np.log10(rms)
             db_spl = raw_db + calib
 
-            # --- CORRECTION : Préparation du dictionnaire de mise à jour ---
+            # Prépare les valeurs à publier dans l'API.
             updates = {
                 "audio_db_text": f"{db_spl:.1f}",
-                "cabin_db_spl": db_spl # Au cas où tu as besoin de la valeur numérique ailleurs
+                "cabin_db_spl": db_spl
             }
 
             now = time.time()
@@ -56,11 +56,11 @@ class CabinNoiseService(BaseService):
                 frequences = np.fft.rfftfreq(len(audio_data), d=1 / 44100)
                 freq_dominante = frequences[np.argmax(spectre)]
 
-                # On ajoute la fréquence au dictionnaire
+                # Ajoute la fréquence dominante détectée.
                 updates["cabin_freq_hz"] = int(freq_dominante)
                 self._last_fft_time = now
 
-            # --- CORRECTION : Envoi groupé et verrouillé à l'API ---
+            # Publie la mise à jour groupée.
             self.api.update(updates)
 
     def _run(self, stop_event):

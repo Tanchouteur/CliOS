@@ -1,5 +1,4 @@
 import threading
-import time
 from src.services.base_service import BaseService
 
 
@@ -9,14 +8,14 @@ class DynamicsService(BaseService):
         self.api = api
         self.thread = None
 
-        # --- INITIALISATION DE LA BOÎTE DE VITESSES ---
+        # Paramètres de détection de rapport.
         trans_config = config.get("transmission", {})
         self._gear_ratios = trans_config.get("ratios", {})
         self._gear_tolerance = trans_config.get("tolerance", 5.0)
         self._last_gear_rpm = -100
         self._last_gear_speed = -100
 
-        # --- CORRECTION : Écriture sécurisée initiale groupée ---
+        # Initialise l'état dynamique exposé à l'interface.
         self.api.update({
             "gear": "N",
             "wheel_slip_fl": False,
@@ -48,7 +47,7 @@ class DynamicsService(BaseService):
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            # --- CORRECTION : Lecture sécurisée de l'API ---
+            # Lit un snapshot cohérent des données véhicule.
             safe_data = self.api.get_display_data()
 
             # Compatibilité: supporte wheel_speed_fl et wheel_fl_speed selon la source.
@@ -80,7 +79,7 @@ class DynamicsService(BaseService):
                     updates[f"wheel_slip_{w}"] = False
                     updates[f"wheel_lock_{w}"] = False
 
-            # --- CALCUL DU RAPPORT DE BOÎTE ---
+            # Estime le rapport engagé à partir du ratio RPM/vitesse.
             rpm = safe_data.get("rpm", 0)
             clutch = safe_data.get("clutch", False)
             reverse = safe_data.get("reverse_engaged", False)

@@ -6,17 +6,17 @@ Rectangle {
     property string activeColor: "#00ff00"
     property string label: "Voyant"
 
-    // NOUVEAUTÉ : Le chemin vers l'image (vide par défaut)
+    // Chemin vers l'icône optionnelle.
     property string iconSource: ""
 
     width: 60
     height: 60
-    radius: width / 2 // S'adapte mathématiquement à la taille
+    radius: width / 2 // Conserve une forme circulaire.
 
     color: isActive ? activeColor : "#222222"
     Behavior on color { ColorAnimation { duration: 150 } }
 
-    // CAS 1 : Pas d'image -> On affiche le texte
+    // Affiche le libellé si aucune icône n'est définie.
     Text {
         visible: root.iconSource === ""
         anchors.centerIn: parent
@@ -26,14 +26,14 @@ Rectangle {
         font.pixelSize: 12
     }
 
-    // CAS 2 : Une image est fournie -> On affiche l'image
+    // Affiche l'icône si elle est définie.
     Image {
         visible: root.iconSource !== ""
         anchors.centerIn: parent
         source: root.iconSource
-        width: parent.width * 0.6 // L'icône prend 60% de la pastille
+        width: parent.width * 0.6 // Taille relative de l'icône.
         height: parent.height * 0.6
         fillMode: Image.PreserveAspectFit
-        opacity: isActive ? 1.0 : 0.3 // Légèrement transparent si éteint
+        opacity: isActive ? 1.0 : 0.3 // Opacité réduite à l'état inactif.
     }
 }

@@ -23,16 +23,16 @@ class SignalProcessor:
 
             endian = sig_def["endian"]
 
-            # --- Champs de bits ---
+            # Décodage des signaux bit-à-bit.
             if sig_def["is_bits"]:
-                # int.from_bytes est très sensible à la taille
+                # Construit le champ binaire sur la taille déclarée.
                 raw_bytes = frame_data[start: start + size]
                 combined_bits = int.from_bytes(raw_bytes, byteorder=endian)
 
                 for bit_name, bit_pos in sig_def["bits"].items():
                     results[bit_name] = bool((combined_bits >> bit_pos) & 1)
 
-            # --- Valeurs numériques ---
+            # Décodage des signaux numériques.
             else:
                 raw_bytes = frame_data[start: start + size]
                 raw_int = int.from_bytes(raw_bytes, byteorder=endian)

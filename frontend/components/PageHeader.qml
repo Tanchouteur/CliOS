@@ -7,7 +7,7 @@ Item {
 
     property string title: "TITRE"
 
-    // --- NOUVEAU : Le signal qui prévient la page parente ---
+    // Signal émis lors d'une demande de retour.
     signal backClicked()
 
     anchors.left: parent.left
@@ -19,16 +19,16 @@ Item {
 
     height: 70
 
-    // Zone de retour (Bouton)
+    // Bouton retour.
     Rectangle {
         id: backArea
         width: 180
         height: parent.height
         radius: 12
 
-        // UX : Feedback visuel au clic (fond coloré)
+        // Retour visuel au clic.
         color: backBtn.pressed ? Qt.rgba(T.Theme.main.r, T.Theme.main.g, T.Theme.main.b, 0.15) : "transparent"
-        // UX : Contour fin pour identifier que c'est un bouton
+        // Contour pour matérialiser la zone interactive.
         border.color: Qt.rgba(T.Theme.main.r, T.Theme.main.g, T.Theme.main.b, 0.6)
         border.width: 1
 
@@ -41,7 +41,7 @@ Item {
                 color: T.Theme.textMain
                 font.pixelSize: 32
                 font.bold: true
-                // UX : Le chevron recule quand on appuie
+                // Décalage visuel du chevron au clic.
                 x: backBtn.pressed ? -6 : 0
                 Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
@@ -57,12 +57,12 @@ Item {
         MouseArea {
             id: backBtn
             anchors.fill: parent
-            // --- CORRECTION : On déclenche le signal ---
+            // Notifie la page parente.
             onClicked: root.backClicked()
         }
     }
 
-    // Titre
+    // Titre de page.
     Text {
         anchors.centerIn: parent
         text: root.title

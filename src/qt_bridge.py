@@ -56,7 +56,7 @@ class DashboardBridge(QObject):
 
         self.needs_restart = False
 
-    # --- LES SOUS-ROUTINES ---
+    # Boucles de rafraîchissement.
     def _update_fast_data(self):
         new_data = self._sanitize_for_qml(self.api.get_display_data())
 
@@ -89,7 +89,7 @@ class DashboardBridge(QObject):
             self.systemHealthChanged.emit()
 
     def _sanitize_for_qml(self, value):
-        # --- RETOUR À LA NORMALE : On laisse les booléens tranquilles ---
+        # Types primitifs compatibles QML.
         if value is None or isinstance(value, (bool, int, float, str)):
             return value
 
@@ -137,7 +137,7 @@ class DashboardBridge(QObject):
         if state in allowed:
             self.api.update({"session_state": state})
 
-    # --- CORRECTION DE FUITE : On lit self._data (local) et non self.api._data (risqué) ---
+    # Lit l'état local déjà sérialisé pour éviter les accès concurrents à l'API.
     @Property(bool, notify=diagDataChanged)
     def isScanning(self):
         return bool(self._data.get("diag_scanning", False))

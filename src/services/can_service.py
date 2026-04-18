@@ -24,7 +24,7 @@ class CanService(BaseService):
         self._decode_errors = 0
         self._last_decode_log_ts = 0.0
 
-        # Recherche des interfaces reseau CAN
+        # Détecte les interfaces réseau CAN disponibles.
         available_interfaces = []
         try:
             available_interfaces = [iface for iface in os.listdir('/sys/class/net') if iface.startswith('can')]
@@ -37,7 +37,7 @@ class CanService(BaseService):
         self.register_param("can_interface", "Interface Réseau", "list", available_interfaces[0], persistent=True,
                             options=available_interfaces)
 
-        # Assignation au driver
+        # Applique l'interface sélectionnée au provider.
         self.provider.channel = self._params["can_interface"]["value"]
 
     def on_param_changed(self, key: str, value):
@@ -55,7 +55,7 @@ class CanService(BaseService):
         valid_ids = set(db.keys())
         valid_ids.update(range(0x7E8, 0x7F0))
 
-        # Variables locales d'optimisation
+        # Références locales pour réduire le coût d'accès en boucle.
         api_update = self.api.update
         processor_decode = self.processor.decode
         obd_call = self.obd_callback
@@ -75,7 +75,7 @@ class CanService(BaseService):
                     stop_event.wait(2.0)
                     continue
 
-            # --- BLOC 1 : LECTURE RESEAU SECURISEE ---
+            # Lecture CAN et gestion des erreurs d'interface.
             try:
                 frame = self.provider.read_frame(timeout=0.01)
                 now = time.time()
@@ -85,7 +85,7 @@ class CanService(BaseService):
                 stop_event.wait(1.0)
                 continue
 
-            # --- BLOC 2 : DECODAGE ISOLE ---
+            # Décodage de trame et agrégation des signaux.
             if frame is not None:
                 self._last_frame_ts = now
                 msg_id = frame.arbitration_id
@@ -108,7 +108,7 @@ class CanService(BaseService):
                                 extra={"error_code": "CAN_DECODE_ERROR"}
                             )
 
-            # Le service n'est nominal que si des trames récentes arrivent réellement.
+            # Le service est nominal uniquement si des trames récentes sont reçues.
             if self._last_frame_ts is None:
                 self.set_warning("Connecté mais aucune trame CAN reçue.")
             else:
@@ -118,7 +118,7 @@ class CanService(BaseService):
                 else:
                     self.set_ok(f"Trames CAN reçues sur {self.provider.channel}.")
 
-            # --- BLOC 3 : LIVRAISON SYNCHRONISEE (60 Hz) ---
+            # Publie les données agrégées à cadence fixe.
             if now - last_ui_update >= ui_refresh_rate:
                 if batch_data:
                     batch_data["can_decode_errors"] = self._decode_errors

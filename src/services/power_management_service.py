@@ -25,7 +25,7 @@ class PowerManagementService(BaseService):
         self.set_ok("Surveillance alim : En attente du contact")
 
         while not stop_event.is_set():
-            # --- CORRECTION : Lecture 100% sécurisée ---
+            # Lecture du snapshot API courant.
             safe_data = self.api.get_display_data()
             ignition_on = safe_data.get("key_run", False)
             delay = self._params["shutdown_delay"]["value"]
@@ -50,19 +50,19 @@ class PowerManagementService(BaseService):
 
                         current_os = platform.system()
                         if current_os == "Darwin" or current_os == "Windows":
-                            print(f"[POWER] Ordre de coupure simulé (Bloqué par sécurité sur {current_os}).")
+                            self.print_message(f"Extinction simulée (désactivée sur {current_os}).")
                             self.has_been_started = False
                             self.off_timer = None
                             self.set_ok("Surveillance alim : En attente du contact")
                         else:
-                            print("\n[POWER] Arrêt du système demandé. Délégation à l'orchestrateur...")
+                            self.print_message("Extinction système demandée. Arrêt des services en cours.")
                             self.orchestrator.stop_all()
                             time.sleep(1.0)
-                            print("[POWER] Sauvegardes terminées. Arrêt du Raspberry Pi...")
+                            self.print_message("Sauvegardes terminées. Arrêt de la machine.")
                             os.system("sudo poweroff")
                             break
 
-            stop_event.wait(1.0) # Optimisation CPU
+            stop_event.wait(1.0)
 
     def stop(self):
         pass

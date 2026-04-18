@@ -15,7 +15,7 @@ class TripSessionManager(BaseService):
         self.trips_dir = trips_dir
         os.makedirs(self.trips_dir, exist_ok=True)
 
-        # --- CORRECTION : Écriture sécurisée ---
+        # Initialise explicitement l'état de session.
         self.api.update({"session_state": "IDLE"})
 
         self.trip_start_time = None
@@ -23,17 +23,13 @@ class TripSessionManager(BaseService):
         self.trip_trace = []
         self.last_trace_time = 0.0
 
-    # ==========================================
-    # COMMANDES UI
-    # ==========================================
+    # Commandes exposées à l'interface.
     def resume_trip(self):
-        # --- CORRECTION : Lecture sécurisée ---
         if self.api.get_display_data().get("session_state") == "PAUSED":
             self.api.update({"session_state": "WAITING_IGNITION"})
             self.set_ok("Trajet repris, en attente de contact...")
 
     def end_trip(self):
-        # --- CORRECTION : Lecture sécurisée ---
         safe_data = self.api.get_display_data()
 
         if safe_data.get("session_state") in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
@@ -48,14 +44,11 @@ class TripSessionManager(BaseService):
             self.trip_trace.clear()
             self.set_ok("Trajet sauvegardé")
 
-    # ==========================================
-    # SAUVEGARDE
-    # ==========================================
+    # Persistance de la synthèse de trajet.
     def _save_trip_summary(self):
         stats = self.stats_service.stats
         end_time = time.time()
 
-        # --- CORRECTION : Lecture sécurisée ---
         end_odo = self.api.get_display_data().get("odometer", 0.0)
 
         duration_sec = int(end_time - self.trip_start_time) if self.trip_start_time else 0
@@ -88,9 +81,7 @@ class TripSessionManager(BaseService):
         except Exception as e:
             self.set_error(f"Erreur d'écriture : {e}")
 
-    # ==========================================
-    # CYCLE DE VIE
-    # ==========================================
+    # Cycle de vie du service.
     def stop(self):
         state = self.api.get_display_data().get("session_state")
         if state in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
@@ -111,7 +102,7 @@ class TripSessionManager(BaseService):
             current_time = time.time()
             current_speed = safe_data.get("speed", 0.0)
 
-            # 1. NOUVEAU TRAJET (Démarrage à froid ou après avoir validé le trajet précédent)
+            # Démarre une nouvelle session.
             if ignition and state in ["IDLE", "ENDED"]:
                 self.api.update({"session_state": "RUNNING"})
                 self.trip_start_time = current_time
@@ -119,22 +110,22 @@ class TripSessionManager(BaseService):
                 self.trip_trace = []
                 self.set_ok("Enregistrement en cours")
 
-            # 1b. REPRISE MANUELLE (En attente suite a une action sur l'interface)
+            # Reprise manuelle après pause.
             elif state == "WAITING_IGNITION" and (ignition or current_speed > 3.0):
                 self.api.update({"session_state": "RUNNING"})
                 self.set_ok("Reprise de l'enregistrement")
 
-            # 1c. REPRISE AUTOMATIQUE (Declenchement exclusif par le mouvement du vehicule)
+            # Reprise automatique sur mouvement véhicule.
             elif state == "PAUSED" and current_speed > 3.0:
                 self.api.update({"session_state": "RUNNING"})
                 self.set_ok("Reprise automatique (mouvement detecte)")
 
-            # 2. MISE EN PAUSE AUTOMATIQUE
+            # Mise en pause automatique sans contact.
             elif not ignition and state == "RUNNING":
                 self.api.update({"session_state": "PAUSED"})
                 self.set_warning("En attente de décision...")
 
-            # 3. ENREGISTREMENT DE LA TRACE
+            # Enregistre la trace de session.
             elif state == "RUNNING":
                 if current_time - self.last_trace_time >= 5.0:
                     point = {

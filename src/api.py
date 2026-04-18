@@ -12,17 +12,17 @@ class VehicleAPI:
         self.storage = storage
         last_odo = storage.get("last_odometer", 0.0)
 
-        # --- NOUVEAU : Le Cadenas Anti-Crash ---
+        # Verrou partagé pour les accès concurrents aux données API.
         self.data_lock = threading.Lock()
 
-        # 1. LA VRAIE RÉALITÉ PHYSIQUE
+        # État temps réel consolidé.
         self._data = {
             "fuel_level": 100.0,
             "engine_light": "OFF",
             "odometer": last_odo
         }
 
-        # 2. L'ILLUSION VISUELLE
+        # État temporaire utilisé pendant la séquence de démarrage.
         self._ui_data = self._data.copy()
 
         # Indicateurs d'état système
@@ -42,7 +42,7 @@ class VehicleAPI:
             self.logger.warning("Payload API invalide ignore", extra={"error_code": "API_INVALID_PAYLOAD"})
             return
 
-        # On verrouille le dictionnaire juste le temps de l'écriture
+        # Section critique minimale pour limiter la contention.
         with self.data_lock:
             self._data.update(new_data)
 
@@ -56,7 +56,7 @@ class VehicleAPI:
             else:
                 self._data["engine_light"] = "OFF"
 
-    # --- Séquences d'Initialisation ---
+    # Séquence d'initialisation visuelle.
 
     def run_startup_sequence(self, duration_sec=2.0):
         """Exécute la routine de vérification matérielle visuelle (Sweep)."""
@@ -78,7 +78,7 @@ class VehicleAPI:
                 "stop_warning", "service_warning"
             ]
 
-            # On verrouille à chaque mise à jour de l'animation
+            # Met à jour l'état UI de démarrage.
             with self.data_lock:
                 self._ui_data.update(dict.fromkeys(voyants_booleens, True))
                 self._ui_data.update({"brightness": 100.0, "gear": "8", "engine_light": "RED"})

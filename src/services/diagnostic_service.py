@@ -1,8 +1,7 @@
 import threading
 import time
-from os import name
 
-from src.services.base_service import BaseService, ServiceStatus
+from src.services.base_service import BaseService
 
 
 class DiagnosticService(BaseService):
@@ -13,7 +12,7 @@ class DiagnosticService(BaseService):
         self.thread = None
         self._scan_requested = threading.Event()
 
-        # --- CORRECTION : Écriture sécurisée initiale ---
+        # Initialise l'état de diagnostic exposé à l'interface.
         self.api.update({
             "diag_codes": [],
             "diag_scanning": False,
@@ -33,18 +32,14 @@ class DiagnosticService(BaseService):
         super().start(stop_event, implemented=True)
 
     def request_scan(self):
-        # --- CORRECTION : Lecture sécurisée ---
         if self.api.get_display_data().get("key_run", False):
             self._scan_requested.set()
 
     def receive_obd_frame(self, frame):
-        hex_data = " ".join([f"{b:02X}" for b in frame.data])
-        # print(f"[DIAG] Trame interceptée (ID: 0x{frame.arbitration_id:03X}) -> [{hex_data}]")
         self._last_obd_response = frame
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            # --- CORRECTION : Lecture sécurisée ---
             safe_data = self.api.get_display_data()
 
             is_connected = self.provider.is_connected
@@ -52,7 +47,7 @@ class DiagnosticService(BaseService):
 
             self.api.update({"diag_ignition_on": ignition_on})
 
-            # 2. Gestion des états avec set_warning
+            # Gère l'état de disponibilité du diagnostic.
             if not is_connected:
                 self.set_error("Adaptateur CAN non détecté")
             elif not ignition_on:
@@ -61,7 +56,7 @@ class DiagnosticService(BaseService):
                 if not safe_data.get("diag_scanning", False):
                     self.set_ok("Prêt pour scan")
 
-            # 3. Gestion de la demande de scan
+            # Exécute le scan à la demande.
             if self._scan_requested.wait(timeout=0.5):
                 if is_connected and ignition_on:
                     try:
@@ -80,7 +75,7 @@ class DiagnosticService(BaseService):
 
         try:
             req_data = [0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-            print(f"[DIAG] Envoi de la requête 0x7DF (Mode 03) -> [{' '.join([f'{b:02X}' for b in req_data])}]")
+            self.print_message(f"Envoi requête OBD mode 03 sur 0x7DF ({' '.join([f'{b:02X}' for b in req_data])})")
 
             if not self.provider.send_frame(0x7DF, req_data):
                 raise Exception("Erreur d'envoi matériel sur le bus CAN.")
@@ -89,25 +84,23 @@ class DiagnosticService(BaseService):
 
             while time.time() < timeout:
                 if self._last_obd_response is not None:
-                    print("[DIAG] Réponse reçue, début du décodage.")
+                    self.print_message("Réponse OBD reçue, décodage en cours.")
                     self._decode_dtc_response(self._last_obd_response.data)
                     break
                 time.sleep(0.05)
 
             if self._last_obd_response is None:
-                print("[DIAG] TIMEOUT : L'ECU n'a rien répondu.")
+                self.print_message("Aucune réponse ECU avant timeout.")
                 self.set_warning("Aucune réponse du calculateur (0x7E8)")
             else:
-                # --- CORRECTION : Lecture sécurisée ---
                 nb_defauts = len(self.api.get_display_data().get('diag_codes', []))
-                print(f"[DIAG] Scan terminé avec succès. {nb_defauts} défaut(s) trouvé(s).")
+                self.print_message(f"Scan terminé: {nb_defauts} défaut(s)")
                 self.set_ok("Scan terminé.")
                 self.api.update({"diag_has_scanned": True})
 
         except Exception as e:
             self.set_error("Erreur critique pendant le scan : " + str(e))
         finally:
-            # --- CORRECTION : Écriture sécurisée ---
             self.api.update({"diag_scanning": False})
 
     def _decode_dtc_response(self, data):
