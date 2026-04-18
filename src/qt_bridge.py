@@ -74,10 +74,8 @@ class DashboardBridge(QObject):
             self.systemHealthChanged.emit()
 
     def _sanitize_for_qml(self, value):
-        if isinstance(value, bool):
-            return 1 if value else 0
-
-        if value is None or isinstance(value, (int, float, str)):
+        # --- RETOUR À LA NORMALE : On laisse les booléens tranquilles ---
+        if value is None or isinstance(value, (bool, int, float, str)):
             return value
 
         if isinstance(value, dict):

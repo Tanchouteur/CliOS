@@ -10,7 +10,7 @@ class CanService(BaseService):
     """Service autonome gérant le bus CAN via SocketCAN (0% CPU overhead)."""
 
     def __init__(self, name: str, api, storage, dbc_path: str, provider, obd_callback=None):
-        super().__init__("Can", storage)
+        super().__init__(name, storage)
         self.name = name
         self.api = api
         self.thread = None
@@ -43,7 +43,7 @@ class CanService(BaseService):
             self.provider.close()
 
     def start(self, stop_event: threading.Event):
-        self.thread = threading.Thread(target=self._run, args=(stop_event,), name=self.name, daemon=True)
+        self.thread = threading.Thread(target=self._run, args=(stop_event,), name=self.service_name, daemon=True)
         self.thread.start()
         super().start(stop_event, implemented=True)
 

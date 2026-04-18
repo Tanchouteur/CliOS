@@ -149,7 +149,7 @@ class EngineSoundService(BaseService):
         except Exception as e:
             self.set_error(f"Echec pyo : {e}")
 
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="EngineSound").start()
+        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
