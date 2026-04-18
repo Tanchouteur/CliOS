@@ -7,11 +7,25 @@ StackView {
     id: settingsStackView
     anchors.fill: parent
 
+    function safePush(sourcePath) {
+        if (settingsStackView.busy) {
+            return
+        }
+
+        const target = Qt.resolvedUrl(sourcePath)
+        if (!target) {
+            console.warn("[NAV] Source invalide:", sourcePath)
+            return
+        }
+
+        settingsStackView.push(target)
+    }
+
     readonly property var tiles: [
-        { label: "Ambiance", desc: "Éclairage LED, couleurs et thèmes visuels", source: "../pages/AmbiancePage.qml" },
-        { label: "Audio",    desc: "Volumes, égaliseur et sources multimédias", source: "../pages/NonBuildPage.qml"    },
-        { label: "Véhicule", desc: "Etat vehicule, config et alertes",          source: "../pages/VehiclePage.qml"  },
-        { label: "Système",  desc: "Services, ",                                source: "../pages/SystemePage.qml"   }
+        { label: "Ambiance", desc: "Éclairage LED, couleurs et thèmes visuels", source: "AmbiancePage.qml" },
+        { label: "Audio",    desc: "Volumes, égaliseur et sources multimédias", source: "NonBuildPage.qml" },
+        { label: "Véhicule", desc: "Etat vehicule, config et alertes",          source: "VehiclePage.qml" },
+        { label: "Système",  desc: "Services, ",                                source: "SystemePage.qml" }
     ]
 
     // 2. LA PAGE PRINCIPALE (Grille)
@@ -58,7 +72,7 @@ StackView {
                         // Animation physique au clic (Rétrécissement)
                         scale: tileArea.pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutBack } }
-                        Behavior on border.color { ColorAnimation { duration: 200 } }
+                        // Animation retirée: `Behavior on border.color` peut être instable selon le moteur QML.
 
                         // Ligne d'accentuation à gauche
                         Rectangle {
@@ -115,8 +129,8 @@ StackView {
                             font.bold: true
 
                             // Petit effet de glissement au survol
-                            transform: Translate { x: tileArea.containsMouse ? 4 : 0 }
-                            Behavior on transform { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                            x: tileArea.containsMouse ? 4 : 0
+                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
                         }
 
                         // Zone de clic
@@ -127,8 +141,7 @@ StackView {
                             cursorShape: Qt.PointingHandCursor
 
                             onClicked: {
-                                // On pousse la page dans le StackView
-                                settingsStackView.push(Qt.resolvedUrl(modelData.source))
+                                settingsStackView.safePush(modelData.source)
                             }
                         }
                     }

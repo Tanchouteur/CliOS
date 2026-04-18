@@ -42,8 +42,8 @@ Item {
                 font.pixelSize: 32
                 font.bold: true
                 // UX : Le chevron recule quand on appuie
-                transform: Translate { x: backBtn.pressed ? -6 : 0 }
-                Behavior on transform { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                x: backBtn.pressed ? -6 : 0
+                Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
             }
 
             Text {

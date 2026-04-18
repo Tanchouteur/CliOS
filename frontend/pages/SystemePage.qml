@@ -7,6 +7,28 @@ import "../components" as C
 Item {
     id: root
 
+    function safePop() {
+        const stack = root.StackView.view
+        if (stack && stack.depth > 1 && !stack.busy) {
+            stack.pop()
+        }
+    }
+
+    function safePush(sourcePath) {
+        const stack = root.StackView.view
+        if (!stack || stack.busy) {
+            return
+        }
+
+        const target = Qt.resolvedUrl(sourcePath)
+        if (!target) {
+            console.warn("[NAV] Source invalide:", sourcePath)
+            return
+        }
+
+        stack.push(target)
+    }
+
     // Modèle des sous-options du menu Système
     readonly property var menuItems: [
         { label: "Services", desc: "Activer ou désactiver les modules (Audio, Leds, etc.)", source: "ServicesPage.qml" },
@@ -20,7 +42,7 @@ Item {
         title: "SYSTÈME"
 
         onBackClicked: {
-            root.StackView.view.pop()
+            root.safePop()
         }
     }
 
@@ -50,7 +72,7 @@ Item {
 
                 scale: tileMouse.pressed ? 0.98 : 1.0
                 Behavior on scale { NumberAnimation { duration: 100 } }
-                Behavior on border.color { ColorAnimation { duration: 200 } }
+                // Animation retirée: `Behavior on border.color` peut être instable selon le moteur QML.
 
                 RowLayout {
                     anchors.fill: parent
@@ -78,8 +100,8 @@ Item {
                         text: "〉"
                         color: tileMouse.containsMouse ? T.Theme.main : T.Theme.unselected
                         font.pixelSize: 20; font.bold: true
-                        transform: Translate { x: tileMouse.containsMouse ? 5 : 0 }
-                        Behavior on transform { NumberAnimation { duration: 200 } }
+                        x: tileMouse.containsMouse ? 5 : 0
+                        Behavior on x { NumberAnimation { duration: 200 } }
                     }
                 }
 
@@ -88,7 +110,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.StackView.view.push(Qt.resolvedUrl(modelData.source))
+                    onClicked: root.safePush(modelData.source)
                 }
             }
         }
