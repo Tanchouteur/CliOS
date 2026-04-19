@@ -6,3 +6,5 @@ data/trips
 data/trips_mock
 data/dash_save
 data/logs
+__pycache__
+*.pyc
