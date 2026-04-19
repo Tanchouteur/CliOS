@@ -3,7 +3,6 @@ import time
 import threading
 import platform
 
-from src import orchestrator
 from src.services.base_service import BaseService
 
 
@@ -27,7 +26,7 @@ class PowerManagementService(BaseService):
         while not stop_event.is_set():
             # Lecture du snapshot API courant.
             safe_data = self.api.get_display_data()
-            ignition_on = safe_data.get("key_run", False)
+            ignition_on = safe_data.get("rpm", 0) > 400
             delay = self._params["shutdown_delay"]["value"]
 
             if ignition_on:
