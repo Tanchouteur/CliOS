@@ -217,7 +217,7 @@ class TripStatsService(BaseService):
     # Routines de calcul.
     def _calc_fast_telemetry(self, data, dt, current_time, current_speed, perfect_fuel):
         rpm = data.get('rpm', 0)
-        accel = data.get('accel_pos', 0.0)
+        accel = data.get('accel_computed', 0.0)
         brake = data.get('brake', False)
         clutch = data.get('clutch', False)
 
