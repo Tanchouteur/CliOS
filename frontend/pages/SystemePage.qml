@@ -33,7 +33,7 @@ Item {
     readonly property var menuItems: [
         { label: "Services", desc: "Activer ou désactiver les modules (Audio, Leds, etc.)", source: "ServicesPage.qml" },
         { label: "Informations", desc: "Version du logiciel, état CPU et RAM", source: "InfoPage.qml" },
-        { label: "Journal", desc: "Consulter les logs d'erreurs du système", source: "NonBuildPage.qml" }
+        { label: "Journal", desc: "Consulter les logs d'erreurs du système", source: "ConsolePage.qml" }
     ]
 
     // --- HEADER ---
