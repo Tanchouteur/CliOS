@@ -48,7 +48,7 @@ Le projet inclut un système de logs asynchrone à faible overhead:
 ## Installation
 
 ```bash
-cd /path/to/ClOS
+cd /path/to/CliOS
 python3 -m pip install -r requirements.txt
 ```
 
