@@ -4,139 +4,247 @@ import "../style" as T
 
 Rectangle {
     id: statusBar
-    height: 35
-    width: parent.width * 0.2
+    /* Augmentation de la hauteur pour une meilleure visibilite */
+    height: 40
+    width: parent.width * 0.25
     color: T.Theme.bgMain
     z: 100
 
-    // --- DONNÉES ---
+    /* Recuperation des donnees de sante du systeme */
     property var health: bridge && bridge.systemHealth !== undefined ? bridge.systemHealth : {}
-
-    // Séparation des services sains et des services en erreur
     property var allKeys: Object.keys(statusBar.health)
-    property var problemKeys: allKeys.filter(k => statusBar.health[k].status !== "OK")
-    property var okKeys: allKeys.filter(k => statusBar.health[k].status === "OK")
 
-    // État du menu déroulant
-    property bool isDropdownOpen: false
+    /* Classification stricte des services par statut */
+    property var errorKeys: allKeys.filter(function (k) {
+        return statusBar.health[k].status === "ERROR";
+    })
+    property var warnKeys: allKeys.filter(function (k) {
+        return statusBar.health[k].status === "WARNING";
+    })
+    property var disabledKeys: allKeys.filter(function (k) {
+        return statusBar.health[k].status === "DISABLED";
+    })
+    property var okKeys: allKeys.filter(function (k) {
+        return statusBar.health[k].status === "OK";
+    })
+
+    /* Variable de controle pour l'affichage des menus ("error", "warn", "disabled", "ok", "") */
+    property string activeMenu: ""
 
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 20
         anchors.rightMargin: 20
-        spacing: 15
+        spacing: 12
 
-        Item { Layout.fillWidth: false} // Pousse tout vers la droite
+        Item {
+            Layout.fillWidth: true
+        }
 
-        // --- ZONE DE DROITE ---
         Row {
-            spacing: 15
+            spacing: 10
             Layout.alignment: Qt.AlignVCenter
 
-            // 1. Les services EN ERREUR (Toujours visibles)
-            Row {
-                spacing: 12
-                Repeater {
-                    model: statusBar.problemKeys
-                    delegate: Row {
-                        spacing: 6
-                        property var service: statusBar.health[modelData]
+            /* Groupe 1 : Services en Erreur (Rouge) */
+            Rectangle {
+                width: errorKeys.length > 0 ? errorText.width + 30 : 0
+                height: 28
+                radius: 14
+                color: Qt.rgba(1.0, 0.0, 0.0, 0.1)
+                border.color: "#ff0000"
+                border.width: 1
+                visible: errorKeys.length > 0
 
-                        Rectangle {
-                            width: 10; height: 10; radius: 5
-                            anchors.verticalCenter: parent.verticalCenter
-                            color: service.status === "WARNING" ? "#ffaa00" : "#ff0000"
-
-                            SequentialAnimation on opacity {
-                                running: true
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.3; duration: 500 }
-                                NumberAnimation { to: 1.0; duration: 500 }
-                            }
-                        }
-
-                        Text {
-                            text: modelData
-                            color: "white"
-                            font.pixelSize: 11
-                            font.bold: true
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
+                SequentialAnimation on opacity {
+                    running: errorKeys.length > 0
+                    loops: Animation.Infinite
+                    NumberAnimation {
+                        to: 0.5; duration: 800
+                    }
+                    NumberAnimation {
+                        to: 1.0; duration: 800
                     }
                 }
-            }
-
-            // 2. Le bouton des services OK (Cliquable)
-            Rectangle {
-                width: okKeys.length > 0 ? okText.width + 20 : 0
-                height: 24
-                radius: 12
-                color: Qt.rgba(0, 1, 0, 0.1) // Fond vert très léger
-                border.color: "#00ff00"
-                border.width: 1
-                visible: okKeys.length > 0
-                anchors.verticalCenter: parent.verticalCenter
 
                 Text {
-                    id: okText
-                    text: "✓ " + statusBar.okKeys.length + " OK"
-                    color: "#00ff00"
-                    font.pixelSize: 11
+                    id: errorText
+                    text: errorKeys.length + " ERR"
+                    color: "#ff0000"
+                    font.pixelSize: 13
                     font.bold: true
                     anchors.centerIn: parent
                 }
 
                 MouseArea {
                     anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: statusBar.isDropdownOpen = !statusBar.isDropdownOpen
+                    onClicked: statusBar.activeMenu = (statusBar.activeMenu === "error") ? "" : "error"
+                }
+            }
+
+            /* Groupe 2 : Services en Avertissement (Orange) */
+            Rectangle {
+                width: warnKeys.length > 0 ? warnText.width + 30 : 0
+                height: 28
+                radius: 14
+                color: Qt.rgba(1.0, 0.66, 0.0, 0.1)
+                border.color: "#ffaa00"
+                border.width: 1
+                visible: warnKeys.length > 0
+
+                Text {
+                    id: warnText
+                    text: warnKeys.length + " WARN"
+                    color: "#ffaa00"
+                    font.pixelSize: 13
+                    font.bold: true
+                    anchors.centerIn: parent
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: statusBar.activeMenu = (statusBar.activeMenu === "warn") ? "" : "warn"
+                }
+            }
+
+            /* Groupe 3 : Services Eteints / Desactives (Bleu) */
+            Rectangle {
+                width: disabledKeys.length > 0 ? disabledText.width + 30 : 0
+                height: 28
+                radius: 14
+                color: Qt.rgba(0.0, 0.5, 1.0, 0.1)
+                border.color: "#0088ff"
+                border.width: 1
+                visible: disabledKeys.length > 0
+
+                Text {
+                    id: disabledText
+                    text: disabledKeys.length + " OFF"
+                    color: "#0088ff"
+                    font.pixelSize: 13
+                    font.bold: true
+                    anchors.centerIn: parent
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: statusBar.activeMenu = (statusBar.activeMenu === "disabled") ? "" : "disabled"
+                }
+            }
+
+            /* Groupe 4 : Services Operationnels (Vert) */
+            Rectangle {
+                width: okKeys.length > 0 ? okText.width + 25 : 0
+                height: 28
+                radius: 14
+                color: Qt.rgba(0.0, 1.0, 0.0, 0.1)
+                border.color: "#00ff00"
+                border.width: 1
+                visible: okKeys.length > 0
+
+                Text {
+                    id: okText
+                    text: okKeys.length + " OK"
+                    color: "#00ff00"
+                    font.pixelSize: 13
+                    font.bold: true
+                    anchors.centerIn: parent
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: statusBar.activeMenu = (statusBar.activeMenu === "ok") ? "" : "ok"
                 }
             }
         }
     }
 
-    // --- LE MENU DÉROULANT (Flottant sous la barre) ---
+    /* Template pour les menus deroulants */
+    /* Menu ERROR */
     Rectangle {
-        id: dropdownMenu
-        visible: statusBar.isDropdownOpen
-
-        // Positionnement juste sous la barre, aligné à droite
-        anchors.top: statusBar.bottom
-        anchors.topMargin: 5
-        anchors.right: parent.right
-        anchors.rightMargin: 20
-
-        // Taille dynamique en fonction du nombre de services
-        width: 150
-        height: okColumn.height + 20
-        radius: 8
-        color: Qt.rgba(0.1, 0.1, 0.1, 0.95)
-        border.color: Qt.rgba(1, 1, 1, 0.2)
-
+        visible: statusBar.activeMenu === "error"
+        anchors.top: statusBar.bottom; anchors.topMargin: 5; anchors.right: parent.right; anchors.rightMargin: 20
+        width: 180; height: errorCol.height + 20; radius: 8; color: Qt.rgba(0.1, 0.1, 0.1, 0.95); border.color: Qt.rgba(1, 1, 1, 0.2)
         Column {
-            id: okColumn
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.margins: 10
-            spacing: 8
-
+            id:
+                errorCol; anchors.margins: 10; anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; spacing: 8
             Repeater {
-                model: statusBar.okKeys
+                model: statusBar.errorKeys;
                 delegate: Row {
-                    spacing: 8
-
+                    spacing: 8;
                     Rectangle {
-                        width: 8; height: 8; radius: 4
-                        color: "#00ff00"
-                        anchors.verticalCenter: parent.verticalCenter
+                        width: 8; height: 8; radius: 4; color: "#ff0000"; anchors.verticalCenter: parent.verticalCenter
                     }
-
                     Text {
-                        text: modelData
-                        color: T.Theme.textMain || "white" // Utilise ton thème
-                        font.pixelSize: 11
-                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData; color: "white"; font.pixelSize: 12
+                    }
+                }
+            }
+        }
+    }
+
+    /* Menu WARN */
+    Rectangle {
+        visible: statusBar.activeMenu === "warn"
+        anchors.top: statusBar.bottom; anchors.topMargin: 5; anchors.right: parent.right; anchors.rightMargin: 20
+        width: 180; height: warnCol.height + 20; radius: 8; color: Qt.rgba(0.1, 0.1, 0.1, 0.95); border.color: Qt.rgba(1, 1, 1, 0.2)
+        Column {
+            id:
+                warnCol; anchors.margins: 10; anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; spacing: 8
+            Repeater {
+                model: statusBar.warnKeys;
+                delegate:
+                    Row {
+                        spacing: 8;
+                        Rectangle {
+                            width: 8; height: 8; radius: 4; color: "#ffaa00"; anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: modelData; color: "white"; font.pixelSize: 12
+                        }
+                    }
+            }
+        }
+    }
+
+    /* Menu DISABLED */
+    Rectangle {
+        visible: statusBar.activeMenu === "disabled"
+        anchors.top: statusBar.bottom; anchors.topMargin: 5; anchors.right: parent.right; anchors.rightMargin: 20
+        width: 180; height: disCol.height + 20; radius: 8; color: Qt.rgba(0.1, 0.1, 0.1, 0.95); border.color: Qt.rgba(1, 1, 1, 0.2)
+        Column {
+            id:
+                disCol; anchors.margins: 10; anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; spacing: 8
+            Repeater {
+                model: statusBar.disabledKeys;
+                delegate: Row {
+                    spacing: 8; Rectangle {
+                        width: 8; height: 8; radius: 4; color: "#0088ff"; anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: modelData; color: "white"; font.pixelSize: 12
+                    }
+                }
+            }
+        }
+    }
+
+    /* Menu OK */
+    Rectangle {
+        visible: statusBar.activeMenu === "ok"
+        anchors.top: statusBar.bottom; anchors.topMargin: 5; anchors.right: parent.right; anchors.rightMargin: 20
+        width: 180; height: okCol.height + 20; radius: 8; color: Qt.rgba(0.1, 0.1, 0.1, 0.95); border.color: Qt.rgba(1, 1, 1, 0.2)
+        Column {
+            id:
+                okCol; anchors.margins: 10; anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; spacing: 8
+            Repeater {
+                model: statusBar.okKeys;
+                delegate: Row {
+                    spacing: 8;
+                    Rectangle {
+                        width: 8; height: 8; radius: 4; color: "#00ff00"; anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: modelData; color: "white"; font.pixelSize: 12
                     }
                 }
             }
