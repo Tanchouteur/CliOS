@@ -9,6 +9,8 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6 import __version__ as pyside_version
 
+from services import export_service
+from services.export_service import ExportService
 from src.profile_manager import ProfileManager
 from src.driver import Slcan
 from src.services.gear_calibration_service import GearCalibrationService
@@ -209,6 +211,9 @@ def main():
             # Notifications Système
             notif_service = NotificationService(bridge, storage)
             orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
+
+            exp_service = ExportService(bridge, storage, TRIPS_DIR)
+            orchestrator.add_service(exp_service, enabled=storage.get("services.Export.enabled", True))
 
             orchestrator.start_all()
 
