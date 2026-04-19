@@ -10,7 +10,19 @@ class VehicleAPI:
     def __init__(self, storage):
         self.logger = get_logger("VehicleAPI")
         self.storage = storage
-        last_odo = storage.get("last_odometer", 0.0)
+
+        # Priorité à la clé actuelle, puis fallback legacy; évite les trips à 0 avec des saves anciens.
+        last_odo = storage.get("vehicle.last_odometer", 0.0)
+        if last_odo <= 0.0:
+            legacy_odo = storage.get("last_odometer", 0.0)
+            if legacy_odo > 0.0:
+                last_odo = legacy_odo
+            else:
+                last_odo = max(
+                    storage.get("trips.a.marker", 0.0),
+                    storage.get("trips.b.marker", 0.0),
+                    storage.get("vehicle.last_revision_odo", 0.0),
+                )
 
         # Verrou partagé pour les accès concurrents aux données API.
         self.data_lock = threading.Lock()

@@ -63,7 +63,8 @@ class TripStatsService(BaseService):
 
             # Valeurs persistantes et longue durée
             "trip_a": init_trip_a, "trip_b": init_trip_b,
-            "inst_cons": 0.0, "avg_cons_b": init_avg_cons, "autonomy": 0.0,
+            "inst_cons": 0.0, "avg_cons_b": init_avg_cons,
+            "avg_cons_session": 0.0, "autonomy": 0.0,
             "km_before_service": init_km_service, "service_warning": False,
 
             # Télémétrie dynamique
@@ -102,6 +103,7 @@ class TripStatsService(BaseService):
         with self._stats_lock:
             self._stats["session_fuel_l"] = 0.0
             self._stats["session_cost"] = 0.0
+            self._stats["avg_cons_session"] = 0.0
 
     # Commandes exposées à l'interface.
     def reset_trip_a(self):
@@ -276,7 +278,13 @@ class TripStatsService(BaseService):
 
     def _calc_slow_telemetry(self, current_odo, perfect_fuel, current_time):
         if self.last_saved_odo == 0.0 and current_odo > 0:
-            self.last_saved_odo = self.trip_a_marker = self.trip_b_marker = self.last_revision_odo = current_odo
+            self.last_saved_odo = current_odo
+            if self.trip_a_marker == 0.0:
+                self.trip_a_marker = current_odo
+            if self.trip_b_marker == 0.0:
+                self.trip_b_marker = current_odo
+            if self.last_revision_odo == 0.0:
+                self.last_revision_odo = current_odo
 
         with self._stats_lock:
             self._stats["trip_a"] = max(0.0, current_odo - self.trip_a_marker)
@@ -292,6 +300,10 @@ class TripStatsService(BaseService):
 
             self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                               1) if trip_b_dist > 0.05 else 0.0
+
+            session_dist = self._session_distance_km
+            self._stats["avg_cons_session"] = round((self._absolute_fuel_session / session_dist) * 100.0,
+                                                     1) if session_dist > 0.05 else 0.0
 
             # Seuils de maintenance configurables à chaud.
             rev_interval = self._params["revision_interval"]["value"]
@@ -319,3 +331,4 @@ class TripStatsService(BaseService):
                     "trips.b.fuel": self.fuel_b_accumulated
                 })
             self.last_saved_odo = current_odo
+

@@ -13,7 +13,10 @@ Item {
 
     property real maxInstCons: 20.0
     property real instCons: bridge.stats.inst_cons ?? -1.0
-    property real avgCons: bridge.stats.avg_cons_b ?? -1.0
+    property real avgConsTripB: bridge.stats.avg_cons_b ?? 0.0
+    property real avgConsSession: bridge.stats.avg_cons_session ?? 0.0
+    property string referenceMode: "trip_b"
+    property real avgCons: referenceMode === "session" ? avgConsSession : avgConsTripB
     property int intervalG: 5
 
     // Lissage de la consommation instantanée pour une animation plus fluide TODO
@@ -85,7 +88,7 @@ Item {
         z: 15
         PathInterpolator {
             id: avgMarkerRail
-            progress: Math.min(gaugeRoot.avgCons / gaugeRoot.maxInstCons, 1.0)
+            progress: Math.min(Math.max(gaugeRoot.avgCons / gaugeRoot.maxInstCons, 0.0), 1.0)
             path: instConsPath
         }
 
@@ -108,6 +111,17 @@ Item {
             property real deltaX: gaugeRoot.visualVPX - avgMarkerRail.x
             rotation: (Math.atan2(deltaY, deltaX) * 180 / Math.PI)
         }
+    }
+
+    Text {
+        z: 20
+        text: gaugeRoot.referenceMode === "trip_b" ? "Ref: Trip B" : "Ref: Session"
+        color: Theme.textDimmed
+        font.pixelSize: 10
+        font.family: "Arial"
+        x: gaugeRoot.endXG + 25
+        y: gaugeRoot.yPos - 44
+        opacity: 0.9
     }
 
     // --- Graduations et Étiquettes ---
@@ -178,6 +192,21 @@ Item {
             color: Theme.textDimmed
             font.pixelSize: 10
             font.family: "Arial"
+        }
+    }
+    MouseArea {
+        z: 100
+
+        x: gaugeRoot.startXG
+        y: gaugeRoot.yPos - 50
+        width: (gaugeRoot.endXG - gaugeRoot.startXG) + 100
+        height: 80
+
+        cursorShape: Qt.PointingHandCursor
+
+        onClicked: {
+            gaugeRoot.referenceMode = gaugeRoot.referenceMode === "trip_b" ? "session" : "trip_b"
+            console.log("Mode changé vers : " + gaugeRoot.referenceMode)
         }
     }
 }
