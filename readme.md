@@ -90,6 +90,56 @@ python3 -u main.py --ui gui --mock --allow-unsupported-pyside
 - sauvegardes dashboard: `data/dash_save/*.json`
 - exports trajets: `data/trips*/trip_*.json`
 
+## Export USB (mode autonome)
+
+Le service `Export` scanne périodiquement les périphériques montés et déclenche un export quand il trouve un fichier `clos_export.json` à la racine de la clé USB.
+
+### 1) Préparer la clé USB
+
+1. Brancher la clé USB.
+2. Créer un fichier `clos_export.json` à la racine de la clé.
+3. Mettre un contenu JSON valide, par exemple:
+
+```json
+{
+  "target_folder": "ClOS_Exports"
+}
+```
+
+`target_folder` est optionnel (défaut: `ClOS_Exports`).
+
+### 2) Ce qui est exporté
+
+- Le service parcourt le `data_dir` configuré côté backend.
+- Seuls les fichiers `.json` sont copiés.
+- La copie est atomique (`.tmp` puis renommage) pour éviter les fichiers partiels.
+- Si l'option `delete_after` est activée dans l'UI, la source locale est supprimée après copie.
+
+### 3) Politique de ré-export
+
+- Par défaut: export uniquement si le fichier a changé (signature `nom|taille|mtime_ns`).
+- Action manuelle possible dans la page Services: bouton `Ré-exporter tout` (paramètre `reexport_all`).
+
+### 4) Historique d'export (important)
+
+Deux historiques sont conservés:
+
+- Historique local (persisté dans le save profil):
+  - clé: `services.Export.history_v2`
+  - emplacement physique: `data/dash_save/*.json` (profil actif)
+- Historique sur clé USB:
+  - fichier: `.clios_export_history.json`
+  - emplacement: `<target_folder>/.clios_export_history.json`
+
+Ces historiques évitent les doublons et permettent de reprendre proprement les exports.
+
+### 5) Dépannage rapide
+
+- Vérifier que `clos_export.json` est bien à la racine de la clé (pas dans un sous-dossier).
+- Vérifier que le JSON est valide.
+- Vérifier que le service `Export` est activé dans la page Services.
+- Vérifier les logs dans `data/logs/clios.log.jsonl`.
+
 ## Notes de déploiement Raspberry Pi
 
 - utiliser des versions PySide6 homogènes (`PySide6`, `PySide6-Addons`, `PySide6-Essentials`, `shiboken6`)
