@@ -3,6 +3,7 @@ import threading
 import time
 from collections import defaultdict
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class GearCalibrationService(BaseService):
@@ -36,7 +37,7 @@ class GearCalibrationService(BaseService):
             "calibration_target_gears": self._target_gear_count(),
         })
 
-        self.register_param("calib_toggle", "Mode Étalonnage", "toggle", False, persistent=False)
+        self.register_param("calib_toggle", "Mode Étalonnage", ServiceParamType.TOGGLE, False, persistent=False)
 
     def on_param_changed(self, key: str, value):
         if key == "calib_toggle":

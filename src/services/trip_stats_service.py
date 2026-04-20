@@ -3,6 +3,7 @@ import threading
 from collections import deque
 
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class TripStatsService(BaseService):
@@ -22,9 +23,9 @@ class TripStatsService(BaseService):
         default_rev_interval = revision_config.get("interval_km", 20000)
         default_rev_warning = revision_config.get("warning_threshold_km", 2000)
 
-        self.register_param("revision_interval", "Intervalle Révision (km)", "slider", default_rev_interval,
+        self.register_param("revision_interval", "Intervalle Révision (km)", ServiceParamType.SLIDER, default_rev_interval,
                             min_val=5000.0, max_val=50000.0)
-        self.register_param("revision_warning", "Alerte Révision (km)", "slider", default_rev_warning, min_val=500.0,
+        self.register_param("revision_warning", "Alerte Révision (km)", ServiceParamType.SLIDER, default_rev_warning, min_val=500.0,
                             max_val=10000.0)
 
         # Charge l'état persistant.

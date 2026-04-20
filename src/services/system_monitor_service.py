@@ -3,6 +3,7 @@ import threading
 import os
 import psutil
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class SystemMonitorService(BaseService):
@@ -17,10 +18,13 @@ class SystemMonitorService(BaseService):
         self.last_time = time.time()
         self.num_cores = psutil.cpu_count() or 1
 
-        self.register_param("refresh_rate", "Rafraîchissement (s)", "slider", 1.0, min_val=0.5, max_val=10.0)
-        self.register_param("cpu_alert", "Alerte CPU (%)", "slider", 80.0, min_val=20.0, max_val=100.0)
-        self.register_param("ram_alert", "Alerte RAM (MB)", "slider", 500.0, min_val=100.0, max_val=2000.0)
-        self.register_param("console_debug", "Afficher Logs Console", "toggle", False)
+        self.register_param("refresh_rate", "Rafraîchissement (s)", ServiceParamType.SLIDER, 1.0,
+                            min_val=0.5, max_val=10.0)
+        self.register_param("cpu_alert", "Alerte CPU (%)", ServiceParamType.SLIDER, 80.0,
+                            min_val=20.0, max_val=100.0)
+        self.register_param("ram_alert", "Alerte RAM (MB)", ServiceParamType.SLIDER, 500.0,
+                            min_val=100.0, max_val=2000.0)
+        self.register_param("console_debug", "Afficher Logs Console", ServiceParamType.TOGGLE, False)
 
     def start(self, stop_event):
         """Lance la boucle de surveillance dans un thread dédié."""

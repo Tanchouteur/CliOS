@@ -3,8 +3,8 @@ import time
 import threading
 import platform
 
-from src import orchestrator
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class PowerManagementService(BaseService):
@@ -15,7 +15,8 @@ class PowerManagementService(BaseService):
         self.orchestrator = orchestrator
         self.has_been_started = False
 
-        self.register_param("shutdown_delay", "Délai avant extinction (s)", "slider", 10.0, min_val=0.0, max_val=60.0)
+        self.register_param("shutdown_delay", "Délai avant extinction (s)", ServiceParamType.SLIDER,
+                            10.0, min_val=0.0, max_val=60.0)
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
@@ -27,7 +28,7 @@ class PowerManagementService(BaseService):
         while not stop_event.is_set():
             # Lecture du snapshot API courant.
             safe_data = self.api.get_display_data()
-            ignition_on = safe_data.get("key_run", False)
+            ignition_on = safe_data.get("rpm", 0) > 400
             delay = self._params["shutdown_delay"]["value"]
 
             if ignition_on:

@@ -3,6 +3,7 @@ import threading
 import traceback
 
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 class NotificationService(BaseService):
     def __init__(self, bridge, storage=None):
@@ -15,10 +16,13 @@ class NotificationService(BaseService):
         }
         self._thread = None
 
-        self.register_param("enable_clutch_warn", "Alerte Embrayage", "toggle", True)
-        self.register_param("clutch_time_limit", "Temps Limite (s)", "slider", 5.0, min_val=2.0, max_val=15.0)
-        self.register_param("min_speed", "Vitesse Min. (km/h)", "slider", 15.0, min_val=0.0, max_val=50.0)
-        self.register_param("notif_duration", "Durée Affichage (ms)", "slider", 4000.0, min_val=1000.0, max_val=10000.0)
+        self.register_param("enable_clutch_warn", "Alerte Embrayage", ServiceParamType.TOGGLE, True)
+        self.register_param("clutch_time_limit", "Temps Limite (s)", ServiceParamType.SLIDER, 5.0,
+                            min_val=2.0, max_val=15.0)
+        self.register_param("min_speed", "Vitesse Min. (km/h)", ServiceParamType.SLIDER, 15.0,
+                            min_val=0.0, max_val=50.0)
+        self.register_param("notif_duration", "Durée Affichage (ms)", ServiceParamType.SLIDER, 4000.0,
+                            min_val=1000.0, max_val=10000.0)
 
     def start(self, stop_event):
         self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name)

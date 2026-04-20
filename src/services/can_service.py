@@ -3,6 +3,7 @@ import threading
 import time
 from src.parser import DbcParser
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 from src.signal_processor import SignalProcessor
 
 
@@ -34,7 +35,7 @@ class CanService(BaseService):
         if not available_interfaces:
             available_interfaces = ["can0", "Aucun réseau CAN détecté"]
 
-        self.register_param("can_interface", "Interface Réseau", "list", available_interfaces[0], persistent=True,
+        self.register_param("can_interface", "Interface Réseau", ServiceParamType.LIST, available_interfaces[0], persistent=True,
                             options=available_interfaces)
 
         # Applique l'interface sélectionnée au provider.

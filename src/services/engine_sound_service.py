@@ -4,6 +4,7 @@ import time
 from pyo import Server, SfPlayer, Mix, Biquad, Tone, Disto, SigTo, Sine, PinkNoise
 import sounddevice as sd
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class EngineSoundService(BaseService):
@@ -23,28 +24,28 @@ class EngineSoundService(BaseService):
             if folders:
                 available_models = folders
 
-        self.register_param("sound_model", "Modele de Son", "list", available_models[0], persistent=True,
+        self.register_param("sound_model", "Modele de Son", ServiceParamType.LIST, available_models[0], persistent=True,
                             options=available_models)
-        self.register_param("max_vol", "Volume Maximum (%)", "slider", 80.0, min_val=0.0, max_val=100.0)
-        self.register_param("idle_vol", "Volume au Ralenti (%)", "slider", 10.0, min_val=0.0, max_val=100.0)
-        self.register_param("master_gain", "Amplificateur Global (x)", "slider", 2.5, min_val=1.0, max_val=5.0)
-        self.register_param("bass_boost", "Boost Basses Naturelles (%)", "slider", 40.0, min_val=0.0, max_val=100.0)
+        self.register_param("max_vol", "Volume Maximum (%)", ServiceParamType.SLIDER, 80.0, min_val=0.0, max_val=100.0)
+        self.register_param("idle_vol", "Volume au Ralenti (%)", ServiceParamType.SLIDER, 10.0, min_val=0.0, max_val=100.0)
+        self.register_param("master_gain", "Amplificateur Global (x)", ServiceParamType.SLIDER, 2.5, min_val=1.0, max_val=5.0)
+        self.register_param("bass_boost", "Boost Basses Naturelles (%)", ServiceParamType.SLIDER, 40.0, min_val=0.0, max_val=100.0)
 
-        self.register_param("cabin_freq", "Filtre Habitacle (Hz)", "slider", 1500.0, min_val=300.0, max_val=8000.0)
-        self.register_param("rasp_vol", "Raclement V8 (Rasp) (%)", "slider", 50.0, min_val=0.0, max_val=100.0)
-        self.register_param("rasp_freq", "Frequence Rasp (Hz)", "slider", 400.0, min_val=100.0, max_val=1500.0)
+        self.register_param("cabin_freq", "Filtre Habitacle (Hz)", ServiceParamType.SLIDER, 1500.0, min_val=300.0, max_val=8000.0)
+        self.register_param("rasp_vol", "Raclement V8 (Rasp) (%)", ServiceParamType.SLIDER, 50.0, min_val=0.0, max_val=100.0)
+        self.register_param("rasp_freq", "Frequence Rasp (Hz)", ServiceParamType.SLIDER, 400.0, min_val=100.0, max_val=1500.0)
 
-        self.register_param("turbo_on", "Activer Turbo", "toggle", True)
-        self.register_param("turbo_vol", "Sifflement (Whine) (%)", "slider", 10.0, min_val=0.0, max_val=100.0)
-        self.register_param("wind_vol", "Aspiration (Whoosh) (%)", "slider", 70.0, min_val=0.0, max_val=100.0)
-        self.register_param("turbo_charge", "Temps Charge (s)", "slider", 0.6, min_val=0.1, max_val=2.0)
+        self.register_param("turbo_on", "Activer Turbo", ServiceParamType.TOGGLE, True)
+        self.register_param("turbo_vol", "Sifflement (Whine) (%)", ServiceParamType.SLIDER, 10.0, min_val=0.0, max_val=100.0)
+        self.register_param("wind_vol", "Aspiration (Whoosh) (%)", ServiceParamType.SLIDER, 70.0, min_val=0.0, max_val=100.0)
+        self.register_param("turbo_charge", "Temps Charge (s)", ServiceParamType.SLIDER, 0.6, min_val=0.1, max_val=2.0)
 
-        self.register_param("wg_active", "Activer Wastegate", "toggle", True)
-        self.register_param("wg_vol", "Volume Wastegate (%)", "slider", 40.0, min_val=0.0, max_val=100.0)
-        self.register_param("wg_duration", "Duree Pschhht (s)", "slider", 0.4, min_val=0.1, max_val=1.5)
+        self.register_param("wg_active", "Activer Wastegate", ServiceParamType.TOGGLE, True)
+        self.register_param("wg_vol", "Volume Wastegate (%)", ServiceParamType.SLIDER, 40.0, min_val=0.0, max_val=100.0)
+        self.register_param("wg_duration", "Duree Pschhht (s)", ServiceParamType.SLIDER, 0.4, min_val=0.1, max_val=1.5)
 
-        self.register_param("turbo_decay_wg", "Decharge avec WG (s)", "slider", 0.08, min_val=0.01, max_val=0.3)
-        self.register_param("turbo_decay_slow", "Decharge sans WG (s)", "slider", 0.8, min_val=0.3, max_val=3.0)
+        self.register_param("turbo_decay_wg", "Decharge avec WG (s)", ServiceParamType.SLIDER, 0.08, min_val=0.01, max_val=0.3)
+        self.register_param("turbo_decay_slow", "Decharge sans WG (s)", ServiceParamType.SLIDER, 0.8, min_val=0.3, max_val=3.0)
 
         self.player_idle = None
         self.player_mid = None

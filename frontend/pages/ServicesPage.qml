@@ -247,7 +247,6 @@ Item {
                                     radius: 8
                                     border.color: parent.hovered ? T.Theme.main : "#444444"
                                     border.width: parent.hovered ? 2 : 1
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
                                 }
 
                                 contentItem: Text {
@@ -259,9 +258,34 @@ Item {
                                 }
                             }
 
+                            // Paramètre de type action (bouton one-shot).
+                            Rectangle {
+                                visible: param.type === "button"
+                                Layout.preferredWidth: 170
+                                Layout.preferredHeight: 34
+                                radius: 8
+                                color: buttonMouse.containsMouse ? T.Theme.mainLight : T.Theme.main
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: param.label
+                                    color: "white"
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: buttonMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: bridge.setServiceParameter(serviceCard.serviceId, param.key, true)
+                                }
+                            }
+
                             // Espaceur pour conserver l'alignement des lignes.
                             Item {
-                                visible: param.type !== "slider"
+                                visible: param.type !== "slider" && param.type !== "button"
                                 Layout.fillWidth: true
                             }
                         }
