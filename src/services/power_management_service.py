@@ -4,6 +4,7 @@ import threading
 import platform
 
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class PowerManagementService(BaseService):
@@ -14,7 +15,8 @@ class PowerManagementService(BaseService):
         self.orchestrator = orchestrator
         self.has_been_started = False
 
-        self.register_param("shutdown_delay", "Délai avant extinction (s)", "slider", 10.0, min_val=0.0, max_val=60.0)
+        self.register_param("shutdown_delay", "Délai avant extinction (s)", ServiceParamType.SLIDER,
+                            10.0, min_val=0.0, max_val=60.0)
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)

@@ -4,6 +4,7 @@ from bleak import BleakClient
 from bleak.exc import BleakError
 
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 MAC_DASHBOARD = "A060C742-6A5E-53EB-4196-099CF978EB2E"
 MAC_FOOTWELL = "1ED496B4-A08D-40AD-5D1F-01C1DEC86072"
@@ -22,9 +23,10 @@ class BleLedController(BaseService):
         self._clients = {}
 
         # Paramètres runtime exposés à l'interface.
-        self.register_param("dash_on", "Activer Dashboard", "toggle", True)
-        self.register_param("foot_on", "Activer Plancher", "toggle", True)
-        self.register_param("brightness", "Luminosité (%)", "slider", 100.0, min_val=0.0, max_val=100.0)
+        self.register_param("dash_on", "Activer Dashboard", ServiceParamType.TOGGLE, True)
+        self.register_param("foot_on", "Activer Plancher", ServiceParamType.TOGGLE, True)
+        self.register_param("brightness", "Luminosité (%)", ServiceParamType.SLIDER,
+                            100.0, min_val=0.0, max_val=100.0)
 
     def start(self, stop_event=None):
         if self._running:

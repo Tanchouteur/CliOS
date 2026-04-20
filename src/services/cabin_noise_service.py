@@ -3,6 +3,7 @@ import threading
 import numpy as np
 import sounddevice as sd
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class CabinNoiseService(BaseService):
@@ -22,9 +23,12 @@ class CabinNoiseService(BaseService):
         })
 
         # Paramètres de calibration audio.
-        self.register_param("calib_offset", "Calibration Micro (dB)", "slider", 87.0, min_val=50.0, max_val=120.0)
-        self.register_param("fft_threshold", "Seuil de Silence (dB)", "slider", 40.0, min_val=20.0, max_val=80.0)
-        self.register_param("fft_rate", "Rafraîchissement FFT (s)", "slider", 0.25, min_val=0.05, max_val=1.0)
+        self.register_param("calib_offset", "Calibration Micro (dB)", ServiceParamType.SLIDER, 87.0,
+                            min_val=50.0, max_val=120.0)
+        self.register_param("fft_threshold", "Seuil de Silence (dB)", ServiceParamType.SLIDER, 40.0,
+                            min_val=20.0, max_val=80.0)
+        self.register_param("fft_rate", "Rafraîchissement FFT (s)", ServiceParamType.SLIDER, 0.25,
+                            min_val=0.05, max_val=1.0)
 
     def start(self, stop_event):
         super().start(stop_event, implemented=True)

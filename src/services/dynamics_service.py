@@ -1,5 +1,6 @@
 import threading
 from src.services.base_service import BaseService
+from src.services.param_types import ServiceParamType
 
 
 class DynamicsService(BaseService):
@@ -29,9 +30,12 @@ class DynamicsService(BaseService):
             "dynamic_warning": "OK"
         })
 
-        self.register_param("min_speed", "Vitesse Min (km/h)", "slider", 5.0, min_val=1.0, max_val=30.0)
-        self.register_param("slip_margin", "Tolérance Patinage (%)", "slider", 15.0, min_val=5.0, max_val=50.0)
-        self.register_param("lock_margin", "Seuil de Blocage (%)", "slider", 30.0, min_val=5.0, max_val=80.0)
+        self.register_param("min_speed", "Vitesse Min (km/h)", ServiceParamType.SLIDER, 5.0,
+                            min_val=1.0, max_val=30.0)
+        self.register_param("slip_margin", "Tolérance Patinage (%)", ServiceParamType.SLIDER, 15.0,
+                            min_val=5.0, max_val=50.0)
+        self.register_param("lock_margin", "Seuil de Blocage (%)", ServiceParamType.SLIDER, 30.0,
+                            min_val=5.0, max_val=80.0)
 
     def reload_config(self, new_config: dict):
         """Met à jour les rapports en RAM après un étalonnage."""
