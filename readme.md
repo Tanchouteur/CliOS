@@ -154,4 +154,4 @@ Ces historiques évitent les doublons et permettent de reprendre proprement les 
 
 ## Licence
 
-Projet distribué sous licence GPLv3 (voir `LICENSE`).
+Projet distribué sous licence GPLv3 (voir [`LICENSE`](./LISCENCE).
