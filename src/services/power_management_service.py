@@ -26,7 +26,15 @@ class PowerManagementService(BaseService):
         self.set_ok("Surveillance alim : En attente du contact")
 
         while not stop_event.is_set():
-            # Lecture du snapshot API courant.
+            system_health = self.orchestrator.get_system_health()
+            can_status = system_health.get("CAN_Moteur", {}).get("status")
+
+            if can_status != "OK":
+                self.set_warning(f"Suspendu : Attente du réseau CAN (Statut: {can_status})")
+                self.off_timer = None
+                stop_event.wait(1.0)
+                continue
+
             safe_data = self.api.get_display_data()
             ignition_on = safe_data.get("rpm", 0) > 400
             delay = self._params["shutdown_delay"]["value"]
