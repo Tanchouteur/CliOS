@@ -156,6 +156,12 @@ class DashboardBridge(QObject):
         if self.stats_service:
             self.stats_service.reset_trip_b()
 
+    @Slot(float)
+    def updateTripBFuel(self, new_fuel: float):
+        if self.stats_service:
+            self.stats_service.set_trip_b_fuel(new_fuel)
+            self.logger.info(f"Carburant Trip B mis a jour: {new_fuel}", extra={"error_code": "FUEL_TRIP_B_UPDATE"})
+
     @Slot(str, str)
     def save_setting(self, key_path, value):
         if key_path == "theme.main" and self.led_service:
