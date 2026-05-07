@@ -61,7 +61,7 @@ class TripStatsService(BaseService):
             "session_cost": 0.0,
             "fuel_price": self.fuel_price,
             "avg_rpm": 0, "coasting_km": 0.0, "aggressivity_pct": 0.0, "shift_time_sec": 0.0,
-
+            "trip_b_fuel": round(self.fuel_b_accumulated, 2),
             # Valeurs persistantes et longue durée
             "trip_a": init_trip_a, "trip_b": init_trip_b,
             "inst_cons": 0.0, "avg_cons_b": init_avg_cons,
@@ -126,6 +126,16 @@ class TripStatsService(BaseService):
         with self._stats_lock:
             self._stats["trip_b"] = 0.0
             self._stats["avg_cons_b"] = 0.0
+
+    def set_trip_b_fuel(self, new_fuel: float):
+        self.fuel_b_accumulated = max(0.0, new_fuel)
+        if self.storage:
+            self.storage.set("trips.b.fuel", self.fuel_b_accumulated)
+        with self._stats_lock:
+            self._stats["trip_b_fuel"] = round(self.fuel_b_accumulated, 2)
+            trip_b_dist = self._stats.get("trip_b", 0.0)
+            self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
+                                              1) if trip_b_dist > 0.05 else 0.0
 
     def reset_maintenance(self):
         current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
@@ -298,6 +308,8 @@ class TripStatsService(BaseService):
                     if delta > 0:
                         self.fuel_b_accumulated += delta
                 self.last_fuel_avg = perfect_fuel
+
+            self._stats["trip_b_fuel"] = round(self.fuel_b_accumulated, 2)
 
             self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                               1) if trip_b_dist > 0.05 else 0.0

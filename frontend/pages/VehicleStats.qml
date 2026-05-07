@@ -6,40 +6,28 @@ import "../style" as T
 Item {
     id: statsPage
 
-    // --- VARIABLES DE PRIX ---
     property real fuelPrice: 1.85
+    property real fuelUsedB: 0.0
 
-    // Récupération de la valeur du backend au chargement de la page
     Component.onCompleted: {
-        if (bridge.stats && bridge.stats.fuel_price !== undefined) {
-            statsPage.fuelPrice = bridge.stats.fuel_price
+        if (bridge.stats) {
+            if (bridge.stats.fuel_price !== undefined) statsPage.fuelPrice = bridge.stats.fuel_price
+            if (bridge.stats.trip_b_fuel !== undefined) statsPage.fuelUsedB = bridge.stats.trip_b_fuel
         }
     }
 
-    // ----------------------------------------------------
-    // 1. HEADER STRICTEMENT ANCRÉ EN HAUT
-    // ----------------------------------------------------
     Item {
         id: header
         anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-            topMargin: 20
-            leftMargin: 30
-            rightMargin: 30
+            top: parent.top; left: parent.left; right: parent.right
+            topMargin: 20; leftMargin: 30; rightMargin: 30
         }
         height: 50
 
-        // Bouton Retour (Gauche)
         MouseArea {
             id: backBtn
             width: 150
-            anchors {
-                left: parent.left
-                top: parent.top
-                bottom: parent.bottom
-            }
+            anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
             cursorShape: Qt.PointingHandCursor
             onClicked: statsPage.StackView.view.pop()
 
@@ -49,47 +37,35 @@ Item {
                 Text {
                     text: "〈 "
                     color: backBtn.pressed ? T.Theme.unselected : T.Theme.textMain
-                    font.pixelSize: 26
-                    font.bold: true
+                    font.pixelSize: 26; font.bold: true
                     transform: Translate { x: backBtn.containsMouse ? -4 : 0 }
                     Behavior on transform { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
                 }
                 Text {
                     text: "Retour"
                     color: backBtn.pressed ? T.Theme.unselected : T.Theme.textMain
-                    font.pixelSize: 20
-                    font.bold: true
+                    font.pixelSize: 20; font.bold: true
                 }
             }
         }
 
-        // Titre (Centre)
         Text {
             anchors.centerIn: parent
             text: "COÛTS & STATISTIQUES"
             color: T.Theme.textMain
-            font.pixelSize: 22
-            font.bold: true
-            font.letterSpacing: 2
+            font.pixelSize: 22; font.bold: true; font.letterSpacing: 2
         }
     }
 
-    // ----------------------------------------------------
-    // 2. ZONE DES CARTES
-    // ----------------------------------------------------
     Row {
         id: cardContainer
         anchors {
-            top: header.bottom
-            bottom: parent.bottom
-            left: parent.left
-            right: parent.right
-            margins: 30
-            topMargin: 20
+            top: header.bottom; bottom: parent.bottom
+            left: parent.left; right: parent.right
+            margins: 30; topMargin: 20
         }
         spacing: 30
 
-        // --- CARTE GAUCHE : CARBURANT ---
         Rectangle {
             width: (cardContainer.width - cardContainer.spacing) / 2
             height: parent.height
@@ -99,101 +75,176 @@ Item {
 
             Column {
                 anchors.centerIn: parent
-                spacing: 40
+                spacing: 35
 
                 Column {
-                    spacing: 8
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    Text {
-                        text: "COÛT DU CARBURANT"
-                        color: T.Theme.textMain
-                        font.pixelSize: 16
-                        font.bold: true
-                        anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                    Text {
-                        text: "Utilisé pour les statistiques de trajet"
-                        color: T.Theme.unselected
-                        font.pixelSize: 13
-                        anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                }
-
-                // --- SÉLECTEUR TACTILE (+ / -) ---
-                Row {
-                    spacing: 15
+                    spacing: 20
                     anchors.horizontalCenter: parent.horizontalCenter
 
-                    // Bouton Moins
-                    Rectangle {
-                        width: 65; height: 65; radius: 12
-                        color: minusArea.pressed ? T.Theme.main : T.Theme.bgMain
-                        border.color: Qt.rgba(1, 1, 1, 0.1)
+                    Column {
+                        spacing: 8
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        Text { text: "COÛT DU CARBURANT"; color: T.Theme.textMain; font.pixelSize: 16; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                        Text { text: "Utilisé pour les statistiques de trajet"; color: T.Theme.unselected; font.pixelSize: 13; anchors.horizontalCenter: parent.horizontalCenter }
+                    }
 
-                        Text {
-                            anchors.centerIn: parent; text: "−"
-                            color: minusArea.pressed ? T.Theme.bgMain : T.Theme.textMain
-                            font.pixelSize: 32; font.bold: true
-                        }
+                    Row {
+                        spacing: 15
+                        anchors.horizontalCenter: parent.horizontalCenter
 
-                        MouseArea {
-                            id: minusArea
-                            anchors.fill: parent
-                            onClicked: {
-                                // Arrondi mathématique pour éviter les bugs de flottants en JS
-                                statsPage.fuelPrice = Math.max(0.0, Math.round((statsPage.fuelPrice - 0.01) * 100) / 100)
-                                bridge.updateFuelPrice(statsPage.fuelPrice)
+                        Rectangle {
+                            width: 65; height: 65; radius: 12
+                            color: minusArea.pressed ? T.Theme.main : T.Theme.bgMain
+                            border.color: Qt.rgba(1, 1, 1, 0.1)
+
+                            Text {
+                                anchors.centerIn: parent; text: "−"
+                                color: minusArea.pressed ? T.Theme.bgMain : T.Theme.textMain
+                                font.pixelSize: 32; font.bold: true
                             }
 
-                            Timer {
-                                interval: 100; running: minusArea.pressed; repeat: true
-                                onTriggered: {
+                            MouseArea {
+                                id: minusArea
+                                anchors.fill: parent
+                                onClicked: {
                                     statsPage.fuelPrice = Math.max(0.0, Math.round((statsPage.fuelPrice - 0.01) * 100) / 100)
                                     bridge.updateFuelPrice(statsPage.fuelPrice)
+                                }
+                                Timer {
+                                    interval: 100; running: minusArea.pressed; repeat: true
+                                    onTriggered: {
+                                        statsPage.fuelPrice = Math.max(0.0, Math.round((statsPage.fuelPrice - 0.01) * 100) / 100)
+                                        bridge.updateFuelPrice(statsPage.fuelPrice)
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: 140; height: 65; radius: 12
+                            color: "transparent"
+                            Text {
+                                anchors.centerIn: parent
+                                text: statsPage.fuelPrice.toFixed(2) + " €/L"
+                                color: T.Theme.main
+                                font.pixelSize: 30; font.bold: true
+                            }
+                        }
+
+                        Rectangle {
+                            width: 65; height: 65; radius: 12
+                            color: plusArea.pressed ? T.Theme.main : T.Theme.bgMain
+                            border.color: Qt.rgba(1, 1, 1, 0.1)
+
+                            Text {
+                                anchors.centerIn: parent; text: "+"
+                                color: plusArea.pressed ? T.Theme.bgMain : T.Theme.textMain
+                                font.pixelSize: 32; font.bold: true
+                            }
+
+                            MouseArea {
+                                id: plusArea
+                                anchors.fill: parent
+                                onClicked: {
+                                    statsPage.fuelPrice = Math.round((statsPage.fuelPrice + 0.01) * 100) / 100
+                                    bridge.updateFuelPrice(statsPage.fuelPrice)
+                                }
+                                Timer {
+                                    interval: 100; running: plusArea.pressed; repeat: true
+                                    onTriggered: {
+                                        statsPage.fuelPrice = Math.round((statsPage.fuelPrice + 0.01) * 100) / 100
+                                        bridge.updateFuelPrice(statsPage.fuelPrice)
+                                    }
                                 }
                             }
                         }
                     }
+                }
 
-                    // Afficheur
-                    Rectangle {
-                        width: 140; height: 65; radius: 12
-                        color: "transparent"
+                Rectangle {
+                    width: parent.width * 0.7; height: 1
+                    color: Qt.rgba(1, 1, 1, 0.1)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: statsPage.fuelPrice.toFixed(2) + " €/L"
-                            color: T.Theme.main
-                            font.pixelSize: 30
-                            font.bold: true
-                        }
+                Column {
+                    spacing: 20
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    Column {
+                        spacing: 8
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        Text { text: "CARBURANT CONSOMMÉ (TRIP B)"; color: T.Theme.textMain; font.pixelSize: 16; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                        Text { text: "Ajustement manuel (Litres)"; color: T.Theme.unselected; font.pixelSize: 13; anchors.horizontalCenter: parent.horizontalCenter }
                     }
 
-                    // Bouton Plus
-                    Rectangle {
-                        width: 65; height: 65; radius: 12
-                        color: plusArea.pressed ? T.Theme.main : T.Theme.bgMain
-                        border.color: Qt.rgba(1, 1, 1, 0.1)
+                    Row {
+                        spacing: 15
+                        anchors.horizontalCenter: parent.horizontalCenter
 
-                        Text {
-                            anchors.centerIn: parent; text: "+"
-                            color: plusArea.pressed ? T.Theme.bgMain : T.Theme.textMain
-                            font.pixelSize: 32; font.bold: true
-                        }
+                        Rectangle {
+                            width: 65; height: 65; radius: 12
+                            color: minusAreaFuel.pressed ? T.Theme.main : T.Theme.bgMain
+                            border.color: Qt.rgba(1, 1, 1, 0.1)
 
-                        MouseArea {
-                            id: plusArea
-                            anchors.fill: parent
-                            onClicked: {
-                                statsPage.fuelPrice = Math.round((statsPage.fuelPrice + 0.01) * 100) / 100
-                                bridge.updateFuelPrice(statsPage.fuelPrice)
+                            Text {
+                                anchors.centerIn: parent; text: "−"
+                                color: minusAreaFuel.pressed ? T.Theme.bgMain : T.Theme.textMain
+                                font.pixelSize: 32; font.bold: true
                             }
 
-                            Timer {
-                                interval: 100; running: plusArea.pressed; repeat: true
-                                onTriggered: {
-                                    statsPage.fuelPrice = Math.round((statsPage.fuelPrice + 0.01) * 100) / 100
-                                    bridge.updateFuelPrice(statsPage.fuelPrice)
+                            MouseArea {
+                                id: minusAreaFuel
+                                anchors.fill: parent
+                                onClicked: {
+                                    statsPage.fuelUsedB = Math.max(0.0, Math.round((statsPage.fuelUsedB - 0.1) * 10) / 10)
+                                    bridge.updateTripBFuel(statsPage.fuelUsedB)
+                                }
+                                Timer {
+                                    interval: 100; running: minusAreaFuel.pressed; repeat: true
+                                    onTriggered: {
+                                        statsPage.fuelUsedB = Math.max(0.0, Math.round((statsPage.fuelUsedB - 0.1) * 10) / 10)
+                                        bridge.updateTripBFuel(statsPage.fuelUsedB)
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: 140; height: 65; radius: 12
+                            color: "transparent"
+                            Text {
+                                anchors.centerIn: parent
+                                text: statsPage.fuelUsedB.toFixed(1) + " L"
+                                color: T.Theme.main
+                                font.pixelSize: 30; font.bold: true
+                            }
+                        }
+
+                        Rectangle {
+                            width: 65; height: 65; radius: 12
+                            color: plusAreaFuel.pressed ? T.Theme.main : T.Theme.bgMain
+                            border.color: Qt.rgba(1, 1, 1, 0.1)
+
+                            Text {
+                                anchors.centerIn: parent; text: "+"
+                                color: plusAreaFuel.pressed ? T.Theme.bgMain : T.Theme.textMain
+                                font.pixelSize: 32; font.bold: true
+                            }
+
+                            MouseArea {
+                                id: plusAreaFuel
+                                anchors.fill: parent
+                                onClicked: {
+                                    statsPage.fuelUsedB = Math.round((statsPage.fuelUsedB + 0.1) * 10) / 10
+                                    bridge.updateTripBFuel(statsPage.fuelUsedB)
+                                }
+                                Timer {
+                                    interval: 100; running: plusAreaFuel.pressed; repeat: true
+                                    onTriggered: {
+                                        statsPage.fuelUsedB = Math.round((statsPage.fuelUsedB + 0.1) * 10) / 10
+                                        bridge.updateTripBFuel(statsPage.fuelUsedB)
+                                    }
                                 }
                             }
                         }
@@ -202,7 +253,6 @@ Item {
             }
         }
 
-        // --- CARTE DROITE : DIAGNOSTIC / MAINTENANCE ---
         Rectangle {
             width: (cardContainer.width - cardContainer.spacing) / 2
             height: parent.height
@@ -218,8 +268,7 @@ Item {
                 Text {
                     text: "MAINTENANCE"
                     color: T.Theme.textMain
-                    font.pixelSize: 16
-                    font.bold: true
+                    font.pixelSize: 16; font.bold: true
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
 

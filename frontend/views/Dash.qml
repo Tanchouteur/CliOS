@@ -250,11 +250,17 @@ Item {
             text: "→ " + bottomBar.autonomy.toFixed(0) + " km"
             color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
         }
+
         Text {
             id: avgB
             anchors.left : autonomyText.right; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter
             text: bridge.stats !== undefined && bridge.stats.avg_cons_b !== undefined ? "Avg " + bridge.stats.avg_cons_b.toFixed(1) : "0.0"
             color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
+
+            MouseArea {
+                anchors.fill: parent
+                onPressAndHold: bridge.resetTripB()
+            }
         }
 
         // --- CONTENEUR DES INFOS TRAJET & SERVICE ---
