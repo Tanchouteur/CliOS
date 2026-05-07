@@ -18,6 +18,9 @@ class PowerManagementService(BaseService):
         self.register_param("shutdown_delay", "Délai avant extinction (s)", ServiceParamType.SLIDER,
                             10.0, min_val=0.0, max_val=60.0)
 
+        # Parametre definissant le declencheur d'extinction
+        self.register_param("wait_key_removal", "Attendre retrait clé", "toggle", False)
+
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
         threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
@@ -36,16 +39,26 @@ class PowerManagementService(BaseService):
                 continue
 
             safe_data = self.api.get_display_data()
-            ignition_on = safe_data.get("rpm", 0) > 400
             delay = self._params["shutdown_delay"]["value"]
+            wait_for_key = self._params["wait_key_removal"]["value"]
 
-            if ignition_on:
+            # Extraction des donnees CAN pertinentes
+            is_engine_running = safe_data.get("rpm", 0) > 400
+            is_key_acc = bool(safe_data.get("key_acc", False))
+
+            # Definition de l'etat d'activite selon le mode choisi
+            if wait_for_key:
+                vehicle_active = is_engine_running or is_key_acc
+            else:
+                vehicle_active = is_engine_running
+
+            if vehicle_active:
                 self.has_been_started = True
                 if self.off_timer is not None:
                     self.off_timer = None
-                self.set_ok("Surveillance alim : Moteur allumé")
+                self.set_ok("Surveillance alim : Véhicule actif")
 
-            elif self.has_been_started and not ignition_on:
+            elif self.has_been_started and not vehicle_active:
                 if self.off_timer is None:
                     self.off_timer = time.time()
                 else:
