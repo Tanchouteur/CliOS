@@ -13,7 +13,7 @@ ApplicationWindow {
     height: 720
     title: "CliOS v" + version
 
-    visibility: "Maximized"
+    visibility: "FullScreen"
     flags: Qt.FramelessWindowHint | Qt.Window | Qt.MSWindowsFixedSizeDialogHint
 
     // Application de la couleur de fond via le Thème

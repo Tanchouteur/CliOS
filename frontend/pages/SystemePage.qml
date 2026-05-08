@@ -29,21 +29,17 @@ Item {
         stack.push(target)
     }
 
-    // Modèle des sous-options du menu Système
+    /* Definition des sous-menus */
     readonly property var menuItems: [
         { label: "Services", desc: "Activer ou désactiver les modules (Audio, Leds, etc.)", source: "ServicesPage.qml" },
         { label: "Informations", desc: "Version du logiciel, état CPU et RAM", source: "InfoPage.qml" },
         { label: "Journal", desc: "Consulter les logs d'erreurs du système", source: "ConsolePage.qml" }
     ]
 
-    // --- HEADER ---
     C.PageHeader {
         id: header
         title: "SYSTÈME"
-
-        onBackClicked: {
-            root.safePop()
-        }
+        onBackClicked: root.safePop()
     }
 
     ColumnLayout {
@@ -52,8 +48,7 @@ Item {
         spacing: 20
         anchors.topMargin: header.height + 50
 
-
-        // --- LISTE DES OPTIONS (Même D.A. que Settings) ---
+        /* --- LISTE DES OPTIONS --- */
         ListView {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -72,7 +67,6 @@ Item {
 
                 scale: tileMouse.pressed ? 0.98 : 1.0
                 Behavior on scale { NumberAnimation { duration: 100 } }
-                // Animation retirée: `Behavior on border.color` peut être instable selon le moteur QML.
 
                 RowLayout {
                     anchors.fill: parent
@@ -112,6 +106,31 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.safePush(modelData.source)
                 }
+            }
+        }
+
+        /* --- BOUTON D'EXTINCTION --- */
+        Rectangle {
+            Layout.fillWidth: true
+            height: 70
+            color: Qt.rgba(1.0, 0.0, 0.0, 0.1) /* Rouge translucide */
+            border.color: "#ff0000"
+            border.width: 1
+            radius: 12
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 15
+                Text { text: "⏻"; color: "#ff0000"; font.pixelSize: 24 }
+                Text { text: "Éteindre le système"; color: "#ff0000"; font.pixelSize: 18; font.bold: true }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: bridge.shutdownSystem()
+                onPressed: parent.opacity = 0.5
+                onReleased: parent.opacity = 1.0
             }
         }
     }

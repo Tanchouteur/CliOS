@@ -331,3 +331,33 @@ class DashboardBridge(QObject):
     def endTripSession(self):
         if self.session_manager:
             self.session_manager.end_trip()
+
+
+    # Pas super propre. A re faire
+    @Slot()
+    def shutdownSystem(self):
+        self.logger.warning("Demande d'extinction manuelle depuis l'interface",
+                            extra={"error_code": "APP_MANUAL_SHUTDOWN"})
+        self.send_notification("WARNING", "Extinction en cours...", 3000)
+
+        def _do_shutdown():
+            import time
+            import platform
+            import os
+
+            # Pause pour permettre a l'UI d'afficher la notification
+            time.sleep(1.0)
+
+            # Declenche la methode stop() de chaque service actif (sauvegarde des BDD, fin des logs)
+            self.orchestrator.stop_all()
+            time.sleep(1.0)
+
+            if platform.system() in ["Darwin", "Windows"]:
+                self.logger.info("Extinction simulee (Environnement de developpement).",
+                                 extra={"error_code": "APP_SIMULATED_SHUTDOWN"})
+                os._exit(0)
+            else:
+                os.system("sudo poweroff")
+
+        # Execution dans un thread separe pour ne pas figer l'interface graphique
+        threading.Thread(target=_do_shutdown, daemon=True).start()
