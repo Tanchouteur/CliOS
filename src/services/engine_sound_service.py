@@ -24,28 +24,45 @@ class EngineSoundService(BaseService):
             if folders:
                 available_models = folders
 
+        # Generation dynamique de la liste des peripheriques audio
+        self.audio_devices = self._get_available_audio_devices()
+        default_dev = self.audio_devices[0] if self.audio_devices else "Default"
+
+        self.register_param("audio_device", "Sortie Audio", ServiceParamType.LIST, default_dev, persistent=True,
+                            options=self.audio_devices)
         self.register_param("sound_model", "Modele de Son", ServiceParamType.LIST, available_models[0], persistent=True,
                             options=available_models)
-        self.register_param("max_vol", "Volume Maximum (%)", ServiceParamType.SLIDER, 80.0, min_val=0.0, max_val=100.0)
-        self.register_param("idle_vol", "Volume au Ralenti (%)", ServiceParamType.SLIDER, 10.0, min_val=0.0, max_val=100.0)
-        self.register_param("master_gain", "Amplificateur Global (x)", ServiceParamType.SLIDER, 2.5, min_val=1.0, max_val=5.0)
-        self.register_param("bass_boost", "Boost Basses Naturelles (%)", ServiceParamType.SLIDER, 40.0, min_val=0.0, max_val=100.0)
 
-        self.register_param("cabin_freq", "Filtre Habitacle (Hz)", ServiceParamType.SLIDER, 1500.0, min_val=300.0, max_val=8000.0)
-        self.register_param("rasp_vol", "Raclement V8 (Rasp) (%)", ServiceParamType.SLIDER, 50.0, min_val=0.0, max_val=100.0)
-        self.register_param("rasp_freq", "Frequence Rasp (Hz)", ServiceParamType.SLIDER, 400.0, min_val=100.0, max_val=1500.0)
+        self.register_param("max_vol", "Volume Maximum (%)", ServiceParamType.SLIDER, 80.0, min_val=0.0, max_val=100.0)
+        self.register_param("idle_vol", "Volume au Ralenti (%)", ServiceParamType.SLIDER, 10.0, min_val=0.0,
+                            max_val=100.0)
+        self.register_param("master_gain", "Amplificateur Global (x)", ServiceParamType.SLIDER, 2.5, min_val=1.0,
+                            max_val=5.0)
+        self.register_param("bass_boost", "Boost Basses Naturelles (%)", ServiceParamType.SLIDER, 40.0, min_val=0.0,
+                            max_val=100.0)
+
+        self.register_param("cabin_freq", "Filtre Habitacle (Hz)", ServiceParamType.SLIDER, 1500.0, min_val=300.0,
+                            max_val=8000.0)
+        self.register_param("rasp_vol", "Raclement V8 (Rasp) (%)", ServiceParamType.SLIDER, 50.0, min_val=0.0,
+                            max_val=100.0)
+        self.register_param("rasp_freq", "Frequence Rasp (Hz)", ServiceParamType.SLIDER, 400.0, min_val=100.0,
+                            max_val=1500.0)
 
         self.register_param("turbo_on", "Activer Turbo", ServiceParamType.TOGGLE, True)
-        self.register_param("turbo_vol", "Sifflement (Whine) (%)", ServiceParamType.SLIDER, 10.0, min_val=0.0, max_val=100.0)
-        self.register_param("wind_vol", "Aspiration (Whoosh) (%)", ServiceParamType.SLIDER, 70.0, min_val=0.0, max_val=100.0)
+        self.register_param("turbo_vol", "Sifflement (Whine) (%)", ServiceParamType.SLIDER, 10.0, min_val=0.0,
+                            max_val=100.0)
+        self.register_param("wind_vol", "Aspiration (Whoosh) (%)", ServiceParamType.SLIDER, 70.0, min_val=0.0,
+                            max_val=100.0)
         self.register_param("turbo_charge", "Temps Charge (s)", ServiceParamType.SLIDER, 0.6, min_val=0.1, max_val=2.0)
 
         self.register_param("wg_active", "Activer Wastegate", ServiceParamType.TOGGLE, True)
         self.register_param("wg_vol", "Volume Wastegate (%)", ServiceParamType.SLIDER, 40.0, min_val=0.0, max_val=100.0)
         self.register_param("wg_duration", "Duree Pschhht (s)", ServiceParamType.SLIDER, 0.4, min_val=0.1, max_val=1.5)
 
-        self.register_param("turbo_decay_wg", "Decharge avec WG (s)", ServiceParamType.SLIDER, 0.08, min_val=0.01, max_val=0.3)
-        self.register_param("turbo_decay_slow", "Decharge sans WG (s)", ServiceParamType.SLIDER, 0.8, min_val=0.3, max_val=3.0)
+        self.register_param("turbo_decay_wg", "Decharge avec WG (s)", ServiceParamType.SLIDER, 0.08, min_val=0.01,
+                            max_val=0.3)
+        self.register_param("turbo_decay_slow", "Decharge sans WG (s)", ServiceParamType.SLIDER, 0.8, min_val=0.3,
+                            max_val=3.0)
 
         self.player_idle = None
         self.player_mid = None
@@ -56,34 +73,24 @@ class EngineSoundService(BaseService):
         self.last_boost_target = 0.0
         self.wg_timer = 0.0
 
-    def _has_audio_output(self) -> bool:
-        """Vérifie qu'une sortie audio exploitable est présente avant de démarrer pyo."""
+    def _get_available_audio_devices(self) -> list:
+        """Scan et retourne tous les peripheriques possedant des canaux de sortie."""
         try:
             devices = sd.query_devices()
-        except Exception:
-            return False
-
-        output_devices = [d for d in devices if d.get("max_output_channels", 0) > 0]
-        if not output_devices:
-            return False
-
-        try:
-            default_dev = sd.default.device
-            out_index = default_dev[1] if isinstance(default_dev, (list, tuple)) else default_dev
-            if isinstance(out_index, int) and out_index >= 0:
-                out_info = sd.query_devices(out_index)
-                if out_info.get("max_output_channels", 0) > 0:
-                    return True
-        except Exception:
-            pass
-
-        # Si le périphérique par défaut est invalide, autorise le démarrage
-        # dès qu'une sortie audio physique est détectée.
-        return True
+            valid_devices = []
+            for i, dev in enumerate(devices):
+                if dev.get("max_output_channels", 0) > 0:
+                    valid_devices.append(f"[{i}] {dev.get('name')}")
+            return valid_devices if valid_devices else ["Default"]
+        except Exception as e:
+            self.print_message(f"Erreur scan peripheriques audio : {e}")
+            return ["Default"]
 
     def on_param_changed(self, key: str, value):
         if key == "sound_model" and self.server:
             self._load_sound_model()
+        elif key == "audio_device":
+            self.set_warning("Redémarrez le service pour appliquer la nouvelle sortie audio.")
 
     def _load_sound_model(self):
         model_name = self._params["sound_model"]["value"]
@@ -130,12 +137,24 @@ class EngineSoundService(BaseService):
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
 
-        if not self._has_audio_output():
-            self.set_error("No audio output")
-            return
-
         try:
-            self.server = Server(duplex=0).boot()
+            self.server = Server(duplex=0)
+
+            # Application de la sortie audio si spécifiée
+            selected_dev = self._params.get("audio_device", {}).get("value", "Default")
+
+            # Fallback en cas d'ancienne valeur invalide dans le stockage
+            if selected_dev not in self.audio_devices:
+                selected_dev = self.audio_devices[0] if self.audio_devices else "Default"
+
+            if selected_dev != "Default" and selected_dev.startswith("["):
+                try:
+                    dev_index = int(selected_dev.split("]")[0][1:])
+                    self.server.setOutputDevice(dev_index)
+                except Exception as e:
+                    self.print_message(f"Echec affectation de l'index audio : {e}")
+
+            self.server.boot()
             self.server.start()
 
             self.pitch_idle = SigTo(value=1.0, time=0.05)
@@ -153,25 +172,21 @@ class EngineSoundService(BaseService):
 
             self.cabin_freq_ctrl = SigTo(value=1500.0, time=0.1)
 
-            # Chaîne de synthèse turbo/admission.
             self.turbo_freq_ctrl = SigTo(value=800.0, time=0.6)
             self.turbo_vol_ctrl = SigTo(value=0.0, time=0.6)
 
             self.turbo_whistle = Sine(freq=self.turbo_freq_ctrl, mul=self.turbo_vol_ctrl)
-            # Harmonique limitée pour conserver un timbre naturel.
             self.turbo_harmonic = Sine(freq=self.turbo_freq_ctrl * 1.5, mul=self.turbo_vol_ctrl * 0.1)
 
             self.wind_freq_ctrl = SigTo(value=300.0, time=0.6)
             self.wind_vol_ctrl = SigTo(value=0.0, time=0.6)
             self.spool_noise = PinkNoise()
 
-            # Filtre passe-bas avec résonance pour modeler l'admission.
             self.spool_filter = Biquad(self.spool_noise, freq=self.wind_freq_ctrl, q=1.2, type=0,
                                        mul=self.wind_vol_ctrl)
 
             self.wg_vol_ctrl = SigTo(value=0.0, time=0.05)
             self.wg_noise = PinkNoise()
-            # Décharge filtrée pour un rendu cockpit.
             self.wg_synth = Biquad(self.wg_noise, freq=1800.0, q=1.0, type=0, mul=self.wg_vol_ctrl)
 
             self.master_vol_ctrl = SigTo(value=0.0, time=0.1)
@@ -179,7 +194,7 @@ class EngineSoundService(BaseService):
             self._load_sound_model()
 
         except Exception as e:
-            self.set_error("No audio output")
+            self.set_error(f"Echec du backend audio: {e}")
             self.print_message(f"Audio backend init failed: {e}")
             self.server = None
             return
@@ -188,7 +203,7 @@ class EngineSoundService(BaseService):
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            if self.status.value == "OK":
+            if self.status.value == "OK" and self.server:
                 safe_data = self.api.get_display_data()
 
                 rpm = safe_data.get("rpm", 0.0)
@@ -282,11 +297,9 @@ class EngineSoundService(BaseService):
                             self.turbo_freq_ctrl.time = decay_slow
                             self.wind_freq_ctrl.time = decay_slow
 
-                    # Plafonne les fréquences pour éviter un rendu agressif en habitacle.
                     self.turbo_freq_ctrl.value = 800.0 + (boost_target * 2000.0)
                     self.wind_freq_ctrl.value = 300.0 + (boost_target * 1200.0)
 
-                    # Pondération des composantes whistle/whoosh.
                     self.turbo_vol_ctrl.value = boost_target * 0.03 * t_vol
                     self.wind_vol_ctrl.value = boost_target * 0.8 * w_vol
 
