@@ -335,29 +335,33 @@ class DashboardBridge(QObject):
 
     # Pas super propre. A re faire
     @Slot()
+    def quitApplication(self):
+        """Arrête proprement les services et ferme l'application."""
+        self.logger.info("Fermeture manuelle de l'application", extra={"error_code": "APP_QUIT"})
+        self.send_notification("INFO", "Fermeture de l'application...", 2000)
+        threading.Thread(target=self._handle_exit, args=(False,), daemon=True).start()
+
+    @Slot()
     def shutdownSystem(self):
-        self.logger.warning("Demande d'extinction manuelle depuis l'interface",
-                            extra={"error_code": "APP_MANUAL_SHUTDOWN"})
-        self.send_notification("WARNING", "Extinction en cours...", 3000)
+        """Arrête proprement les services et éteint le Raspberry Pi."""
+        self.logger.warning("Extinction système demandée", extra={"error_code": "SYS_SHUTDOWN"})
+        self.send_notification("WARNING", "Extinction du système...", 3000)
+        threading.Thread(target=self._handle_exit, args=(True,), daemon=True).start()
 
-        def _do_shutdown():
-            import time
-            import platform
-            import os
+    def _handle_exit(self, poweroff=False):
+        import time
+        import os
+        import platform
 
-            # Pause pour permettre a l'UI d'afficher la notification
-            time.sleep(1.0)
+        # Temps pour laisser l'UI afficher la notification
+        time.sleep(1.0)
 
-            # Declenche la methode stop() de chaque service actif (sauvegarde des BDD, fin des logs)
-            self.orchestrator.stop_all()
-            time.sleep(1.0)
+        # Arrêt de l'orchestrateur (déclenche le .stop() de chaque service pour sauvegarder)
+        self.orchestrator.stop_all()
+        time.sleep(0.8)
 
-            if platform.system() in ["Darwin", "Windows"]:
-                self.logger.info("Extinction simulee (Environnement de developpement).",
-                                 extra={"error_code": "APP_SIMULATED_SHUTDOWN"})
-                os._exit(0)
-            else:
-                os.system("sudo poweroff")
-
-        # Execution dans un thread separe pour ne pas figer l'interface graphique
-        threading.Thread(target=_do_shutdown, daemon=True).start()
+        if poweroff and platform.system() not in ["Darwin", "Windows"]:
+            os.system("sudo poweroff")
+        else:
+            # os._exit(0) est plus radical que quit() pour s'assurer que le thread principal s'arrête
+            os._exit(0)

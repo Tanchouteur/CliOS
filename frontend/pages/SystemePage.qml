@@ -109,28 +109,60 @@ Item {
             }
         }
 
-        /* --- BOUTON D'EXTINCTION --- */
-        Rectangle {
+        /* --- ZONE DES BOUTONS D'ACTION (BAS DE PAGE) --- */
+        RowLayout {
             Layout.fillWidth: true
-            height: 70
-            color: Qt.rgba(1.0, 0.0, 0.0, 0.1) /* Rouge translucide */
-            border.color: "#ff0000"
-            border.width: 1
-            radius: 12
+            height: 80
+            spacing: 20
 
-            Row {
-                anchors.centerIn: parent
-                spacing: 15
-                Text { text: "⏻"; color: "#ff0000"; font.pixelSize: 24 }
-                Text { text: "Éteindre le système"; color: "#ff0000"; font.pixelSize: 18; font.bold: true }
+            // BOUTON QUITTER (Orange)
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 70
+                color: Qt.rgba(1.0, 0.5, 0.0, 0.1) // Orange translucide
+                border.color: "#ff8c00"
+                border.width: 1
+                radius: 12
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 12
+                    Text { text: "󰈆"; color: "#ff8c00"; font.pixelSize: 24 } // Icône de sortie
+                    Text { text: "Quitter l'App"; color: "#ff8c00"; font.pixelSize: 17; font.bold: true }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: bridge.quitApplication()
+                    onPressed: parent.opacity = 0.5
+                    onReleased: parent.opacity = 1.0
+                }
             }
 
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: bridge.shutdownSystem()
-                onPressed: parent.opacity = 0.5
-                onReleased: parent.opacity = 1.0
+            // BOUTON ÉTEINDRE (Rouge)
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 70
+                color: Qt.rgba(1.0, 0.0, 0.0, 0.1) // Rouge translucide
+                border.color: "#ff0000"
+                border.width: 1
+                radius: 12
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 12
+                    Text { text: "⏻"; color: "#ff0000"; font.pixelSize: 24 }
+                    Text { text: "Éteindre"; color: "#ff0000"; font.pixelSize: 17; font.bold: true }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: bridge.shutdownSystem()
+                    onPressed: parent.opacity = 0.5
+                    onReleased: parent.opacity = 1.0
+                }
             }
         }
     }
