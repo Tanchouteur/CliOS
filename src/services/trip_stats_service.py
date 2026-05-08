@@ -137,6 +137,25 @@ class TripStatsService(BaseService):
             self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                               1) if trip_b_dist > 0.05 else 0.0
 
+    def set_trip_b_distance(self, new_distance: float):
+        """Force la distance du Trip B en recalibrant le marqueur d'odometre."""
+        current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
+        new_distance = max(0.0, new_distance)
+
+        # Le marqueur devient l'odometre actuel moins la distance souhaitee
+        self.trip_b_marker = current_odo - new_distance
+
+        if self.storage:
+            self.storage.set("trips.b.marker", self.trip_b_marker)
+
+        with self._stats_lock:
+            self._stats["trip_b"] = round(new_distance, 1)
+
+            # Mise a jour en temps reel de la moyenne de consommation
+            trip_b_dist = new_distance
+            self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
+                                              1) if trip_b_dist > 0.05 else 0.0
+
     def reset_maintenance(self):
         current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
         self.last_revision_odo = current_odo

@@ -8,11 +8,13 @@ Item {
 
     property real fuelPrice: 1.85
     property real fuelUsedB: 0.0
+    property real distanceB: 0.0
 
     Component.onCompleted: {
         if (bridge.stats) {
             if (bridge.stats.fuel_price !== undefined) statsPage.fuelPrice = bridge.stats.fuel_price
             if (bridge.stats.trip_b_fuel !== undefined) statsPage.fuelUsedB = bridge.stats.trip_b_fuel
+            if (bridge.stats.trip_b !== undefined) statsPage.distanceB = bridge.stats.trip_b
         }
     }
 
@@ -66,6 +68,7 @@ Item {
         }
         spacing: 30
 
+        /* CARTE GAUCHE : CARBURANT */
         Rectangle {
             width: (cardContainer.width - cardContainer.spacing) / 2
             height: parent.height
@@ -97,11 +100,7 @@ Item {
                             color: minusArea.pressed ? T.Theme.main : T.Theme.bgMain
                             border.color: Qt.rgba(1, 1, 1, 0.1)
 
-                            Text {
-                                anchors.centerIn: parent; text: "−"
-                                color: minusArea.pressed ? T.Theme.bgMain : T.Theme.textMain
-                                font.pixelSize: 32; font.bold: true
-                            }
+                            Text { anchors.centerIn: parent; text: "−"; color: minusArea.pressed ? T.Theme.bgMain : T.Theme.textMain; font.pixelSize: 32; font.bold: true }
 
                             MouseArea {
                                 id: minusArea
@@ -123,12 +122,7 @@ Item {
                         Rectangle {
                             width: 140; height: 65; radius: 12
                             color: "transparent"
-                            Text {
-                                anchors.centerIn: parent
-                                text: statsPage.fuelPrice.toFixed(2) + " €/L"
-                                color: T.Theme.main
-                                font.pixelSize: 30; font.bold: true
-                            }
+                            Text { anchors.centerIn: parent; text: statsPage.fuelPrice.toFixed(2) + " €/L"; color: T.Theme.main; font.pixelSize: 30; font.bold: true }
                         }
 
                         Rectangle {
@@ -136,11 +130,7 @@ Item {
                             color: plusArea.pressed ? T.Theme.main : T.Theme.bgMain
                             border.color: Qt.rgba(1, 1, 1, 0.1)
 
-                            Text {
-                                anchors.centerIn: parent; text: "+"
-                                color: plusArea.pressed ? T.Theme.bgMain : T.Theme.textMain
-                                font.pixelSize: 32; font.bold: true
-                            }
+                            Text { anchors.centerIn: parent; text: "+"; color: plusArea.pressed ? T.Theme.bgMain : T.Theme.textMain; font.pixelSize: 32; font.bold: true }
 
                             MouseArea {
                                 id: plusArea
@@ -187,11 +177,7 @@ Item {
                             color: minusAreaFuel.pressed ? T.Theme.main : T.Theme.bgMain
                             border.color: Qt.rgba(1, 1, 1, 0.1)
 
-                            Text {
-                                anchors.centerIn: parent; text: "−"
-                                color: minusAreaFuel.pressed ? T.Theme.bgMain : T.Theme.textMain
-                                font.pixelSize: 32; font.bold: true
-                            }
+                            Text { anchors.centerIn: parent; text: "−"; color: minusAreaFuel.pressed ? T.Theme.bgMain : T.Theme.textMain; font.pixelSize: 32; font.bold: true }
 
                             MouseArea {
                                 id: minusAreaFuel
@@ -213,12 +199,7 @@ Item {
                         Rectangle {
                             width: 140; height: 65; radius: 12
                             color: "transparent"
-                            Text {
-                                anchors.centerIn: parent
-                                text: statsPage.fuelUsedB.toFixed(1) + " L"
-                                color: T.Theme.main
-                                font.pixelSize: 30; font.bold: true
-                            }
+                            Text { anchors.centerIn: parent; text: statsPage.fuelUsedB.toFixed(1) + " L"; color: T.Theme.main; font.pixelSize: 30; font.bold: true }
                         }
 
                         Rectangle {
@@ -226,11 +207,7 @@ Item {
                             color: plusAreaFuel.pressed ? T.Theme.main : T.Theme.bgMain
                             border.color: Qt.rgba(1, 1, 1, 0.1)
 
-                            Text {
-                                anchors.centerIn: parent; text: "+"
-                                color: plusAreaFuel.pressed ? T.Theme.bgMain : T.Theme.textMain
-                                font.pixelSize: 32; font.bold: true
-                            }
+                            Text { anchors.centerIn: parent; text: "+"; color: plusAreaFuel.pressed ? T.Theme.bgMain : T.Theme.textMain; font.pixelSize: 32; font.bold: true }
 
                             MouseArea {
                                 id: plusAreaFuel
@@ -253,31 +230,101 @@ Item {
             }
         }
 
+        /* CARTE DROITE : DISTANCE ET MAINTENANCE */
         Rectangle {
             width: (cardContainer.width - cardContainer.spacing) / 2
             height: parent.height
             color: T.Theme.bgDimmed
             radius: 16
             border.color: Qt.rgba(1, 1, 1, 0.05)
-            opacity: 0.4
 
             Column {
                 anchors.centerIn: parent
-                spacing: 20
+                spacing: 35
 
-                Text {
-                    text: "MAINTENANCE"
-                    color: T.Theme.textMain
-                    font.pixelSize: 16; font.bold: true
+                Column {
+                    spacing: 20
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    Column {
+                        spacing: 8
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        Text { text: "DISTANCE PARCOURUE (TRIP B)"; color: T.Theme.textMain; font.pixelSize: 16; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                        Text { text: "Ajustement manuel (km)"; color: T.Theme.unselected; font.pixelSize: 13; anchors.horizontalCenter: parent.horizontalCenter }
+                    }
+
+                    Row {
+                        spacing: 15
+                        anchors.horizontalCenter: parent.horizontalCenter
+
+                        Rectangle {
+                            width: 65; height: 65; radius: 12
+                            color: minusAreaDist.pressed ? T.Theme.main : T.Theme.bgMain
+                            border.color: Qt.rgba(1, 1, 1, 0.1)
+
+                            Text { anchors.centerIn: parent; text: "−"; color: minusAreaDist.pressed ? T.Theme.bgMain : T.Theme.textMain; font.pixelSize: 32; font.bold: true }
+
+                            MouseArea {
+                                id: minusAreaDist
+                                anchors.fill: parent
+                                onClicked: {
+                                    statsPage.distanceB = Math.max(0.0, Math.round((statsPage.distanceB - 1.0) * 10) / 10)
+                                    bridge.updateTripBDistance(statsPage.distanceB)
+                                }
+                                Timer {
+                                    interval: 100; running: minusAreaDist.pressed; repeat: true
+                                    onTriggered: {
+                                        statsPage.distanceB = Math.max(0.0, Math.round((statsPage.distanceB - 1.0) * 10) / 10)
+                                        bridge.updateTripBDistance(statsPage.distanceB)
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            width: 140; height: 65; radius: 12
+                            color: "transparent"
+                            Text { anchors.centerIn: parent; text: statsPage.distanceB.toFixed(1) + " km"; color: T.Theme.main; font.pixelSize: 30; font.bold: true }
+                        }
+
+                        Rectangle {
+                            width: 65; height: 65; radius: 12
+                            color: plusAreaDist.pressed ? T.Theme.main : T.Theme.bgMain
+                            border.color: Qt.rgba(1, 1, 1, 0.1)
+
+                            Text { anchors.centerIn: parent; text: "+"; color: plusAreaDist.pressed ? T.Theme.bgMain : T.Theme.textMain; font.pixelSize: 32; font.bold: true }
+
+                            MouseArea {
+                                id: plusAreaDist
+                                anchors.fill: parent
+                                onClicked: {
+                                    statsPage.distanceB = Math.round((statsPage.distanceB + 1.0) * 10) / 10
+                                    bridge.updateTripBDistance(statsPage.distanceB)
+                                }
+                                Timer {
+                                    interval: 100; running: plusAreaDist.pressed; repeat: true
+                                    onTriggered: {
+                                        statsPage.distanceB = Math.round((statsPage.distanceB + 1.0) * 10) / 10
+                                        bridge.updateTripBDistance(statsPage.distanceB)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width * 0.7; height: 1
+                    color: Qt.rgba(1, 1, 1, 0.1)
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
 
-                Text {
-                    text: "Remise à zéro des compteurs\n(Disponible prochainement)"
-                    color: T.Theme.unselected
-                    font.pixelSize: 14
-                    horizontalAlignment: Text.AlignHCenter
+                Column {
+                    spacing: 8
                     anchors.horizontalCenter: parent.horizontalCenter
+                    opacity: 0.4
+                    Text { text: "MAINTENANCE"; color: T.Theme.textMain; font.pixelSize: 16; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: "Remise à zéro des compteurs\n(Disponible prochainement)"; color: T.Theme.unselected; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; anchors.horizontalCenter: parent.horizontalCenter }
                 }
             }
         }

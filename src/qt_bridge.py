@@ -162,6 +162,13 @@ class DashboardBridge(QObject):
             self.stats_service.set_trip_b_fuel(new_fuel)
             self.logger.info(f"Carburant Trip B mis a jour: {new_fuel}", extra={"error_code": "FUEL_TRIP_B_UPDATE"})
 
+    @Slot(float)
+    def updateTripBDistance(self, new_distance: float):
+        if self.stats_service:
+            self.stats_service.set_trip_b_distance(new_distance)
+            self.logger.info(f"Distance Trip B mise a jour: {new_distance}",
+                             extra={"error_code": "DISTANCE_TRIP_B_UPDATE"})
+
     @Slot(str, str)
     def save_setting(self, key_path, value):
         if key_path == "theme.main" and self.led_service:
