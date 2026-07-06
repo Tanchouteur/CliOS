@@ -39,17 +39,19 @@ class DashboardBridge(QObject):
         with open(config_path, 'r') as f:
             self._config = json.load(f)
 
-        # 1. Voie Ultra-Rapide (60 Hz / 16ms)
+        # --- Configuration des frequences de rafraichissement ---
+
+        # 1. Voie Ultra-Rapide (60 Hz / 16ms) - Vitesse, RPM, etats critiques
         self.timer_fast = QTimer()
         self.timer_fast.timeout.connect(self._update_fast_data)
         self.timer_fast.start(16)
 
-        # 2. Voie Moyenne (2 Hz / 500ms)
+        # 2. Voie Moyenne (24 Hz / 41ms) - Télémétrie et consommation
         self.timer_medium = QTimer()
         self.timer_medium.timeout.connect(self._update_stats)
-        self.timer_medium.start(500)
+        self.timer_medium.start(41)
 
-        # 3. Voie Lente (1 Hz / 1000ms)
+        # 3. Voie Lente (1 Hz / 1000ms) - Sante du systeme et logs
         self.timer_slow = QTimer()
         self.timer_slow.timeout.connect(self._update_health)
         self.timer_slow.start(1000)

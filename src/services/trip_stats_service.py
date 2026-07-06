@@ -15,6 +15,11 @@ class TripStatsService(BaseService):
         self._thread = None
         self.storage = storage
 
+        # --- Configuration des fréquences de rafraîchissement (en secondes) ---
+        self.RATE_FAST_LOOP = 0.020           # Boucle matérielle principale (50 Hz)
+        self.RATE_INST_CONS = 1.0 / 24.0      # Calcul conso instantanée (~41ms / 24 Hz)
+        self.RATE_SLOW_TELEMETRY = 1.0 / 24.0 # Télémétrie persistante (~41ms / 24 Hz)
+
         # Verrou d'accès aux statistiques partagées.
         self._stats_lock = threading.Lock()
 
@@ -26,7 +31,7 @@ class TripStatsService(BaseService):
         self.register_param("revision_interval", "Intervalle Révision (km)", ServiceParamType.SLIDER, default_rev_interval,
                             min_val=5000.0, max_val=50000.0)
         self.register_param("revision_warning", "Alerte Révision (km)", ServiceParamType.SLIDER, default_rev_warning, min_val=500.0,
-                            max_val=10000.0)
+                            max_val=30000.0)
 
         # Charge l'état persistant.
         self.trip_a_marker = self.storage.get("trips.a.marker", 0.0) if self.storage else 0.0
@@ -62,27 +67,21 @@ class TripStatsService(BaseService):
             "fuel_price": self.fuel_price,
             "avg_rpm": 0, "coasting_km": 0.0, "aggressivity_pct": 0.0, "shift_time_sec": 0.0,
             "trip_b_fuel": round(self.fuel_b_accumulated, 2),
-            # Valeurs persistantes et longue durée
             "trip_a": init_trip_a, "trip_b": init_trip_b,
             "inst_cons": 0.0, "avg_cons_b": init_avg_cons,
             "avg_cons_session": 0.0, "autonomy": 0.0,
             "km_before_service": init_km_service, "service_warning": False,
-
-            # Télémétrie dynamique
             "g_force": 0.0
         }
 
         self._prev_speed = 0.0
         self._last_g_time = time.time()
 
-        # Initialise la session avec l'odomètre courant.
         safe_data = self.api.get_display_data()
         self.reset_session(safe_data.get("odometer"))
 
-    # Fournit une copie thread-safe pour l'interface.
     @property
     def stats(self):
-        """Fournit une copie Thread-Safe du dictionnaire pour le Bridge QML."""
         with self._stats_lock:
             return self._stats.copy()
 
@@ -100,13 +99,11 @@ class TripStatsService(BaseService):
         self._shift_start = 0.0
         self._absolute_fuel_session = 0.0
 
-        # Réinitialise les compteurs de session.
         with self._stats_lock:
             self._stats["session_fuel_l"] = 0.0
             self._stats["session_cost"] = 0.0
             self._stats["avg_cons_session"] = 0.0
 
-    # Commandes exposées à l'interface.
     def reset_trip_a(self):
         current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
         self.trip_a_marker = current_odo
@@ -138,20 +135,13 @@ class TripStatsService(BaseService):
                                               1) if trip_b_dist > 0.05 else 0.0
 
     def set_trip_b_distance(self, new_distance: float):
-        """Force la distance du Trip B en recalibrant le marqueur d'odometre."""
         current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
         new_distance = max(0.0, new_distance)
-
-        # Le marqueur devient l'odometre actuel moins la distance souhaitee
         self.trip_b_marker = current_odo - new_distance
-
         if self.storage:
             self.storage.set("trips.b.marker", self.trip_b_marker)
-
         with self._stats_lock:
             self._stats["trip_b"] = round(new_distance, 1)
-
-            # Mise a jour en temps reel de la moyenne de consommation
             trip_b_dist = new_distance
             self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                               1) if trip_b_dist > 0.05 else 0.0
@@ -173,7 +163,6 @@ class TripStatsService(BaseService):
     def get_fuel_price(self):
         return self.fuel_price
 
-    # Cycle de vie du worker.
     def start(self, stop_event):
         self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name="TripStatsWorker")
         self._thread.start()
@@ -202,7 +191,6 @@ class TripStatsService(BaseService):
                 dt = current_time - last_tick_time
                 last_tick_time = current_time
 
-                # Lecture snapshot des données API.
                 safe_data = self.api.get_display_data()
                 current_odo = safe_data.get('odometer')
                 raw_fuel = safe_data.get('fuel_used')
@@ -213,7 +201,6 @@ class TripStatsService(BaseService):
                     stop_event.wait(0.1)
                     continue
 
-                # Mise à jour thread-safe des statistiques.
                 with self._stats_lock:
                     self._stats["is_active"] = (session_state == "RUNNING")
 
@@ -236,15 +223,14 @@ class TripStatsService(BaseService):
 
                 self._calc_fast_telemetry(safe_data, dt, current_time, current_speed, perfect_fuel_stream)
 
-                if current_time - last_calc_time >= 1.0:
+                if current_time - last_calc_time >= self.RATE_SLOW_TELEMETRY:
                     self._calc_slow_telemetry(current_odo, perfect_fuel_stream, current_time)
                     last_calc_time = current_time
 
-                stop_event.wait(0.020)
+                stop_event.wait(self.RATE_FAST_LOOP)
         except Exception as e:
             self.set_error(f"Crash inattendu : {str(e)}")
 
-    # Routines de calcul.
     def _calc_fast_telemetry(self, data, dt, current_time, current_speed, perfect_fuel):
         rpm = data.get('rpm', 0)
         accel = data.get('accel_computed', 0.0)
@@ -252,10 +238,10 @@ class TripStatsService(BaseService):
         clutch = data.get('clutch', False)
 
         with self._stats_lock:
-            # Consommation instantanée.
+            # Exploitation de la variable de rafraîchissement personnalisée
             if perfect_fuel is not None and self.last_fuel_inst is not None:
                 dt_inst = current_time - self.last_time_inst
-                if dt_inst >= 0.2:
+                if dt_inst >= self.RATE_INST_CONS:
                     delta_fuel = perfect_fuel - self.last_fuel_inst
                     delta_dist = current_speed * (dt_inst / 3600.0)
 
@@ -274,7 +260,6 @@ class TripStatsService(BaseService):
             elif perfect_fuel is not None:
                 self.last_fuel_inst = perfect_fuel
 
-            # Indicateurs de conduite.
             if self._stats["is_active"]:
                 self._session_distance_km += current_speed * (dt / 3600.0)
                 if rpm > 0:
@@ -286,7 +271,6 @@ class TripStatsService(BaseService):
                 elif current_speed > 5.0 and not brake:
                     self._coasting_dist += current_speed * (dt / 3600.0)
 
-                # Temps moyen de passage de rapport.
                 if clutch and not self._is_shifting:
                     self._is_shifting, self._shift_start = True, current_time
                 elif not clutch and self._is_shifting:
@@ -296,7 +280,6 @@ class TripStatsService(BaseService):
                         self._shift_time_sum += duration
                         self._shift_count += 1
 
-                # G-force longitudinal lissé.
                 now = time.time()
                 dt_g = now - self._last_g_time
                 if dt_g >= 0.1:
@@ -337,7 +320,6 @@ class TripStatsService(BaseService):
             self._stats["avg_cons_session"] = round((self._absolute_fuel_session / session_dist) * 100.0,
                                                      1) if session_dist > 0.05 else 0.0
 
-            # Seuils de maintenance configurables à chaud.
             rev_interval = self._params["revision_interval"]["value"]
             rev_warning = self._params["revision_warning"]["value"]
 
@@ -363,4 +345,3 @@ class TripStatsService(BaseService):
                     "trips.b.fuel": self.fuel_b_accumulated
                 })
             self.last_saved_odo = current_odo
-
