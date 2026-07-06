@@ -2,35 +2,26 @@ import can
 
 class Slcan:
     """Interface de communication matérielle via SocketCAN (Linux Natif).
-    Gère l'initialisation non-bloquante sur la carte réseau virtuelle (ex: can0).
+    Désormais 100% plug & play via le module noyau gs_usb (firmware candlelight).
     """
 
     def __init__(self, channel: str = "can0", baudrate: int = 500000):
-        # On garde baudrate dans le constructeur pour ne pas casser le reste du code s'il est appelé,
-        # mais il ne sera plus utilisé pour initialiser le bus.
+        # On conserve la signature baudrate pour la compatibilité avec le reste de l'app,
+        # mais la vitesse est maintenant directement gérée par le noyau Linux.
         self.channel = channel
-        self.baudrate = baudrate
         self.bus = None
         self.is_connected = False
 
     def connect(self, can_filters: list = None) -> bool:
-        """Tente d'établir la liaison sur l'interface réseau SocketCAN."""
+        """Se connecte directement à l'interface réseau SocketCAN."""
         if self.is_connected:
             return True
 
         try:
-            # Auto-détecte le type de bus selon le channel.
-            bustype = "slcan" if self.channel.startswith("/dev/") else "socketcan"
-            bus_kwargs = {
-                "bustype": bustype,
-                "channel": self.channel,
-                "can_filters": can_filters,
-            }
-            if bustype == "slcan":
-                # SLCAN: le bitrate CAN est configuré ici (macOS / port série).
-                bus_kwargs["bitrate"] = self.baudrate
             self.bus = can.interface.Bus(
-                **bus_kwargs
+                bustype="socketcan",
+                channel=self.channel,
+                can_filters=can_filters,
             )
             self.is_connected = True
             return True
@@ -38,7 +29,7 @@ class Slcan:
         except Exception as e:
             self.is_connected = False
             self.bus = None
-            raise RuntimeError(f"Impossible de se connecter à l'interface réseau {self.channel} : {e}")
+            raise RuntimeError(f"Impossible de se connecter au réseau {self.channel}. L'interface est-elle UP sous Linux ? : {e}")
 
     def read_frame(self, timeout: float = 0.1) -> can.Message | None:
         """Extrait une trame matérielle du noyau Linux."""
@@ -49,7 +40,6 @@ class Slcan:
             msg = self.bus.recv(timeout)
             if msg is not None and msg.is_error_frame:
                 return None
-
             return msg
         except Exception:
             self.close()
