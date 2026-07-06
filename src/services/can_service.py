@@ -1,4 +1,5 @@
 import os
+import glob
 import threading
 import time
 from src.parser import DbcParser
@@ -30,7 +31,9 @@ class CanService(BaseService):
         try:
             available_interfaces = [iface for iface in os.listdir('/sys/class/net') if iface.startswith('can')]
         except Exception:
-            pass
+            # macOS: ports série pour adaptateurs SLCAN
+            serial_ports = glob.glob("/dev/cu.*") + glob.glob("/dev/tty.*")
+            available_interfaces = sorted(set(serial_ports))
 
         if not available_interfaces:
             available_interfaces = ["can0", "Aucun réseau CAN détecté"]

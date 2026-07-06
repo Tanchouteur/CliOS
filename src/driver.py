@@ -19,11 +19,18 @@ class Slcan:
             return True
 
         try:
+            # Auto-détecte le type de bus selon le channel.
+            bustype = "slcan" if self.channel.startswith("/dev/") else "socketcan"
+            bus_kwargs = {
+                "bustype": bustype,
+                "channel": self.channel,
+                "can_filters": can_filters,
+            }
+            if bustype == "slcan":
+                # SLCAN: le bitrate CAN est configuré ici (macOS / port série).
+                bus_kwargs["bitrate"] = self.baudrate
             self.bus = can.interface.Bus(
-                # Utilise l'interface SocketCAN native du noyau Linux.
-                bustype="socketcan",
-                channel=self.channel,
-                can_filters=can_filters
+                **bus_kwargs
             )
             self.is_connected = True
             return True
