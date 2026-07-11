@@ -12,15 +12,23 @@ Item {
     property real vanishingPointY: 0
 
     property real maxInstCons: 20.0
-    property real instCons: bridge.stats.inst_cons ?? -1.0
     property real avgConsTripB: bridge.stats.avg_cons_b ?? 0.0
     property real avgConsSession: bridge.stats.avg_cons_session ?? 0.0
     property string referenceMode: "trip_b"
     property real avgCons: referenceMode === "session" ? avgConsSession : avgConsTripB
     property int intervalG: 5
 
-    // Lissage de la consommation instantanée pour une animation plus fluide TODO
+    property real instCons: bridge.stats.inst_cons ?? 0.0
+
     property real smoothInstCons: instCons
+
+    Behavior on smoothInstCons {
+        SmoothedAnimation {
+            duration: 150 // Lissage très rapide de 150 millisecondes
+            velocity: -1
+        }
+    }
+
 
     // --- Géométrie Interne ---
     // Ajustement des coordonnées pour le rendu visuel en miroir
