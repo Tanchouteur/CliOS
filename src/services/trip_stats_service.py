@@ -52,7 +52,7 @@ class TripStatsService(BaseService):
         self.last_fuel_avg = None
         self.last_time_avg = time.time()
 
-        self.inst_window = deque(maxlen=5)
+        self.inst_window = deque(maxlen=9)  # Fenêtre glissante pour la conso instantanée
         self.last_fuel_inst = None
         self.last_time_inst = time.time()
 
