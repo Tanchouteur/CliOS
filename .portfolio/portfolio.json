@@ -1,0 +1,24 @@
+{
+  "title": "CliOS",
+  "description": "Tableau de bord automobile modulaire en Python/PySide6 pour Renault Clio 3, avec télémétrie CAN/OBD, statistiques de trajet et services embarqués en temps réel.",
+  "longDescription": "# CliOS\n\nCliOS est un **tableau de bord automobile modulaire** conçu pour fonctionner sur Raspberry Pi ou sur poste de développement. Le projet centralise la télémétrie véhicule, les services embarqués et une interface **QML / PySide6** temps réel.\n\n## Points forts\n\n- **Lecture CAN / OBD** avec décodage des signaux et diagnostic de défauts.\n- **Gestion de session trajet** avec pause, reprise, fin de session et export de synthèse.\n- **Statistiques avancées** : distance, consommation, coût et indicateurs de maintenance.\n- **Services optionnels** : son moteur, LEDs BLE, monitoring système, calibration et notification.\n- **Mode simulation** pour développer et tester l'interface sans véhicule.\n- **Logging robuste** avec journaux JSONL, traces fatales et bundle de diagnostic.\n- **Export USB autonome** pour synchroniser les trajets et les données JSON vers une clé.\n\n## Architecture\n\nLe projet est structuré autour d'un backend Python orchestrant les services métiers et d'un frontend QML pour l'interface conducteur.\n\n## Pourquoi c'est intéressant\n\nCliOS met en avant une approche très concrète de l'embarqué : temps réel, modularité, séparation claire entre backend et UI, et adaptation à plusieurs profils véhicule (Clio 3 Diesel et Clio 3 RS).",
+  "category": "Personal",
+  "status": "In Progress",
+  "date": "2026-07",
+  "tags": [
+    "Python",
+    "PySide6",
+    "QML",
+    "CAN bus",
+    "OBD-II",
+    "Raspberry Pi",
+    "Real-time telemetry",
+    "Renault Clio 3"
+  ],
+  "featured": true,
+  "order": 1,
+  "links": {
+    "github": "https://github.com/Tanchouteur/CliOS"
+  }
+}
+
