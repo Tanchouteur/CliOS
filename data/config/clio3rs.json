@@ -2,6 +2,9 @@
     "theme": {
         "main": "#ff00b8"
     },
+    "ui": {
+        "visual_style": "gt_modern"
+    },
     "tachometer": {
         "max_rpm": 7500,
         "redline_rpm": 7000,

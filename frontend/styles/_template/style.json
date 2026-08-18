@@ -1,0 +1,23 @@
+{
+    "id": "_template",
+    "label": "Mon nouveau style",
+    "description": "Description affichée dans la page Apparence",
+    "order": 100,
+    "dashboard": "Dashboard.qml",
+    "palette": {
+        "background": "#080B0F",
+        "surface": "#11171D",
+        "surfaceRaised": "#182029",
+        "surfaceSoft": "#202A34",
+        "text": "#FFFFFF",
+        "textSecondary": "#D5DCE3",
+        "outline": "#40505F",
+        "gaugeTrack": "#2A3742"
+    },
+    "metrics": {
+        "radiusSmall": 8,
+        "radiusMedium": 14,
+        "radiusLarge": 20,
+        "borderWidth": 1
+    }
+}

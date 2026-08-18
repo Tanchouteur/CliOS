@@ -1,367 +1,284 @@
 import QtQuick
-import QtQuick.Shapes
+import QtQuick.Layouts
 import "../components"
-import "../style"
+import "../pages"
+import "../style" as T
+import "../state" as S
 
 Item {
     id: root
-
-    property string sessionState: bridge.data !== undefined && bridge.data.session_state !== undefined ? bridge.data.session_state : "IDLE"
-
+    objectName: "dashboardRoot"
     focus: true
-    Keys.onPressed: (event) => {
+    property string destination: "drive"
+    property string previousDestination: "drive"
+    property string confirmationAction: ""
+    property string timeText: Qt.formatTime(new Date(), "hh:mm")
+
+    readonly property var destinations: [
+        { id: "drive", label: "CONDUITE", source: "../pages/GtDrivePage.qml", complex: false },
+        { id: "trip", label: "TRAJET", source: "../pages/GtTripPage.qml", complex: true },
+        { id: "performance", label: "PERFORMANCE", source: "../pages/GtPerformancePage.qml", complex: true },
+        { id: "diagnostic", label: "DIAGNOSTIC", source: "../pages/GtDiagnosticPage.qml", complex: true },
+        { id: "menu", label: "MENU", source: "../pages/GtMenuPage.qml", complex: true }
+    ]
+
+    function routeInfo(id) {
+        for (let i = 0; i < destinations.length; ++i)
+            if (destinations[i].id === id) return destinations[i]
+        const deep = {
+            appearance: {id:"appearance", source:"../pages/GtAppearancePage.qml", complex:true},
+            vehicle: {id:"vehicle", source:"../pages/GtVehiclePage.qml", complex:true},
+            services: {id:"services", source:"../pages/GtServicesPage.qml", complex:true},
+            system: {id:"system", source:"../pages/GtSystemPage.qml", complex:true},
+            developer: {id:"developer", source:"../pages/GtDeveloperPage.qml", complex:true}
+        }
+        return deep[id] || destinations[0]
+    }
+
+    function navigate(id) {
+        const info = routeInfo(id)
+        if (info.complex && S.UiState.complexInteraction) {
+            attentionBanner.shown = true
+            attentionTimer.restart()
+        }
+        previousDestination = destination
+        destination = id
+        pageLoader.source = Qt.resolvedUrl(info.source)
+    }
+
+    function askConfirmation(action) {
+        if (action === "resume_trip") {
+            bridge.resumeTripSession()
+            return
+        }
+        confirmationAction = action
+        const copy = {
+            reset_a: ["Remettre Trip A à zéro ?", "La distance Trip A sera effacée.", "REMETTRE À ZÉRO", true],
+            reset_b: ["Remettre Trip B à zéro ?", "La distance et la consommation Trip B seront effacées.", "REMETTRE À ZÉRO", true],
+            reset_maintenance: ["Confirmer la révision ?", "Le compteur d’entretien repartira sur un intervalle complet.", "CONFIRMER LA RÉVISION", false],
+            end_trip: ["Terminer le trajet ?", "Le trajet sera clôturé et ses statistiques sauvegardées.", "TERMINER LE TRAJET", true],
+            quit: ["Quitter CliOS ?", "Les services seront arrêtés proprement avant la fermeture.", "QUITTER", true],
+            restart: ["Redémarrer CliOS ?", "Les services seront relancés et le profil en attente sera chargé.", "REDÉMARRER", true],
+            shutdown: ["Éteindre le système ?", "Le Raspberry Pi et les services CliOS seront arrêtés proprement.", "ÉTEINDRE", true]
+        }
+        const data = copy[action]
+        if (!data) return
+        confirmDialog.title = data[0]
+        confirmDialog.message = data[1]
+        confirmDialog.acceptText = data[2]
+        confirmDialog.dangerous = data[3]
+        confirmDialog.visible = true
+    }
+
+    function executeConfirmed() {
+        confirmDialog.visible = false
+        switch (confirmationAction) {
+        case "reset_a": bridge.resetTripA(); break
+        case "reset_b": bridge.resetTripB(); break
+        case "reset_maintenance": bridge.resetMaintenance(); break
+        case "end_trip": bridge.endTripSession(); break
+        case "quit": bridge.quitApplication(); break
+        case "restart": bridge.restartApplication(); break
+        case "shutdown": bridge.shutdownSystem(); break
+        }
+        confirmationAction = ""
+    }
+
+    Keys.onPressed: event => {
         if (event.key === Qt.Key_T) {
-            console.log("Touche T pressée : Bascule de l'état de session")
-            if (root.sessionState === "RUNNING" || root.sessionState === "IDLE") {
-                bridge.setSessionState("PAUSED")
-            } else {
-                bridge.setSessionState("RUNNING")
-            }
+            if (S.UiState.sessionState === "PAUSED") bridge.resumeTripSession()
+            else bridge.setSessionState("PAUSED")
         }
     }
 
+    Rectangle { anchors.fill: parent; color: T.StyleManager.background }
+
+    // Barre d’état — 56 px.
     Rectangle {
-        anchors.fill: parent
-        color: Theme.bgMain
-        z: -100
-    }
+        id: statusBar
+        x: 0; y: 0; width: 1920; height: 56
+        color: T.StyleManager.surface
+        border.width: 0
 
-    StatusBar {
-        anchors.top: parent.top
-        anchors.left: parent.left
-    }
-
-    SplMeterWidget {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.topMargin: 20
-        anchors.rightMargin: 20
-        z: 100
-    }
-
-    // --- Conteneur Central (Reste affiché !) ---
-    Item {
-        id: centerGroup
-        // Au lieu de centerIn, on gère les axes séparément pour pouvoir l'animer
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenterOffset: -30
-
-        width: parent.width * 0.5
-        height: 630
-        z: 10 // On le met au-dessus du panneau pour l'effet de glissement
-
-        CenterHub {
-            anchors.centerIn: parent
-            width: parent.width; height: parent.height
-        }
-
-        Image {
-            id: renaultLogo
-            source: "../assets/Renault-Logo-w.png"
-            anchors.centerIn: parent
-            fillMode: Image.PreserveAspectFit
-            width: parent.width * 0.25
-        }
-
-        CarStatusWidget {
-            anchors.centerIn: parent
+        RowLayout {
+            anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 18; spacing: 12
+            Text { text: root.timeText; color: T.StyleManager.text; font.pixelSize: 25; font.weight: Font.DemiBold; Layout.preferredWidth: 76 }
+            Text { text: S.UiState.fixed(S.UiState.outsideTemp, 1, "—") + " °C"; color: T.StyleManager.textSecondary; font.pixelSize: 19; Layout.preferredWidth: 90 }
+            Rectangle { width: 1; Layout.fillHeight: true; Layout.topMargin: 12; Layout.bottomMargin: 12; color: T.StyleManager.outline }
+            Row {
+                Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter; spacing: 7
+                Repeater {
+                    model: S.UiState.indicators
+                    GtLamp { code: modelData.code; label: modelData.label; active: modelData.active; blinking: modelData.blink; lampColor: modelData.color }
+                }
+            }
+            Rectangle {
+                Layout.preferredWidth: 190; height: 38; radius: T.StyleManager.radiusSmall
+                color: S.UiState.ramMode ? Qt.rgba(T.StyleManager.danger.r, T.StyleManager.danger.g, T.StyleManager.danger.b, 0.14) : Qt.rgba(T.StyleManager.success.r, T.StyleManager.success.g, T.StyleManager.success.b, 0.12)
+                border.width: 1; border.color: S.UiState.ramMode ? T.StyleManager.danger : T.StyleManager.success
+                Text { anchors.centerIn: parent; text: S.UiState.ramMode ? "USB · MODE RAM" : "USB · " + S.UiState.fixed(S.UiState.storage.free_space_mb, 0, "0") + " MB"; color: parent.border.color; font.pixelSize: 14; font.bold: true }
+            }
+            Rectangle {
+                visible: S.UiState.serviceErrorKeys.length + S.UiState.serviceWarningKeys.length > 0
+                Layout.preferredWidth: visible ? 170 : 0; height: 38; radius: T.StyleManager.radiusSmall
+                color: Qt.rgba(T.StyleManager.warning.r, T.StyleManager.warning.g, T.StyleManager.warning.b, 0.13)
+                border.width: 1; border.color: S.UiState.serviceErrorKeys.length ? T.StyleManager.danger : T.StyleManager.warning
+                Text { anchors.centerIn: parent; text: S.UiState.serviceErrorKeys.length + " ERR · " + S.UiState.serviceWarningKeys.length + " AVIS"; color: parent.border.color; font.pixelSize: 14; font.bold: true }
+            }
+            Text { text: "CliOS GT"; color: T.StyleManager.accent; font.pixelSize: 20; font.weight: Font.Bold; Layout.preferredWidth: 95; horizontalAlignment: Text.AlignRight }
         }
     }
 
-    // ==========================================
-    // PANNEAU DE FIN DE SESSION (Le "Tiroir")
-    // ==========================================
+    // Panneau permanent conduite — 330 px.
     Rectangle {
-        id: sessionOverlay
-
-        // MODIFICATION : On l'attache à la gauche du CenterHub
-        anchors.verticalCenter: centerGroup.verticalCenter
-        anchors.right: centerGroup.left
-
-        width: 650 // Légèrement affiné pour être élégant sur le côté
-        height: 450
-        color: Qt.rgba(0, 0, 0, 0.7)
-        radius: 20
-        border.color: Qt.rgba(1, 1, 1, 0.1)
-        border.width: 2
-
-        z: 5
-
-        Column {
-            anchors.centerIn: parent
-            spacing: 30
-            width: parent.width * 0.9
-
-            Text {
-                text: "Résumé du Trajet"
-                color: "white"
-                font.pixelSize: 36
-                font.bold: true
-                anchors.horizontalCenter: parent.horizontalCenter
+        id: leftPanel
+        x: 0; y: 56; width: 330; height: 580
+        color: T.StyleManager.surface
+        border.width: 1; border.color: T.StyleManager.outline
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 18; spacing: 12
+            Text { text: "CONDUITE"; color: T.StyleManager.textSecondary; font.pixelSize: 17; font.weight: Font.DemiBold; font.letterSpacing: 1.5 }
+            Column {
+                Layout.fillWidth: true; Layout.preferredHeight: 160; spacing: -2
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: Math.round(S.UiState.speed); color: T.StyleManager.text; font.pixelSize: 112; font.weight: Font.DemiBold }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "km/h"; color: T.StyleManager.textSecondary; font.pixelSize: 21 }
             }
-
-            // Résumé en temps réel du trajet
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 50
-
-                Column {
-                    spacing: 5
-                    Text { text: "Distance"; color: Theme.unselected; font.pixelSize: 16; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text {
-                        text: bridge.stats !== undefined && bridge.stats.distance_km !== undefined ? bridge.stats.distance_km.toFixed(1) + " km" : "0.0 km"
-                        color: Theme.main; font.pixelSize: 28; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                }
-                Column {
-                    spacing: 5
-                    Text { text: "Consommation"; color: Theme.unselected; font.pixelSize: 16; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text {
-                        text: bridge.stats !== undefined && bridge.stats.session_fuel_l !== undefined ? bridge.stats.session_fuel_l.toFixed(1) + " L" : "0.0 L"
-                        color: Theme.main; font.pixelSize: 28; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                }
-                Column {
-                    spacing: 5
-                    Text { text: "Coût estimé"; color: Theme.unselected; font.pixelSize: 16; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text {
-                        text: bridge.stats !== undefined && bridge.stats.session_cost !== undefined ? bridge.stats.session_cost.toFixed(2) + " €" : "0.00 €"
-                        color: Theme.main; font.pixelSize: 28; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter
-                    }
+            GtCard {
+                Layout.fillWidth: true; Layout.preferredHeight: 96; title: "Régulateur / limiteur"
+                RowLayout {
+                    anchors.fill: parent
+                    Text { Layout.fillWidth: true; text: S.UiState.cruiseMode + " · " + S.UiState.cruiseStatus; color: T.StyleManager.textSecondary; font.pixelSize: 16; elide: Text.ElideRight }
+                    Text { text: S.UiState.cruiseTarget > 0 ? Math.round(S.UiState.cruiseTarget) : "—"; color: T.StyleManager.accent; font.pixelSize: 30; font.weight: Font.DemiBold }
                 }
             }
-
-            Item { width: 1; height: 20 } // Espaceur
-
-            // --- BOUTONS (Cachés si le trajet est ENDED) ---
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: 30
-                visible: root.sessionState === "PAUSED"
-
-                Rectangle {
-                    width: 220; height: 60; radius: 10
-                    color: Qt.rgba(1, 1, 1, 0.1)
-                    border.color: Qt.rgba(1, 1, 1, 0.3); border.width: 2
-
-                    Text { anchors.centerIn: parent; text: "Continuer"; color: "white"; font.pixelSize: 20; font.bold: true }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: bridge.resumeTripSession()
-                        onPressed: parent.opacity = 0.5
-                        onReleased: parent.opacity = 1.0
-                    }
-                }
-
-                Rectangle {
-                    width: 280; height: 60; radius: 10
-                    color: Theme.main
-
-                    Text { anchors.centerIn: parent; text: "Terminer"; color: "white"; font.pixelSize: 20; font.bold: true }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: bridge.endTripSession()
-                        onPressed: parent.opacity = 0.7
-                        onReleased: parent.opacity = 1.0
-                    }
+            GtCard {
+                Layout.fillWidth: true; Layout.preferredHeight: 112; title: "Carburant"
+                ColumnLayout {
+                    anchors.fill: parent; spacing: 8
+                    RowLayout { Layout.fillWidth: true; Text { Layout.fillWidth: true; text: S.UiState.fixed(S.UiState.fuelLevel, 1, "—") + " L"; color: S.UiState.lowFuel ? T.StyleManager.warning : T.StyleManager.text; font.pixelSize: 24; font.weight: Font.DemiBold } Text { text: S.UiState.fixed(S.UiState.trip.autonomy, 0, "—") + " km"; color: T.StyleManager.textSecondary; font.pixelSize: 19 } }
+                    GtProgress { Layout.fillWidth: true; height: 10; value: S.UiState.fuelLevel; to: S.UiState.maxFuel; fillColor: S.UiState.lowFuel ? T.StyleManager.warning : T.StyleManager.accent }
                 }
             }
-
-            // --- MESSAGE DE FIN (Visible si ENDED) ---
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                visible: root.sessionState === "ENDED"
-                text: "✓ Données sauvegardées.\nExtinction en cours..."
-                color: Theme.main
-                font.pixelSize: 24
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
+            RowLayout {
+                Layout.fillWidth: true; Layout.fillHeight: true; spacing: 10
+                GtMetric { Layout.fillWidth: true; label: "Trip B"; value: S.UiState.fixed(S.UiState.trip.trip_b, 1, "0,0"); unit: "km"; valueSize: 27 }
+                GtMetric { Layout.fillWidth: true; label: "Conso moy."; value: S.UiState.fixed(S.UiState.trip.avg_cons_b, 1, "0,0"); unit: "L/100"; valueSize: 27 }
             }
         }
     }
 
-    // ==========================================
-    // INSTRUMENTATION GAUCHE & DROITE
-    // ==========================================
-    Item {
-        id: leftGauges
-        width: 500; height: 450
-        anchors.verticalCenter: root.verticalCenter; anchors.verticalCenterOffset: 50
-        anchors.left: root.left; anchors.leftMargin: root.width * -0.015
-
-        SpeedometerBmw {
-            id: speedo
-            width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; scale: 1.15
+    // Zone de contenu contextuel — 1260 px.
+    Rectangle {
+        x: 330; y: 56; width: 1260; height: 580
+        color: T.StyleManager.background
+        Loader {
+            id: pageLoader
+            anchors.fill: parent
+            source: Qt.resolvedUrl("../pages/GtDrivePage.qml")
         }
-        BigFuelGauge {
-            id: bigFuel
-            width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 600; anchors.left: parent.left
+        Connections {
+            target: pageLoader.item
+            ignoreUnknownSignals: true
+            function onNavigateRequested(target) { root.navigate(target) }
+            function onBackRequested() { root.navigate("menu") }
+            function onActionRequested(action) { root.askConfirmation(action) }
+        }
+        Rectangle {
+            anchors.fill: parent
+            visible: S.UiState.sessionState === "PAUSED" || S.UiState.sessionState === "ENDED"
+            color: Qt.rgba(T.StyleManager.background.r, T.StyleManager.background.g, T.StyleManager.background.b, 0.91)
+            GtCard {
+                width: 900; height: 390; anchors.centerIn: parent
+                title: S.UiState.sessionState === "ENDED" ? "Trajet terminé" : "Session en pause"
+                highlighted: true
+                ColumnLayout {
+                    anchors.fill: parent; spacing: 18
+                    RowLayout {
+                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 36
+                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Distance"; value: S.UiState.fixed(S.UiState.trip.distance_km, 1, "0,0"); unit: "km"; alignment: Text.AlignHCenter }
+                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Carburant"; value: S.UiState.fixed(S.UiState.trip.session_fuel_l, 2, "0,00"); unit: "L"; alignment: Text.AlignHCenter }
+                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Coût"; value: S.UiState.fixed(S.UiState.trip.session_cost, 2, "0,00"); unit: "€"; alignment: Text.AlignHCenter }
+                    }
+                    Row {
+                        visible: S.UiState.sessionState === "PAUSED"
+                        Layout.alignment: Qt.AlignHCenter; spacing: 18
+                        GtButton { width: 280; text: "CONTINUER"; primary: true; onClicked: bridge.resumeTripSession() }
+                        GtButton { width: 320; text: "TERMINER LE TRAJET"; destructive: true; onClicked: root.askConfirmation("end_trip") }
+                    }
+                    Text { visible: S.UiState.sessionState === "ENDED"; Layout.alignment: Qt.AlignHCenter; text: "Données sauvegardées"; color: T.StyleManager.success; font.pixelSize: 24; font.weight: Font.DemiBold }
+                }
+            }
         }
     }
 
-    Item {
-        id: rightGauges
-        width: 500; height: 400
-        anchors.verticalCenter: root.verticalCenter; anchors.verticalCenterOffset: 50
-        anchors.right: root.right; anchors.rightMargin: root.width * -0.015
-
-        TachometerBmw {
-            id: tacho
-            width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.right: parent.right; scale: 1.15
-        }
-        BigTempGauge {
-            id: bigTemp
-            width: 500; height: 400
-            anchors.verticalCenter: parent.verticalCenter; anchors.verticalCenterOffset: 600; anchors.right: parent.right
+    // Panneau permanent moteur — 330 px.
+    Rectangle {
+        x: 1590; y: 56; width: 330; height: 580
+        color: T.StyleManager.surface
+        border.width: 1; border.color: T.StyleManager.outline
+        ColumnLayout {
+            anchors.fill: parent; anchors.margins: 18; spacing: 12
+            Text { text: "MOTEUR"; color: T.StyleManager.textSecondary; font.pixelSize: 17; font.weight: Font.DemiBold; font.letterSpacing: 1.5 }
+            Column {
+                Layout.fillWidth: true; Layout.preferredHeight: 150; spacing: -4
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.gear; color: S.UiState.redline ? T.StyleManager.danger : T.StyleManager.text; font.pixelSize: 72; font.weight: Font.Bold }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; text: "RAPPORT"; color: T.StyleManager.textSecondary; font.pixelSize: 17 }
+            }
+            GtCard {
+                Layout.fillWidth: true; Layout.preferredHeight: 150; title: "Régime moteur"; highlighted: S.UiState.redline
+                ColumnLayout {
+                    anchors.fill: parent; spacing: 10
+                    RowLayout { Layout.fillWidth: true; Text { Layout.fillWidth: true; text: Math.round(S.UiState.rpm); color: S.UiState.redline ? T.StyleManager.danger : T.StyleManager.text; font.pixelSize: 36; font.weight: Font.DemiBold } Text { text: "tr/min"; color: T.StyleManager.textSecondary; font.pixelSize: 17 } }
+                    GtProgress { Layout.fillWidth: true; height: 14; value: S.UiState.rpm; to: S.UiState.maxRpm; fillColor: S.UiState.redline ? T.StyleManager.danger : T.StyleManager.accent }
+                    Text { text: "ZONE ROUGE  " + Math.round(S.UiState.redlineRpm); color: T.StyleManager.textSecondary; font.pixelSize: 14 }
+                }
+            }
+            GtCard {
+                Layout.fillWidth: true; Layout.preferredHeight: 134; title: "Température moteur"; highlighted: S.UiState.hotEngine
+                ColumnLayout {
+                    anchors.fill: parent; spacing: 10
+                    RowLayout { Layout.fillWidth: true; Text { Layout.fillWidth: true; text: S.UiState.fixed(S.UiState.engineTemp, 0, "—"); color: S.UiState.hotEngine ? T.StyleManager.danger : T.StyleManager.text; font.pixelSize: 36; font.weight: Font.DemiBold } Text { text: "°C"; color: T.StyleManager.textSecondary; font.pixelSize: 18 } }
+                    GtProgress { Layout.fillWidth: true; height: 12; value: S.UiState.engineTemp; from: 40; to: S.UiState.tempMax; fillColor: S.UiState.hotEngine ? T.StyleManager.danger : T.StyleManager.success }
+                }
+            }
+            Text { Layout.fillWidth: true; Layout.fillHeight: true; text: S.UiState.hotEngine ? "TEMPÉRATURE CRITIQUE" : (S.UiState.redline ? "RÉGIME ÉLEVÉ" : "SYSTÈME MOTEUR NORMAL"); color: S.UiState.hotEngine || S.UiState.redline ? T.StyleManager.danger : T.StyleManager.success; font.pixelSize: 17; font.weight: Font.DemiBold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
         }
     }
 
-    // ==========================================
-    // BANDEAU D'INFORMATIONS INFÉRIEUR
-    // ==========================================
-    Item {
-        id: bottomBar
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 20
+    // Navigation tactile — 84 px.
+    Rectangle {
+        x: 0; y: 636; width: 1920; height: 84
+        color: T.StyleManager.surfaceRaised
+        border.width: 1; border.color: T.StyleManager.outline
+        RowLayout {
+            anchors.fill: parent; anchors.leftMargin: 240; anchors.rightMargin: 240; anchors.topMargin: 6; anchors.bottomMargin: 6; spacing: 16
+            Repeater {
+                model: root.destinations
+                GtButton {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    text: modelData.label
+                    primary: root.destination === modelData.id || (modelData.id === "menu" && ["appearance","vehicle","services","system","developer"].indexOf(root.destination) >= 0)
+                    onClicked: root.navigate(modelData.id)
+                }
+            }
+        }
+    }
+
+    GtAlertBanner {
+        id: attentionBanner
+        objectName: "attentionBanner"
         anchors.horizontalCenter: parent.horizontalCenter
-        width: parent.width * 0.9; height: 40
-
-        property real autonomy: bridge.stats !== undefined && bridge.stats.autonomy !== undefined ? bridge.stats.autonomy : 450
-        property real outsideTemp: bridge.data !== undefined && bridge.data.outside_temp !== undefined ? bridge.data.outside_temp : 21.5
-        property string timeString: Qt.formatTime(new Date(), "hh:mm")
-
-        Timer { interval: 1000; running: true; repeat: true; onTriggered: bottomBar.timeString = Qt.formatTime(new Date(), "hh:mm") }
-
-        property int currentScreenIndex: 0
-        property bool isInitialized: false
-        property bool serviceWarning: bridge.data !== undefined && bridge.data.service_warning !== undefined ? bridge.data.service_warning : false
-
-        // Initialisation automatique sur la page de Service si un avertissement est présent au démarrage
-        onServiceWarningChanged: { if (!bottomBar.isInitialized && bottomBar.serviceWarning === true) { bottomBar.currentScreenIndex = 2; bottomBar.isInitialized = true } }
-
-        Text {
-            id: autonomyText
-            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-            text: "→ " + bottomBar.autonomy.toFixed(0) + " km"
-            color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
-        }
-
-        Text {
-            id: avgB
-            anchors.left : autonomyText.right; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter
-            text: bridge.stats !== undefined && bridge.stats.avg_cons_b !== undefined ? "Avg " + bridge.stats.avg_cons_b.toFixed(1) : "0.0"
-            color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
-
-            MouseArea {
-                anchors.fill: parent
-                onPressAndHold: bridge.resetTripB()
-            }
-        }
-
-        // --- CONTENEUR DES INFOS TRAJET & SERVICE ---
-        Item {
-            anchors.left: avgB.right; anchors.leftMargin: 40; anchors.verticalCenter: parent.verticalCenter; height: parent.height
-            width: 300 // Largeur définie pour offrir une bonne zone tactile
-
-            MouseArea {
-                anchors.fill: parent
-
-                property bool isLongPress: false
-
-                onPressAndHold: {
-                    if (bottomBar.currentScreenIndex === 0) {
-                        bridge.resetTripB()
-                        isLongPress = true
-                    }
-                }
-
-                onClicked: {
-                    /* Si on relache apres un appui long, on reinitialise l'indicateur et on bloque le changement d'ecran */
-                    if (isLongPress) {
-                        isLongPress = false
-                        return
-                    }
-
-                    /* Comportement normal : passage a l'ecran suivant */
-                    bottomBar.currentScreenIndex = (bottomBar.currentScreenIndex + 1) % 3
-                }
-            }
-
-            Row {
-                visible: bottomBar.currentScreenIndex === 0; anchors.verticalCenter: parent.verticalCenter; spacing: 40
-                Text { text: bridge.stats !== undefined && bridge.stats.trip_b !== undefined ? "B : " + bridge.stats.trip_b.toFixed(1) + " km" : "Trip B 0.0 km"; color: Theme.textMain; font.pixelSize: 22; font.family: "Arial"; opacity: 0.8 }
-            }
-            Row {
-                visible: bottomBar.currentScreenIndex === 1; anchors.verticalCenter: parent.verticalCenter
-                Text { text: bridge.stats !== undefined && bridge.stats.trip_a !== undefined ? "A : " + bridge.stats.trip_a.toFixed(1) + " km" : "Trip A 0.0 km"; color: Theme.textMain; font.pixelSize: 22; font.family: "Arial"; opacity: 0.8 }
-            }
-            Row {
-                visible: bottomBar.currentScreenIndex === 2; anchors.verticalCenter: parent.verticalCenter
-                Text { text: bridge.stats !== undefined && bridge.stats.km_before_service !== undefined ? "Service dans : " + bridge.stats.km_before_service.toFixed(0) + " km" : "Service : ---"; color: (bridge.data !== undefined && bridge.data.service_warning === true) ? Theme.danger : Theme.textMain; font.pixelSize: 22; font.bold: (bridge.data !== undefined && bridge.data.service_warning === true); font.family: "Arial"; opacity: 0.9 }
-            }
-        }
-
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter; anchors.verticalCenter: parent.verticalCenter; anchors.horizontalCenterOffset: 95; spacing: 60
-            Text { text: bottomBar.timeString; color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.9 }
-            Text { text: bridge.data !== undefined && bridge.data.odometer !== undefined ? bridge.data.odometer.toFixed(0) + " km" : "0 km"; color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.9 }
-        }
-        Text {
-            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            text: bottomBar.outsideTemp.toFixed(1) + " °C"; color: Theme.textMain; font.pixelSize: 24; font.family: "Arial"; opacity: 0.8
-        }
+        z: 800
+        message: "Interaction complexe — restez attentif"
     }
+    Timer { id: attentionTimer; interval: 3000; onTriggered: attentionBanner.shown = false }
+    Timer { interval: 1000; running: true; repeat: true; onTriggered: root.timeText = Qt.formatTime(new Date(), "hh:mm") }
 
-    // ==========================================
-    // MOTEUR D'ANIMATION (ÉTATS)
-    // ==========================================
-    states: [
-        State {
-            name: "PAUSED_OR_ENDED"
-            when: root.sessionState === "PAUSED" || root.sessionState === "ENDED"
-
-            // 1. Les compteurs sortent de l'écran (-800px)
-            PropertyChanges { target: speedo; anchors.leftMargin: -800; opacity: 0.0 }
-            PropertyChanges { target: tacho; anchors.rightMargin: -800; opacity: 0.0 }
-            PropertyChanges { target: bigFuel; anchors.leftMargin: -800; opacity: 0.0 }
-            PropertyChanges { target: bigTemp; anchors.rightMargin: -800; opacity: 0.0 }
-
-            // 2. Le Hub Central se décale vers la droite !
-            PropertyChanges { target: centerGroup; anchors.horizontalCenterOffset: 350 }
-
-            // 3. Le tiroir sort de derrière (il s'écarte du hub central)
-            PropertyChanges { target: sessionOverlay; anchors.rightMargin: 40; opacity: 1.0; scale: 1.0 }
-        },
-        State {
-            name: "DRIVE"
-            when: root.sessionState !== "PAUSED" && root.sessionState !== "ENDED"
-
-            PropertyChanges { target: speedo; anchors.leftMargin: 0; opacity: 1.0 }
-            PropertyChanges { target: tacho; anchors.rightMargin: 0; opacity: 1.0 }
-            PropertyChanges { target: bigFuel; anchors.leftMargin: -600; opacity: 0.0 }
-            PropertyChanges { target: bigTemp; anchors.rightMargin: -600; opacity: 0.0 }
-
-            // Le Hub Central revient au milieu
-            PropertyChanges { target: centerGroup; anchors.horizontalCenterOffset: 0 }
-
-            // Le tiroir se cache derrière le hub central (rightMargin négatif)
-            PropertyChanges { target: sessionOverlay; anchors.rightMargin: -300; opacity: 0.0; scale: 0.9 }
-        }
-    ]
-
-    transitions: [
-        Transition {
-            NumberAnimation {
-                // On ajoute horizontalCenterOffset à la liste des animations
-                properties: "opacity, anchors.leftMargin, anchors.rightMargin, anchors.horizontalCenterOffset, scale"
-                duration: 700
-                easing.type: Easing.InOutCubic
-            }
-        }
-    ]
+    GtConfirmDialog {
+        id: confirmDialog
+        objectName: "confirmDialog"
+        z: 1000
+        onRejected: { visible = false; root.confirmationAction = "" }
+        onAccepted: root.executeConfirmed()
+    }
 }

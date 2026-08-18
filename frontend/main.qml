@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Window
-import "views"
 import "style"
 import "components"
 
@@ -9,22 +8,21 @@ ApplicationWindow {
     id: appWindow
     property string version: bridge.data !== undefined && bridge.data.system_version !== undefined ? bridge.data.system_version : "?.?.?"
     visible: true
-    width: 1980
+    width: 1920
     height: 720
     title: "CliOS v" + version
 
-    visibility: "FullScreen"
+    visibility: Window.FullScreen
     flags: Qt.FramelessWindowHint | Qt.Window | Qt.MSWindowsFixedSizeDialogHint
 
-    // Application de la couleur de fond via le Thème
     color: Theme.bgMain
 
-    Dash {
-        id: dashboardView
+    Loader {
+        id: dashboardLoader
         anchors.fill: parent
+        source: Qt.resolvedUrl(StyleManager.dashboardSource)
     }
 
-    // --- Bannière d'Alerte Télémétrique ---
     NotificationCenter {
         id: notifCenter
         z: 9999 // Toujours au premier plan

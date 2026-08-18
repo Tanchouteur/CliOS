@@ -1,0 +1,23 @@
+{
+    "id": "gt_modern",
+    "label": "GT moderne",
+    "description": "Graphite mat, blanc franc et détails lumineux",
+    "order": 10,
+    "dashboard": "Dashboard.qml",
+    "palette": {
+        "background": "#080B0F",
+        "surface": "#11171D",
+        "surfaceRaised": "#182029",
+        "surfaceSoft": "#202A34",
+        "text": "#F4F7FA",
+        "textSecondary": "#CDD5DD",
+        "outline": "#34414D",
+        "gaugeTrack": "#27323D"
+    },
+    "metrics": {
+        "radiusSmall": 8,
+        "radiusMedium": 14,
+        "radiusLarge": 20,
+        "borderWidth": 1
+    }
+}
