@@ -1,7 +1,7 @@
 {
     "id": "legacy_dashboard",
-    "label": "Ancien dashboard",
-    "description": "Votre ancien cockpit et ses compteurs circulaires",
+    "label": "BMW Renault",
+    "description": "Ancien cockpit et ses compteurs circulaires",
     "order": 20,
     "dashboard": "Dashboard.qml",
     "palette": {

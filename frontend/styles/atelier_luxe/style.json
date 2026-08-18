@@ -1,0 +1,23 @@
+{
+    "id": "atelier_luxe",
+    "label": "Atelier Luxe",
+    "description": "Obsidienne satinée, horlogerie tourbillon et télémétrie de prestige",
+    "order": 5,
+    "dashboard": "Dashboard.qml",
+    "palette": {
+        "background": "#070A0F",
+        "surface": "#0F1622",
+        "surfaceRaised": "#162030",
+        "surfaceSoft": "#1E2C40",
+        "text": "#F5F8FC",
+        "textSecondary": "#BAC8D9",
+        "outline": "#293A4E",
+        "gaugeTrack": "#1B2533"
+    },
+    "metrics": {
+        "radiusSmall": 10,
+        "radiusMedium": 18,
+        "radiusLarge": 26,
+        "borderWidth": 1
+    }
+}

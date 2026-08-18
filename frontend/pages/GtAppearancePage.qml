@@ -13,11 +13,22 @@ Item {
         GtPageHeader { Layout.fillWidth: true; title: "Apparence"; subtitle: "Aperçu immédiat, enregistré dans le profil"; onBackClicked: root.backRequested() }
         RowLayout {
             Layout.fillWidth: true; Layout.fillHeight: true; spacing: 14
-            Repeater {
+
+            // Liste horizontale défilable supportant 2, 5, 20+ thèmes graphiques
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                orientation: ListView.Horizontal
+                spacing: 14
+                clip: true
+                boundsBehavior: Flickable.DragAndOvershootBounds
                 model: T.StyleManager.styles
-                GtCard {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    title: modelData.label; highlighted: T.StyleManager.styleId === modelData.id
+
+                delegate: GtCard {
+                    width: 360
+                    height: ListView.view.height
+                    title: modelData.label
+                    highlighted: T.StyleManager.styleId === modelData.id
                     ColumnLayout {
                         anchors.fill: parent; spacing: 18
                         Text { Layout.fillWidth: true; text: modelData.description; color: T.StyleManager.textSecondary; font.pixelSize: 16; wrapMode: Text.WordWrap }
@@ -37,6 +48,7 @@ Item {
                     }
                 }
             }
+
             GtCard {
                 Layout.preferredWidth: 300; Layout.minimumWidth: 300; Layout.maximumWidth: 300; Layout.fillHeight: true; title: "Accent"
                 ColumnLayout {
