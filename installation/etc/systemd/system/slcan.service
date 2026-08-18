@@ -1,0 +1,12 @@
+[Unit]
+Description=Pont SLCAN pour modem USB ttyACM0
+# Le service s'allume et s'eteint en meme temps que le port USB
+BindsTo=dev-ttyACM0.device
+After=dev-ttyACM0.device
+
+[Service]
+Type=simple
+ExecStartPre=-/sbin/modprobe slcan
+ExecStart=/usr/bin/slcand -o -c -F -s6 /dev/ttyACM0 can0
+ExecStartPost=/bin/sleep 1
+ExecStartPost=/sbin/ip link set up can0

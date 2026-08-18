@@ -1,0 +1,12 @@
+[Unit]
+Description=Configuration native de la clé USB CAN
+BindsTo=sys-subsystem-net-devices-can0.device
+After=sys-subsystem-net-devices-can0.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip link set can0 up type can bitrate 500000
+
+[Install]
+WantedBy=sys-subsystem-net-devices-can0.device

@@ -73,6 +73,8 @@ class ExportService(BaseService):
             for p in partitions:
                 if p.mountpoint.startswith(('/snap', '/boot', '/efi', '/dev')):
                     continue
+                if os.path.isdir(os.path.join(p.mountpoint, "clios")):
+                    continue
 
                 config_path = os.path.join(p.mountpoint, self.config_filename)
 
@@ -82,6 +84,10 @@ class ExportService(BaseService):
 
         except Exception as e:
             self.set_error(f"Erreur d'analyse des partitions : {e}")
+
+    def update_data_dir(self, data_dir: str):
+        """Suit le répertoire des trajets après une transition de stockage."""
+        self.data_dir = data_dir
 
     def _process_usb_export(self, mountpoint: str, config_path: str):
         """Execute le transfert de donnees de maniere securisee."""
@@ -218,4 +224,3 @@ class ExportService(BaseService):
         if not (dest_abs == mount_abs or dest_abs.startswith(mount_abs + os.sep)):
             raise ValueError("target_folder sort du point de montage")
         return export_dest
-

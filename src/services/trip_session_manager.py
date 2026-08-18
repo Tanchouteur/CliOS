@@ -13,7 +13,9 @@ class TripSessionManager(BaseService):
         self.stats_service = stats_service
 
         self.trips_dir = trips_dir
-        os.makedirs(self.trips_dir, exist_ok=True)
+        self._dir_lock = threading.RLock()
+        self._pending_summaries = []
+        self._ensure_trips_dir()
 
         # Initialise explicitement l'état de session.
         self.api.update({"session_state": "IDLE"})
@@ -33,7 +35,7 @@ class TripSessionManager(BaseService):
         safe_data = self.api.get_display_data()
 
         if safe_data.get("session_state") in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
-            self._save_trip_summary()
+            saved = self._save_trip_summary()
 
             current_odo = safe_data.get("odometer", 0.0)
             self.stats_service.reset_session(current_odo)
@@ -42,7 +44,10 @@ class TripSessionManager(BaseService):
 
             self.trip_start_time = None
             self.trip_trace.clear()
-            self.set_ok("Trajet sauvegardé")
+            if saved:
+                self.set_ok("Trajet sauvegardé")
+            else:
+                self.set_warning("Trajet conservé en mémoire, écriture en attente")
 
     # Persistance de la synthèse de trajet.
     def _save_trip_summary(self):
@@ -70,16 +75,65 @@ class TripSessionManager(BaseService):
             "trace": self.trip_trace
         }
 
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if self._write_summary(trip_summary):
+            return True
+        with self._dir_lock:
+            self._pending_summaries.append(trip_summary)
+        return False
+
+    def _write_summary(self, trip_summary):
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         filename = f"trip_{timestamp_str}.json"
-        filepath = os.path.join(self.trips_dir, filename)
+        with self._dir_lock:
+            trips_dir = self.trips_dir
+        filepath = os.path.join(trips_dir, filename)
+        tmp_path = filepath + ".tmp"
 
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
+            os.makedirs(trips_dir, exist_ok=True)
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(trip_summary, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, filepath)
             self.print_message(f"Trajet exporté : {filename}")
-        except Exception as e:
-            self.set_error(f"Erreur d'écriture : {e}")
+            return True
+        except Exception as exc:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            self.set_warning(f"Écriture du trajet différée : {exc}")
+            return False
+
+    def _ensure_trips_dir(self):
+        try:
+            os.makedirs(self.trips_dir, exist_ok=True)
+            return True
+        except OSError as exc:
+            self.set_warning(f"Répertoire trips inaccessible : {exc}")
+            return False
+
+    def update_trips_dir(self, new_dir: str):
+        """Change la cible à chaud et retente les trajets gardés en RAM."""
+        with self._dir_lock:
+            self.trips_dir = new_dir
+        if not self._ensure_trips_dir():
+            return False
+
+        with self._dir_lock:
+            pending = list(self._pending_summaries)
+            self._pending_summaries.clear()
+        failed = []
+        for summary in pending:
+            if not self._write_summary(summary):
+                failed.append(summary)
+        if failed:
+            with self._dir_lock:
+                self._pending_summaries[0:0] = failed
+            return False
+        return True
 
     # Cycle de vie du service.
     def stop(self):

@@ -17,6 +17,7 @@ Item {
     property color ramColor: ramUsage > 800.0 ? T.Theme.danger : T.Theme.main
 
     property var health: bridge && bridge.systemHealth !== undefined ? bridge.systemHealth : {}
+    property var storageStatus: bridge && bridge.storageStatus !== undefined ? bridge.storageStatus : ({})
 
 
     // En-tête.
@@ -179,6 +180,45 @@ Item {
 
                     Text { text: "Connexion CAN Bus :"; color: T.Theme.unselected; font.pixelSize: 20 }
                     Text { text: ""; color: T.Theme.danger; font.pixelSize: 20; font.bold: true }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Qt.rgba(1, 1, 1, 0.08)
+                }
+
+                Text { text: "STOCKAGE"; color: T.Theme.unselected; font.pixelSize: 16; font.bold: true }
+
+                GridLayout {
+                    columns: 4
+                    columnSpacing: 25
+                    rowSpacing: 10
+
+                    Text { text: "Mode :"; color: T.Theme.unselected; font.pixelSize: 17 }
+                    Text {
+                        text: root.storageStatus.usb_connected === true ? "USB" : "DÉGRADÉ (RAM)"
+                        color: root.storageStatus.usb_connected === true ? T.Theme.main : T.Theme.danger
+                        font.pixelSize: 17; font.bold: true
+                    }
+                    Text { text: "Espace libre :"; color: T.Theme.unselected; font.pixelSize: 17 }
+                    Text {
+                        text: root.storageStatus.usb_connected === true
+                              ? ((root.storageStatus.free_space_mb || 0) / 1024).toFixed(1) + " GB"
+                              : "Non persistant"
+                        color: T.Theme.textMain; font.pixelSize: 17; font.bold: true
+                    }
+
+                    Text { text: "Point de montage :"; color: T.Theme.unselected; font.pixelSize: 17 }
+                    Text {
+                        text: root.storageStatus.mount_point || "—"
+                        color: T.Theme.textMain; font.pixelSize: 17; font.bold: true
+                    }
+                    Text { text: "Trajets sauvegardés :"; color: T.Theme.unselected; font.pixelSize: 17 }
+                    Text {
+                        text: root.storageStatus.trip_count !== undefined ? root.storageStatus.trip_count : 0
+                        color: T.Theme.textMain; font.pixelSize: 17; font.bold: true
+                    }
                 }
 
                 Item { Layout.fillHeight: true }
