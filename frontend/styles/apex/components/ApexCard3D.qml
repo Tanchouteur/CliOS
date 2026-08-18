@@ -1,7 +1,7 @@
 import QtQuick
 import "../../../style" as T
 
-// Carte avec effet 3D : Biseau cristal + Reflet supérieur + Glow respirant + Double ombre d'élévation
+// Carte avec effet 3D : Biseau cristal + Reflet supérieur + Double ombre d'élévation (GPU pur)
 Item {
     id: root
     property string title:       ""
@@ -10,46 +10,33 @@ Item {
     property alias  content:     contentItem.data
     default property alias contentData: contentItem.data
 
-    // Phase du glow pulsatoire
-    property real glowPhase: 0.0
-    property real glowOpacity: 0.0
-
-    SequentialAnimation on glowPhase {
-        loops: Animation.Infinite
-        NumberAnimation { from: 0; to: Math.PI * 2; duration: 3400; easing.type: Easing.Linear }
-    }
-
     // Animation d'apparition fluide 3D
     property real entryProgress: 0.0
     NumberAnimation on entryProgress {
-        from: 0; to: 1; duration: 420; easing.type: Easing.OutCubic
+        from: 0.0; to: 1.0; duration: 380; easing.type: Easing.OutCubic
         running: true
     }
 
     opacity: entryProgress
-    transform: Translate { y: (1.0 - root.entryProgress) * 14 }
-
-    onGlowPhaseChanged: {
-        glowOpacity = (highlighted ? 0.26 : 0.08) + Math.sin(glowPhase) * (highlighted ? 0.12 : 0.04)
-    }
+    transform: Translate { y: (1.0 - root.entryProgress) * 12 }
 
     // ── 1. Double ombre portée 3D (Effet de lévitation au-dessus du fond) ─────
     Rectangle {
         anchors.fill: parent
-        anchors.topMargin: 8
-        anchors.leftMargin: 4
-        anchors.rightMargin: 4
+        anchors.topMargin: 6
+        anchors.leftMargin: 3
+        anchors.rightMargin: 3
         radius: T.StyleManager.radiusMedium
-        color: Qt.rgba(0, 0, 0, 0.65)
+        color: Qt.rgba(0, 0, 0, 0.60)
         z: -2
     }
     Rectangle {
         anchors.fill: parent
-        anchors.topMargin: 4
-        anchors.leftMargin: 2
-        anchors.rightMargin: 2
+        anchors.topMargin: 3
+        anchors.leftMargin: 1
+        anchors.rightMargin: 1
         radius: T.StyleManager.radiusMedium
-        color: Qt.rgba(0, 0, 0, 0.40)
+        color: Qt.rgba(0, 0, 0, 0.35)
         z: -1
     }
 
@@ -66,12 +53,11 @@ Item {
         }
 
         border.width: 1
-        border.color: Qt.rgba(
-            root.glowColor.r,
-            root.glowColor.g,
-            root.glowColor.b,
-            root.glowOpacity
-        )
+        border.color: root.highlighted
+            ? Qt.rgba(root.glowColor.r, root.glowColor.g, root.glowColor.b, 0.55)
+            : Qt.rgba(root.glowColor.r, root.glowColor.g, root.glowColor.b, 0.14)
+
+        Behavior on border.color { ColorAnimation { duration: 250 } }
 
         // ── 3. Biseau supérieur biseauté (Lumière zénithale 3D) ───────────────
         Rectangle {
@@ -104,7 +90,7 @@ Item {
         anchors.topMargin: 12
         anchors.leftMargin: 16
         text: root.title.toUpperCase()
-        color: Qt.rgba(1, 1, 1, 0.45)
+        color: Qt.rgba(1.0, 1.0, 1.0, 0.45)
         font.pixelSize: 11
         font.weight: Font.Bold
         font.letterSpacing: 2.0

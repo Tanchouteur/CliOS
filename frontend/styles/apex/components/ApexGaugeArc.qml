@@ -2,7 +2,7 @@ import QtQuick
 import "../../../state" as S
 import "../../../style" as T
 
-// Jauge circulaire Arc Canvas réutilisable
+// Jauge circulaire Arc Canvas haute performance
 Item {
     id: root
     implicitWidth: 160
@@ -18,16 +18,9 @@ Item {
     property real   ratio:     to > from ? Math.min(1.0, Math.max(0, (value - from) / (to - from))) : 0
     property bool   isWarning: ratio >= warningAt && warningAt < 1.0
 
-    // Animated value for smooth transitions
+    // Interpolation fluide de la valeur
     property real animRatio: ratio
-    Behavior on animRatio { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-
-    // Glow phase
-    property real glowPhase: 0.0
-    SequentialAnimation on glowPhase {
-        loops: Animation.Infinite
-        NumberAnimation { from: 0; to: Math.PI * 2; duration: 2600; easing.type: Easing.Linear }
-    }
+    Behavior on animRatio { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
 
     Canvas {
         anchors.fill: parent
@@ -35,17 +28,19 @@ Item {
 
         property real animRatio:  root.animRatio
         property bool isWarning:  root.isWarning
-        property real glowPhase:  root.glowPhase
 
         onAnimRatioChanged: requestPaint()
-        onGlowPhaseChanged: requestPaint()
+        onIsWarningChanged: requestPaint()
 
         onPaint: {
             var ctx = getContext("2d")
             ctx.reset()
             var w = width, h = height
+            if (w < 30 || h < 30) return
+
             var cx = w / 2, cy = h / 2
             var r = Math.min(w, h) / 2 - 10
+            if (r < 5) return
 
             var startRad = (220 - 90) * Math.PI / 180
             var totalDeg = 280
@@ -53,7 +48,7 @@ Item {
             var fillRad  = startRad + animRatio * totalRad
             var fullRad  = startRad + totalRad
 
-            // Track
+            // Track de fond
             ctx.beginPath()
             ctx.arc(cx, cy, r, startRad, fullRad, false)
             ctx.strokeStyle = Qt.rgba(0.06, 0.13, 0.22, 1.0)
@@ -65,9 +60,9 @@ Item {
                 // Arc rempli
                 var col = isWarning ? "#FF1744" : root.baseColor
                 var grad = ctx.createLinearGradient(0, 0, w, 0)
-                grad.addColorStop(0,   Qt.rgba(Qt.color(col).r * 0.5, Qt.color(col).g * 0.5, Qt.color(col).b, 0.8))
+                grad.addColorStop(0.0, Qt.rgba(Qt.color(col).r * 0.5, Qt.color(col).g * 0.5, Qt.color(col).b, 0.85))
                 grad.addColorStop(0.6, Qt.color(col))
-                grad.addColorStop(1,   isWarning ? "#FF6B00" : Qt.color(col))
+                grad.addColorStop(1.0, isWarning ? "#FF6B00" : Qt.color(col))
 
                 ctx.beginPath()
                 ctx.arc(cx, cy, r, startRad, fillRad, false)
@@ -76,10 +71,10 @@ Item {
                 ctx.lineCap = "round"
                 ctx.stroke()
 
-                // Reflet
+                // Reflet de brillance
                 ctx.beginPath()
                 ctx.arc(cx, cy, r, startRad, fillRad, false)
-                ctx.strokeStyle = Qt.rgba(1, 1, 1, 0.12)
+                ctx.strokeStyle = Qt.rgba(1.0, 1.0, 1.0, 0.15)
                 ctx.lineWidth = 4
                 ctx.stroke()
             }
@@ -96,7 +91,7 @@ Item {
             ctx.fillText(displayVal, cx, cy - 6)
 
             // Unité
-            ctx.fillStyle = Qt.rgba(1, 1, 1, 0.50)
+            ctx.fillStyle = Qt.rgba(1.0, 1.0, 1.0, 0.50)
             ctx.font = "bold 12px Arial"
             ctx.fillText(root.unit, cx, cy + 18)
         }
@@ -105,12 +100,12 @@ Item {
     // Label
     Text {
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 6
+        anchors.bottomMargin: 4
         anchors.horizontalCenter: parent.horizontalCenter
         text: root.label.toUpperCase()
-        color: Qt.rgba(1, 1, 1, 0.32)
-        font.pixelSize: 10
+        color: Qt.rgba(1.0, 1.0, 1.0, 0.40)
+        font.pixelSize: 11
         font.weight: Font.Bold
-        font.letterSpacing: 1.8
+        font.letterSpacing: 1.5
     }
 }
