@@ -1,0 +1,12 @@
+[Unit]
+Description=Reveil materiel du modem CAN (DFU)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStartPre=-/bin/rm -f /tmp/boot_can.bin
+ExecStart=/usr/bin/dfu-util -d 0483:df11 -a 0 -S 207B3949534B -s 0x08000000:leave -U /tmp/boot_can.bin -Z 1
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
