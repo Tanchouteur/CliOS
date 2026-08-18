@@ -18,6 +18,13 @@ QtObject {
     readonly property real fuelLevel: number(vehicle.fuel_level, 0)
     readonly property real odometer: number(vehicle.odometer, 0)
     readonly property string sessionState: text(vehicle.session_state, "IDLE")
+    readonly property real power: number(vehicle.power !== undefined ? vehicle.power : (vehicle.power_kw !== undefined ? vehicle.power_kw : (rpm > 0 && vehicle.driver_torque_request ? (rpm * vehicle.driver_torque_request / 9549) : 0)), 0)
+    readonly property real torque: number(vehicle.torque !== undefined ? vehicle.torque : (vehicle.torque_nm !== undefined ? vehicle.torque_nm : (vehicle.driver_torque_request !== undefined ? vehicle.driver_torque_request : 0)), 0)
+    readonly property real throttle: number(vehicle.throttle !== undefined ? vehicle.throttle : (vehicle.accel_pos !== undefined ? vehicle.accel_pos : (vehicle.throttle_pct !== undefined ? vehicle.throttle_pct : 0)), 0)
+    readonly property real intakeTemp: number(vehicle.intake_temp !== undefined ? vehicle.intake_temp : outsideTemp, 0)
+    readonly property real boostPsi: number(vehicle.boost_psi !== undefined ? vehicle.boost_psi : (vehicle.boost_bar !== undefined ? vehicle.boost_bar * 14.5038 : 0), 0)
+    readonly property real instantCons: number(trip.inst_cons !== undefined ? trip.inst_cons : (vehicle.inst_cons !== undefined ? vehicle.inst_cons : 0), 0)
+    readonly property real gForce: number(trip.g_force !== undefined ? trip.g_force : 0, 0)
     readonly property bool tripActive: trip.is_active === true || sessionState === "RUNNING"
     readonly property bool complexInteraction: speed > 5
 

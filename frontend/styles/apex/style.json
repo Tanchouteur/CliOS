@@ -1,0 +1,23 @@
+{
+    "id": "apex",
+    "label": "Apex",
+    "description": "Obsidienne vivante · Effets 3D · Animations constantes · Taillé pour la console centrale",
+    "order": 1,
+    "dashboard": "Dashboard.qml",
+    "palette": {
+        "background":    "#03050A",
+        "surface":       "#0B1018",
+        "surfaceRaised": "#111C26",
+        "surfaceSoft":   "#182435",
+        "text":          "#FFFFFF",
+        "textSecondary": "#C8D4E0",
+        "outline":       "#1E3045",
+        "gaugeTrack":    "#122030"
+    },
+    "metrics": {
+        "radiusSmall":  10,
+        "radiusMedium": 18,
+        "radiusLarge":  28,
+        "borderWidth":  1
+    }
+}
