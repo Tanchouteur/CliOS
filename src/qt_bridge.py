@@ -32,6 +32,8 @@ class DashboardBridge(QObject):
         self.gear_calib_service = gear_calib_service
         self._storage_manager = storage_manager
         self._config_lock = threading.RLock()
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._ui_styles_dir = os.path.join(project_root, "frontend", "styles")
 
         self._config_path = config_path
         self._data = {}
@@ -145,6 +147,53 @@ class DashboardBridge(QObject):
     def storageStatus(self):
         return self._storage_status
 
+    @Slot(result='QVariantList')
+    def getAvailableUiStyles(self):
+        """Découvre les paquets UI placés dans frontend/styles/<id>/style.json."""
+        required_colors = {
+            "background", "surface", "surfaceRaised", "surfaceSoft",
+            "text", "textSecondary", "outline", "gaugeTrack",
+        }
+        styles = []
+        try:
+            entries = sorted(os.scandir(self._ui_styles_dir), key=lambda entry: entry.name)
+        except OSError as exc:
+            self.logger.error(f"Catalogue de styles illisible: {exc}", extra={"error_code": "UI_STYLE_CATALOG_ERROR"})
+            return []
+
+        for entry in entries:
+            if not entry.is_dir() or entry.name.startswith("_") or not entry.name.replace("_", "").isalnum():
+                continue
+            manifest_path = os.path.join(entry.path, "style.json")
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+                    manifest = json.load(manifest_file)
+            except (OSError, json.JSONDecodeError, TypeError):
+                continue
+
+            style_id = str(manifest.get("id", ""))
+            dashboard_file = os.path.basename(str(manifest.get("dashboard", "Dashboard.qml")))
+            palette = manifest.get("palette", {})
+            if style_id != entry.name or not dashboard_file.endswith(".qml"):
+                continue
+            if not isinstance(palette, dict) or not required_colors.issubset(palette):
+                continue
+            if not os.path.isfile(os.path.join(entry.path, dashboard_file)):
+                continue
+
+            styles.append({
+                "id": style_id,
+                "label": str(manifest.get("label", style_id)),
+                "description": str(manifest.get("description", "")),
+                "order": int(manifest.get("order", 100)),
+                "dashboard": f"styles/{style_id}/{dashboard_file}",
+                "palette": {key: str(palette[key]) for key in required_colors},
+                "metrics": self._sanitize_for_qml(manifest.get("metrics", {})),
+            })
+
+        styles.sort(key=lambda item: (item["order"], item["label"].lower()))
+        return styles
+
     @Slot()
     def requestDiagnosticScan(self):
         if self.diag_service:
@@ -174,6 +223,18 @@ class DashboardBridge(QObject):
         self.logger.info("Reset Trip B demande", extra={"error_code": "UI_RESET_TRIP_B"})
         if self.stats_service:
             self.stats_service.reset_trip_b()
+
+    @Slot()
+    def resetTripA(self):
+        self.logger.info("Reset Trip A demande", extra={"error_code": "UI_RESET_TRIP_A"})
+        if self.stats_service:
+            self.stats_service.reset_trip_a()
+
+    @Slot()
+    def resetMaintenance(self):
+        self.logger.info("Reset maintenance demande", extra={"error_code": "UI_RESET_MAINTENANCE"})
+        if self.stats_service:
+            self.stats_service.reset_maintenance()
 
     @Slot(float)
     def updateTripBFuel(self, new_fuel: float):

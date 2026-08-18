@@ -2,32 +2,23 @@ pragma Singleton
 import QtQuick
 
 QtObject {
-    // --- Couleurs de Base  ---
-    readonly property color bgMain: "#000000"
-    readonly property color bgDimmed: "#1a1a1c"
-
-    readonly property color textMain: "#f4f4f4"
-    readonly property color textDimmed: "#aaFFFFFF"
-    readonly property color unselected: "#888888"
-
-    // --- Couleurs d'Alerte (Voyants) ---
-    readonly property color danger: "#e73c3c"
-    readonly property color success: "#2ecc71"
-    readonly property color info: "#3498db"
-    readonly property color warning: "#e67e22"
-
-    // --- Thème Dynamique (Couleur d'accentuation pour les LEDs) ---
-    property color main: bridge.config.theme.main !== undefined ? bridge.config.theme.main : "#00aaff"
-    property color mainLight: Qt.lighter(main, 1.3)
-    property color mainDark: Qt.darker(main, 1.4)
-
-    property color secondary: "#00aaff"
-    property color secondaryLight: "#33bbff"
-    property color secondaryDark: "#0088cc"
-
-    property color redLine: "#ff1e00"
-
-    readonly property string fontMain: "sans-serif"
-
-    readonly property string fontMono: "arial"
+    // Alias conservés pour les écrans secondaires historiques encore chargés.
+    readonly property color bgMain: StyleManager.background
+    readonly property color bgDimmed: StyleManager.surface
+    readonly property color textMain: StyleManager.text
+    readonly property color textDimmed: StyleManager.textSecondary
+    readonly property color unselected: StyleManager.textSecondary
+    readonly property color danger: StyleManager.danger
+    readonly property color success: StyleManager.success
+    readonly property color info: StyleManager.info
+    readonly property color warning: StyleManager.warning
+    property color main: StyleManager.accent
+    readonly property color mainLight: Qt.lighter(main, 1.15)
+    readonly property color mainDark: Qt.darker(main, 1.25)
+    readonly property color secondary: StyleManager.info
+    readonly property color secondaryLight: Qt.lighter(secondary, 1.15)
+    readonly property color secondaryDark: Qt.darker(secondary, 1.25)
+    readonly property color redLine: StyleManager.danger
+    readonly property string fontMain: StyleManager.fontFamily
+    readonly property string fontMono: "Monospace"
 }
