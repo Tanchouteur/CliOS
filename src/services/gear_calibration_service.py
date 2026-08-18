@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 import time
 from collections import defaultdict
@@ -89,8 +90,12 @@ class GearCalibrationService(BaseService):
 
             config_data["transmission"]["ratios"] = new_ratios
 
-            with open(config_path, 'w', encoding='utf-8') as f:
+            tmp_path = config_path + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, config_path)
 
             self.dynamics_service.reload_config(config_data)
             self._save_progress_to_storage(force=True)
@@ -100,6 +105,11 @@ class GearCalibrationService(BaseService):
             return True
 
         except Exception as e:
+            try:
+                if 'tmp_path' in locals() and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
             self.set_error(f"Erreur d'écriture : {str(e)}")
             return False
 

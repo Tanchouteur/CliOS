@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import argparse
@@ -15,6 +14,7 @@ from src.driver import Slcan
 from src.services.gear_calibration_service import GearCalibrationService
 from src.services.power_management_service import PowerManagementService
 from src.services.trip_session_manager import TripSessionManager
+from src.services.usb_storage_service import UsbStorageService
 from src.simulation.physique_mock import PhysicsMockProvider
 from src.simulation.mock_ui import MockControlPanel
 
@@ -31,8 +31,9 @@ from src.storage import PersistentStorage
 from src.api import VehicleAPI
 from src.qt_bridge import DashboardBridge
 from src.services.dynamics_service import DynamicsService
-from src.logging_runtime import init_logging, set_global_context, shutdown_logging, get_logger
-from src.crash_hooks import install_crash_hooks
+from src.logging_runtime import init_logging, relocate_log_dir, set_global_context, shutdown_logging, get_logger
+from src.crash_hooks import install_crash_hooks, relocate_crash_log
+from src.storage_manager import StorageManager, StorageMode
 
 # Import de notre outil de debug externalisé
 from src.cli_debug import ui_loop
@@ -77,7 +78,8 @@ def load_system_version(root_dir: str) -> str:
         return "unknown"
 
 
-def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir, storage_dir):
+def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir,
+                   storage_dir, storage_manager):
     """Initialise et enregistre tous les services via une boucle propre."""
 
     diag_service = DiagnosticService(api, can_provider)
@@ -108,6 +110,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         (led_service, "services.Leds.enabled", True),
         (PowerManagementService(api, storage, orchestrator), "services.PowerManager.enabled", True),
         (session_manager, "services.SessionManager.enabled", True),
+        (UsbStorageService(api, storage, storage_manager), None, True),
     ]
 
     # Rétrocompatibilité: anciennes sauvegardes utilisaient services.Can.enabled
@@ -116,6 +119,8 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     for service, storage_key, default_state in services_to_register:
         if service.service_name == "CAN_Moteur":
             orchestrator.add_service(service, enabled=can_enabled)
+        elif storage_key is None:
+            orchestrator.add_service(service, enabled=True)
         else:
             orchestrator.add_service(service, enabled=storage.get(storage_key, default_state))
 
@@ -134,23 +139,31 @@ def main():
     ensure_supported_pyside(is_gui=(args.ui == 'gui'), allow_unsupported=args.allow_unsupported_pyside)
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    STORAGE_DIR = os.path.join(BASE_DIR, "data")
-    LOG_DIR = os.path.join(STORAGE_DIR, "logs")
+    STATIC_DATA_DIR = os.path.join(BASE_DIR, "data")
+    storage_mgr = StorageManager(BASE_DIR)
+    storage_mgr.start_monitoring()
+
+    LOG_DIR = storage_mgr.resolve_path("logs")
 
     init_logging(LOG_DIR, level=args.log_level, console_level="WARNING")
     install_crash_hooks(LOG_DIR)
     set_global_context(ui=args.ui, mock=args.mock)
     logger = get_logger("Main")
-    CAN_DIR = os.path.join(STORAGE_DIR, "can")
-    CONFIG_DIR = os.path.join(STORAGE_DIR, "config")
-    SAVE_DASH_DIR = os.path.join(STORAGE_DIR, "dash_save")
+    CAN_DIR = os.path.join(STATIC_DATA_DIR, "can")
+    STATIC_CONFIG_DIR = os.path.join(STATIC_DATA_DIR, "config")
+    CONFIG_DIR = storage_mgr.prepare_config_dir(STATIC_CONFIG_DIR)
+    SAVE_DASH_DIR = storage_mgr.resolve_path("dash_save")
     ENGINE_DIR = os.path.join(BASE_DIR, "assets", "sounds", "engine")
 
     # --- 2. Initialisation Core (Fichiers, BDD, API) ---
-    profile_manager = ProfileManager(CONFIG_DIR, CAN_DIR, SAVE_DASH_DIR, args.mock)
-
-    with open(profile_manager.get_config_path(), 'r', encoding='utf-8') as f:
-        vehicle_config = json.load(f)
+    profile_manager = ProfileManager(
+        CONFIG_DIR,
+        CAN_DIR,
+        SAVE_DASH_DIR,
+        args.mock,
+        fallback_config_dir=STATIC_CONFIG_DIR,
+    )
+    vehicle_config = profile_manager.load_active_config()
 
     storage = PersistentStorage(profile_manager.get_save_path())
     api = VehicleAPI(storage)
@@ -172,12 +185,38 @@ def main():
         can_provider = Slcan()
 
     folder_name = "trips_mock" if profile_manager.is_mock else "trips"
-    TRIPS_DIR = os.path.join(STORAGE_DIR, folder_name)
+    TRIPS_DIR = storage_mgr.resolve_path(folder_name)
 
     # --- 4. Branchement des Services ---
     led_srv, stats_srv, diag_srv, gear_calib_srv, session_manager = setup_services(
-        api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR
+        api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR,
+        storage_mgr
     )
+
+    runtime_targets = {"bridge": None, "export": None}
+
+    def on_storage_mode_changed(new_mode):
+        new_config_dir = storage_mgr.prepare_config_dir(STATIC_CONFIG_DIR)
+        new_save_dir = storage_mgr.resolve_path("dash_save")
+        profile_manager.relocate(new_config_dir, new_save_dir)
+        storage.relocate(
+            profile_manager.get_save_path(),
+            merge_existing=(new_mode is StorageMode.USB),
+        )
+        new_trips_dir = storage_mgr.resolve_path(folder_name)
+        session_manager.update_trips_dir(new_trips_dir)
+        relocate_log_dir(storage_mgr.resolve_path("logs"))
+        relocate_crash_log(storage_mgr.resolve_path("logs"))
+
+        bridge = runtime_targets["bridge"]
+        if bridge is not None:
+            bridge.relocate_config(profile_manager.get_config_path())
+        export_service = runtime_targets["export"]
+        if export_service is not None:
+            export_service.update_data_dir(new_trips_dir)
+
+    storage_mgr.register_callback(on_storage_mode_changed)
+    on_storage_mode_changed(storage_mgr.mode)
 
     # --- 5. Lancement de l'Application ---
     needs_restart = False
@@ -202,8 +241,10 @@ def main():
                 diag_service=diag_srv,
                 profile_manager=profile_manager,
                 gear_calib_service=gear_calib_srv,
-                session_manager=session_manager
+                session_manager=session_manager,
+                storage_manager=storage_mgr,
             )
+            runtime_targets["bridge"] = bridge
             bridge.storage = storage
             engine.rootContext().setContextProperty("bridge", bridge)
 
@@ -211,7 +252,8 @@ def main():
             notif_service = NotificationService(bridge, storage)
             orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
 
-            exp_service = ExportService(bridge, storage, TRIPS_DIR)
+            exp_service = ExportService(bridge, storage, storage_mgr.resolve_path(folder_name))
+            runtime_targets["export"] = exp_service
             orchestrator.add_service(exp_service, enabled=storage.get("services.Export.enabled", True))
 
             orchestrator.start_all()
@@ -235,6 +277,7 @@ def main():
     finally:
         # --- 6. Nettoyage et Arrêt ---
         logger.info("Extinction de l'orchestrateur", extra={"error_code": "APP_SHUTDOWN"})
+        storage_mgr.stop_monitoring()
         orchestrator.stop_all()
         if hasattr(storage, "close"):
             storage.close()

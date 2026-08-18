@@ -14,6 +14,7 @@ _LOCK = threading.RLock()
 _INITIALIZED = False
 _QUEUE: queue.Queue | None = None
 _LISTENER: logging.handlers.QueueListener | None = None
+_FILE_HANDLER: logging.handlers.RotatingFileHandler | None = None
 _RECENT_EVENTS: deque[dict[str, Any]] = deque(maxlen=500)
 _DROPPED_COUNT = 0
 _GLOBAL_CONTEXT: dict[str, Any] = {}
@@ -101,6 +102,14 @@ class NonBlockingQueueHandler(logging.handlers.QueueHandler):
                 _DROPPED_COUNT += 1
 
 
+class ResilientRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """Ne propage jamais une erreur liée au retrait du support de logs."""
+
+    def handleError(self, record: logging.LogRecord) -> None:
+        # Le RingBufferHandler et la console continuent de recevoir les événements.
+        return
+
+
 def _supports_ansi_colors() -> bool:
     if os.environ.get("NO_COLOR") is not None:
         return False
@@ -115,13 +124,11 @@ def _supports_ansi_colors() -> bool:
 
 
 def init_logging(log_dir: str, level: str = "INFO", console_level: str = "WARNING") -> None:
-    global _INITIALIZED, _QUEUE, _LISTENER
+    global _INITIALIZED, _QUEUE, _LISTENER, _FILE_HANDLER
 
     with _LOCK:
         if _INITIALIZED:
             return
-
-        os.makedirs(log_dir, exist_ok=True)
 
         root = logging.getLogger()
         root.setLevel(getattr(logging, level.upper(), logging.INFO))
@@ -134,14 +141,8 @@ def init_logging(log_dir: str, level: str = "INFO", console_level: str = "WARNIN
         queue_handler.addFilter(ContextFilter())
         root.addHandler(queue_handler)
 
-        file_handler = logging.handlers.RotatingFileHandler(
-            os.path.join(log_dir, "clios.log.jsonl"),
-            maxBytes=5 * 1024 * 1024,
-            backupCount=5,
-            encoding="utf-8",
-        )
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(JsonFormatter())
+        file_handler = _create_file_handler(log_dir)
+        _FILE_HANDLER = file_handler
 
         console_handler = logging.StreamHandler()
         console_handler.setLevel(getattr(logging, console_level.upper(), logging.WARNING))
@@ -153,13 +154,10 @@ def init_logging(log_dir: str, level: str = "INFO", console_level: str = "WARNIN
         ring_handler = RingBufferHandler()
         ring_handler.setLevel(logging.INFO)
 
-        _LISTENER = logging.handlers.QueueListener(
-            log_queue,
-            file_handler,
-            console_handler,
-            ring_handler,
-            respect_handler_level=True,
-        )
+        handlers = [console_handler, ring_handler]
+        if file_handler is not None:
+            handlers.insert(0, file_handler)
+        _LISTENER = logging.handlers.QueueListener(log_queue, *handlers, respect_handler_level=True)
         _LISTENER.start()
         _INITIALIZED = True
 
@@ -167,7 +165,7 @@ def init_logging(log_dir: str, level: str = "INFO", console_level: str = "WARNIN
 
 
 def shutdown_logging() -> None:
-    global _INITIALIZED, _LISTENER
+    global _INITIALIZED, _LISTENER, _FILE_HANDLER
 
     with _LOCK:
         if not _INITIALIZED:
@@ -178,7 +176,59 @@ def shutdown_logging() -> None:
 
         logging.shutdown()
         _LISTENER = None
+        _FILE_HANDLER = None
         _INITIALIZED = False
+
+
+def _create_file_handler(log_dir: str):
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        handler = ResilientRotatingFileHandler(
+            os.path.join(log_dir, "clios.log.jsonl"),
+            maxBytes=5 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(JsonFormatter())
+        return handler
+    except OSError:
+        return None
+
+
+def relocate_log_dir(new_dir: str) -> bool:
+    """Déplace le fichier de logs sans remplacer la file asynchrone."""
+    global _FILE_HANDLER
+    with _LOCK:
+        if not _INITIALIZED or _LISTENER is None:
+            return False
+
+        if _FILE_HANDLER is None:
+            handler = _create_file_handler(new_dir)
+            if handler is None:
+                return False
+            _FILE_HANDLER = handler
+            _LISTENER.handlers = (handler, *_LISTENER.handlers)
+            return True
+
+        handler = _FILE_HANDLER
+        new_path = os.path.abspath(os.path.join(new_dir, "clios.log.jsonl"))
+        try:
+            os.makedirs(new_dir, exist_ok=True)
+            handler.acquire()
+            try:
+                if handler.stream:
+                    try:
+                        handler.stream.close()
+                    except OSError:
+                        pass
+                handler.stream = None
+                handler.baseFilename = new_path
+            finally:
+                handler.release()
+            return True
+        except OSError:
+            return False
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -207,5 +257,3 @@ def log_with_code(logger: logging.Logger, level: int, error_code: str, message: 
     if kwargs:
         message = f"{message} | {kwargs}"
     logger.log(level, message, extra=extra)
-
-

@@ -39,8 +39,8 @@ Le projet centralise la télémétrie véhicule (CAN/OBD), les services embarqu�
 
 Le projet inclut un système de logs asynchrone à faible overhead:
 
-- fichier JSONL rotatif: `data/logs/clios.log.jsonl`
-- trace fatale: `data/logs/fatal_tracebacks.log`
+- fichier JSONL rotatif: `<clé USB>/clios/logs/clios.log.jsonl`
+- trace fatale: `<clé USB>/clios/logs/fatal_tracebacks.log`
 - buffer mémoire des derniers événements (consultable depuis l'UI)
 - hooks globaux (`sys.excepthook`, `threading.excepthook`, `faulthandler`)
 - export d'un bundle de diagnostic depuis la page Journal système
@@ -84,11 +84,16 @@ python3 -u main.py --ui gui --mock --allow-unsupported-pyside
 
 ## Données et profils
 
-- profils: `data/config/profiles.json`
-- configurations véhicule: `data/config/*.json`
+- profils modifiables: `<clé USB>/clios/config/profiles.json`
+- configurations véhicule modifiables: `<clé USB>/clios/config/*.json`
 - définitions CAN: `data/can/*.json`
-- sauvegardes dashboard: `data/dash_save/*.json`
-- exports trajets: `data/trips*/trip_*.json`
+- sauvegardes dashboard: `<clé USB>/clios/dash_save/*.json`
+- exports trajets: `<clé USB>/clios/trips*/trip_*.json`
+
+Les fichiers dynamiques sont écrits sur une clé montée sous `/media/clios/<volume>/`
+et contenant un dossier `clios/`. Sans cette clé, CliOS continue en mode dégradé
+dans `/dev/shm/clios_volatile/` sur Linux : les données restent en RAM et ne
+survivent pas au redémarrage. Le branchement et le retrait à chaud sont pris en charge.
 
 ## Export USB (mode autonome)
 
@@ -126,7 +131,7 @@ Deux historiques sont conservés:
 
 - Historique local (persisté dans le save profil):
   - clé: `services.Export.history_v2`
-  - emplacement physique: `data/dash_save/*.json` (profil actif)
+  - emplacement physique: `<clé USB>/clios/dash_save/*.json` (profil actif)
 - Historique sur clé USB:
   - fichier: `.clios_export_history.json`
   - emplacement: `<target_folder>/.clios_export_history.json`
@@ -138,7 +143,7 @@ Ces historiques évitent les doublons et permettent de reprendre proprement les 
 - Vérifier que `clos_export.json` est bien à la racine de la clé (pas dans un sous-dossier).
 - Vérifier que le JSON est valide.
 - Vérifier que le service `Export` est activé dans la page Services.
-- Vérifier les logs dans `data/logs/clios.log.jsonl`.
+- Vérifier les logs dans `<clé USB>/clios/logs/clios.log.jsonl`.
 
 ## Notes de déploiement Raspberry Pi
 

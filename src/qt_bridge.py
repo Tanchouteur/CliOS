@@ -16,9 +16,10 @@ class DashboardBridge(QObject):
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
     statsChanged = Signal()
     systemHealthChanged = Signal()
+    storageStatusChanged = Signal()
 
     def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
-                 profile_manager=None, gear_calib_service=None, session_manager=None):
+                 profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
         super().__init__()
         self.logger = get_logger("DashboardBridge")
         self.session_manager = session_manager
@@ -29,11 +30,14 @@ class DashboardBridge(QObject):
         self.orchestrator = orchestrator
         self.profile_manager = profile_manager
         self.gear_calib_service = gear_calib_service
+        self._storage_manager = storage_manager
+        self._config_lock = threading.RLock()
 
         self._config_path = config_path
         self._data = {}
         self._stats = {}
         self._system_health = {}
+        self._storage_status = self._read_storage_status()
         self._diag_state = (False, False, ())
 
         with open(config_path, 'r') as f:
@@ -89,6 +93,15 @@ class DashboardBridge(QObject):
         if new_health != self._system_health:
             self._system_health = new_health
             self.systemHealthChanged.emit()
+        new_storage_status = self._read_storage_status()
+        if new_storage_status != self._storage_status:
+            self._storage_status = new_storage_status
+            self.storageStatusChanged.emit()
+
+    def _read_storage_status(self):
+        if not self._storage_manager:
+            return {"mode": "UNKNOWN", "usb_connected": False, "free_space_mb": 0.0}
+        return self._sanitize_for_qml(self._storage_manager.get_status())
 
     def _sanitize_for_qml(self, value):
         # Types primitifs compatibles QML.
@@ -127,6 +140,10 @@ class DashboardBridge(QObject):
     @Property('QVariant', notify=systemHealthChanged)
     def systemHealth(self):
         return self._system_health
+
+    @Property('QVariant', notify=storageStatusChanged)
+    def storageStatus(self):
+        return self._storage_status
 
     @Slot()
     def requestDiagnosticScan(self):
@@ -177,25 +194,49 @@ class DashboardBridge(QObject):
             self.led_service.set_color(value)
 
         keys = key_path.split('.')
-        current_dict = self._config
-
-        for k in keys[:-1]:
-            if k not in current_dict:
-                current_dict[k] = {}
-            current_dict = current_dict[k]
-
-        current_dict[keys[-1]] = value
+        with self._config_lock:
+            current_dict = self._config
+            for k in keys[:-1]:
+                if k not in current_dict:
+                    current_dict[k] = {}
+                current_dict = current_dict[k]
+            current_dict[keys[-1]] = value
         self.configChanged.emit()
 
         def write_worker():
-            try:
-                with open(self._config_path, "w") as f:
-                    json.dump(self._config, f, indent=4)
+            if self._write_current_config():
                 self.logger.info(f"Parametre sauvegarde: {key_path}", extra={"error_code": "CONFIG_SAVED"})
-            except Exception as e:
-                self.logger.error(f"Echec sauvegarde config {key_path}: {e}", extra={"error_code": "CONFIG_SAVE_ERROR"})
+            else:
+                self.logger.error(f"Echec sauvegarde config {key_path}", extra={"error_code": "CONFIG_SAVE_ERROR"})
+                self.send_notification("WARNING", "Réglage conservé en mémoire uniquement", 4000)
 
         threading.Thread(target=write_worker, daemon=True).start()
+
+    def relocate_config(self, new_config_path: str) -> bool:
+        with self._config_lock:
+            self._config_path = new_config_path
+        return self._write_current_config()
+
+    def _write_current_config(self) -> bool:
+        with self._config_lock:
+            target = self._config_path
+            snapshot = json.loads(json.dumps(self._config))
+        tmp_path = target + ".tmp"
+        try:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, indent=4)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, target)
+            return True
+        except OSError:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            return False
 
     @Slot(float)
     def updateFuelPrice(self, new_price: float):
@@ -268,7 +309,8 @@ class DashboardBridge(QObject):
         if not self.profile_manager:
             return False
         self.profile_manager.create_new_config(config_file)
-        self.profile_manager.add_profile(profile_id, name, can_file, config_file, save_file)
+        if not self.profile_manager.add_profile(profile_id, name, can_file, config_file, save_file):
+            return False
         self.logger.info(f"Nouveau profil cree: {profile_id}", extra={"error_code": "PROFILE_CREATED"})
         return True
 
@@ -297,9 +339,13 @@ class DashboardBridge(QObject):
     @Slot(result=str)
     def exportDiagnosticBundle(self) -> str:
         try:
-            data_dir = os.path.dirname(os.path.dirname(self._config_path))
-            log_dir = os.path.join(data_dir, "logs")
-            output_dir = os.path.join(data_dir, "diagnostics")
+            if self._storage_manager:
+                log_dir = self._storage_manager.resolve_path("logs")
+                output_dir = self._storage_manager.resolve_path("diagnostics")
+            else:
+                data_dir = os.path.dirname(os.path.dirname(self._config_path))
+                log_dir = os.path.join(data_dir, "logs")
+                output_dir = os.path.join(data_dir, "diagnostics")
             bundle_path = create_diagnostic_bundle(
                 output_dir=output_dir,
                 log_dir=log_dir,

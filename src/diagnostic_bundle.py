@@ -22,6 +22,7 @@ def create_diagnostic_bundle(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     bundle_name = f"diag_bundle_{timestamp}.zip"
     bundle_path = os.path.join(output_dir, bundle_name)
+    tmp_bundle_path = bundle_path + ".tmp"
 
     runtime_info = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -34,24 +35,34 @@ def create_diagnostic_bundle(
     if extra:
         runtime_info["extra"] = extra
 
-    with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        # Snapshot runtime
-        zf.writestr("runtime_snapshot.json", json.dumps(runtime_info, indent=2, ensure_ascii=True))
+    try:
+        with zipfile.ZipFile(tmp_bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            # Snapshot runtime
+            zf.writestr("runtime_snapshot.json", json.dumps(runtime_info, indent=2, ensure_ascii=True))
 
-        # Config active
-        cfg_path = Path(config_path)
-        if cfg_path.exists():
-            zf.write(str(cfg_path), arcname=f"config/{cfg_path.name}")
+            # Config active
+            cfg_path = Path(config_path)
+            if cfg_path.exists():
+                zf.write(str(cfg_path), arcname=f"config/{cfg_path.name}")
 
-        # Logs rotation
-        log_path = Path(log_dir)
-        if log_path.exists():
-            for p in sorted(log_path.glob("clios.log.jsonl*")):
-                zf.write(str(p), arcname=f"logs/{p.name}")
-            fatal = log_path / "fatal_tracebacks.log"
-            if fatal.exists():
-                zf.write(str(fatal), arcname="logs/fatal_tracebacks.log")
+            # Logs rotation
+            log_path = Path(log_dir)
+            if log_path.exists():
+                for p in sorted(log_path.glob("clios.log.jsonl*")):
+                    zf.write(str(p), arcname=f"logs/{p.name}")
+                fatal = log_path / "fatal_tracebacks.log"
+                if fatal.exists():
+                    zf.write(str(fatal), arcname="logs/fatal_tracebacks.log")
+        with open(tmp_bundle_path, "rb") as bundle_file:
+            os.fsync(bundle_file.fileno())
+        os.replace(tmp_bundle_path, bundle_path)
+    except Exception:
+        try:
+            if os.path.exists(tmp_bundle_path):
+                os.remove(tmp_bundle_path)
+        except OSError:
+            pass
+        raise
 
     return bundle_path
-
 

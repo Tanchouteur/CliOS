@@ -12,6 +12,7 @@ Rectangle {
 
     /* Recuperation des donnees de sante du systeme */
     property var health: bridge && bridge.systemHealth !== undefined ? bridge.systemHealth : {}
+    property var storageStatus: bridge && bridge.storageStatus !== undefined ? bridge.storageStatus : ({})
     property var allKeys: Object.keys(statusBar.health)
 
     /* Classification stricte des services par statut */
@@ -44,6 +45,37 @@ Rectangle {
         Row {
             spacing: 10
             Layout.alignment: Qt.AlignVCenter
+
+            Rectangle {
+                id: usbStoragePill
+                property bool usbOk: statusBar.storageStatus.usb_connected === true
+                width: usbStorageText.width + 30
+                height: 28
+                radius: 14
+                color: usbOk ? Qt.rgba(0.0, 1.0, 0.0, 0.1) : Qt.rgba(1.0, 0.0, 0.0, 0.1)
+                border.color: usbOk ? "#00ff00" : "#ff0000"
+                border.width: 1
+
+                SequentialAnimation on opacity {
+                    running: !usbStoragePill.usbOk
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.45; duration: 600 }
+                    NumberAnimation { to: 1.0; duration: 600 }
+                }
+
+                Text {
+                    id: usbStorageText
+                    anchors.centerIn: parent
+                    text: usbStoragePill.usbOk
+                          ? "💾 " + (statusBar.storageStatus.free_space_mb >= 1024
+                                     ? (statusBar.storageStatus.free_space_mb / 1024).toFixed(1) + " GB"
+                                     : Math.round(statusBar.storageStatus.free_space_mb || 0) + " MB")
+                          : "💾 DÉGRADÉ"
+                    color: usbStoragePill.usbOk ? "#00ff00" : "#ff0000"
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+            }
 
             /* Groupe 1 : Services en Erreur (Rouge) */
             Rectangle {
