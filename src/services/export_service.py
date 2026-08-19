@@ -14,9 +14,9 @@ class ExportService(BaseService):
     Intègre une vérification périodique et une journalisation des fichiers traités.
     """
 
-    def __init__(self, bridge, storage, data_dir: str):
+    def __init__(self, notifier, storage, data_dir: str):
         super().__init__("Export", storage)
-        self.bridge = bridge
+        self._notifier = notifier
         self.data_dir = data_dir
         self.config_filename = "clos_export.json"
         self.usb_history_filename = ".clios_export_history.json"
@@ -47,16 +47,20 @@ class ExportService(BaseService):
     def request_reexport_all(self):
         self._force_reexport_all = True
         self.print_message("Ré-export complet demandé pour le prochain cycle USB.")
-        self.bridge.send_notification("INFO", "Re-export total programme", 3000)
+        self._notifier("INFO", "Re-export total programme", 3000)
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(
+            target=self._run, args=(stop_event,), daemon=True, name=self.service_name
+        )
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         """Boucle principale orchestrant la detection."""
         # Attente initiale pour ne pas surcharger le demarrage du systeme
-        time.sleep(5.0)
+        if stop_event.wait(5.0):
+            return
 
         while not stop_event.is_set():
             if not self.is_exporting:
@@ -131,7 +135,7 @@ class ExportService(BaseService):
 
             self.set_warning("Processus d'exportation actif.")
             mode_label = " (mode re-export total)" if self._force_reexport_all else ""
-            self.bridge.send_notification("INFO", f"Debut de l'exportation USB{mode_label}", 3000)
+            self._notifier("INFO", f"Debut de l'exportation USB{mode_label}", 3000)
 
             for filename, src, tmp_dst, final_dst, signature in pending_files:
                 # Copie atomique
@@ -154,12 +158,12 @@ class ExportService(BaseService):
 
             msg = f"Export terminé : {exported_count} fichiers."
             self.set_ok(msg)
-            self.bridge.send_notification("OK", msg, 5000)
+            self._notifier("OK", msg, 5000)
             self._force_reexport_all = False
 
         except Exception as e:
             self.set_error(f"Echec du transfert : {e}")
-            self.bridge.send_notification("ERROR", "Échec de l'exportation", 5000)
+            self._notifier("ERROR", "Échec de l'exportation", 5000)
         finally:
             self.is_exporting = False
 

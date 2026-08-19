@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import "../../../style" as T
+import "../../../state" as S
 import "../components" as C
 
 Item {
@@ -13,8 +14,8 @@ Item {
     onSelectedColorChanged: T.Theme.main = selectedColor
 
     Component.onCompleted: {
-        var startColorHex = (bridge.config.theme !== undefined && bridge.config.theme.main !== undefined)
-                             ? bridge.config.theme.main
+        var startColorHex = (S.UiState.config.theme !== undefined && S.UiState.config.theme.main !== undefined)
+                             ? S.UiState.config.theme.main
                              : "#ff4400"
         var c = Qt.color(startColorHex)
         currentHue = c.hsvHue

@@ -8,7 +8,7 @@ import "../../../state" as S
 Item {
     id: root
     signal backRequested()
-    readonly property var serviceKeys: Object.keys(S.UiState.health)
+    readonly property var serviceKeys: Object.keys(S.UiState.serviceHealth)
 
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 16; spacing: 12
@@ -21,7 +21,7 @@ Item {
                 radius: T.StyleManager.radiusSmall; color: T.StyleManager.surface
                 border.width: 1; border.color: T.StyleManager.outline; clip: true
                 property string serviceId: String(modelData)
-                property var details: S.UiState.health[serviceId] || ({})
+                property var details: S.UiState.serviceHealth[serviceId] || ({})
                 property bool running: details.status !== "DISABLED"
                 property bool expanded: false
                 property var params: []

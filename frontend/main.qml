@@ -3,10 +3,11 @@ import QtQuick.Controls
 import QtQuick.Window
 import "style"
 import "components"
+import "state" as S
 
 ApplicationWindow {
     id: appWindow
-    property string version: bridge.data !== undefined && bridge.data.system_version !== undefined ? bridge.data.system_version : "?.?.?"
+    property string version: S.UiState.systemVersion
     visible: true
     width: 1920
     height: 720

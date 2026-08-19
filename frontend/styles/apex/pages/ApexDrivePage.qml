@@ -293,7 +293,7 @@ Item {
                         model: [
                             { label: "CHARGE MOTEUR", value: S.UiState.engineLoad, text: S.UiState.fixed(S.UiState.engineLoad, 0, "0") + " %", color: T.StyleManager.accent },
                             { label: "PUISSANCE", value: 100 * S.UiState.power / Math.max(1, S.UiState.maxPowerKw), text: S.UiState.fixed(S.UiState.powerHp, 0, "0") + " / " + S.UiState.fixed(S.UiState.maxPowerHp, 0, "0") + " ch", color: "#6EE8FF" },
-                            { label: "FORCE LATÉRALE", value: Math.min(100, Math.abs(S.UiState.gForce) * 100), text: S.UiState.fixed(S.UiState.gForce, 2, "0,00") + " G", color: "#FFCA68" }
+                            { label: "ACCÉLÉRATION LONG.", value: Math.min(100, Math.abs(S.UiState.longitudinalG) * 100), text: S.UiState.fixed(S.UiState.longitudinalG, 2, "0,00") + " G", color: "#FFCA68" }
                         ]
                         delegate: ColumnLayout {
                             Layout.fillWidth: true

@@ -152,7 +152,7 @@ Item {
                     Repeater {
                         model: [
                             { label: "ACCÉLÉRATEUR", value: Math.min(1, S.UiState.throttle / 100), text: S.UiState.fixed(S.UiState.throttle, 0, "0") + " %", color: T.StyleManager.accent },
-                            { label: "CHARGE LATÉRALE", value: Math.min(1, Math.abs(S.UiState.gForce)), text: S.UiState.fixed(S.UiState.gForce, 2, "0,00") + " G", color: "#FFB84D" }
+                            { label: "ACCÉLÉRATION LONG.", value: Math.min(1, Math.abs(S.UiState.longitudinalG)), text: S.UiState.fixed(S.UiState.longitudinalG, 2, "0,00") + " G", color: "#FFB84D" }
                         ]
                         delegate: Rectangle {
                             Layout.fillWidth: true
@@ -216,7 +216,7 @@ Item {
                         model: [
                             { label: "DISTANCE", value: S.UiState.fixed(S.UiState.tripDistance, 1, "0"), unit: "km" },
                             { label: "RÉGIME MOY.", value: Math.round(S.UiState.avgRpm), unit: "rpm" },
-                            { label: "ROUE LIBRE", value: S.UiState.fixed(S.UiState.coastingKm, 1, "0"), unit: "km" },
+                            { label: "DÉCÉL. SANS GAZ", value: S.UiState.fixed(S.UiState.decelerationWithoutThrottleKm, 1, "0"), unit: "km" },
                             { label: "AGRESSIVITÉ", value: S.UiState.fixed(S.UiState.aggressivityPct, 0, "0"), unit: "%" }
                         ]
                         delegate: Rectangle {

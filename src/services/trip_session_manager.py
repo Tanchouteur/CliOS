@@ -7,18 +7,21 @@ from src.services.base_service import BaseService
 
 
 class TripSessionManager(BaseService):
-    def __init__(self, api, storage, stats_service, trips_dir):
+    VALID_STATES = {"IDLE", "RUNNING", "PAUSED", "WAITING_IGNITION", "ENDING", "ENDED"}
+
+    def __init__(self, runtime, storage, stats_service, trips_dir):
         super().__init__("SessionManager", storage)
-        self.api = api
+        self.runtime = runtime
         self.stats_service = stats_service
 
         self.trips_dir = trips_dir
         self._dir_lock = threading.RLock()
         self._pending_summaries = []
+        self._session_lock = threading.RLock()
         self._ensure_trips_dir()
 
         # Initialise explicitement l'état de session.
-        self.api.update({"session_state": "IDLE"})
+        self.runtime.publish("session", {"state": "IDLE"}, source="session-manager")
 
         self.trip_start_time = None
         self.trip_start_odo = 0.0
@@ -27,21 +30,27 @@ class TripSessionManager(BaseService):
 
     # Commandes exposées à l'interface.
     def resume_trip(self):
-        if self.api.get_display_data().get("session_state") == "PAUSED":
-            self.api.update({"session_state": "WAITING_IGNITION"})
+        if self.runtime.snapshot().domain("session").get("state") == "PAUSED":
+            self.runtime.publish(
+                "session", {"state": "WAITING_IGNITION"}, source="session-manager"
+            )
             self.set_ok("Trajet repris, en attente de contact...")
 
     def end_trip(self):
-        safe_data = self.api.get_display_data()
-
-        if safe_data.get("session_state") in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
-            saved = self._save_trip_summary()
-
-            current_odo = safe_data.get("odometer", 0.0)
-            self.stats_service.reset_session(current_odo)
-
-            self.api.update({"session_state": "IDLE"})
-
+        with self._session_lock:
+            snapshot = self.runtime.snapshot()
+            state = snapshot.domain("session").get("state")
+            if state not in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
+                return
+            # Fige d'abord la session afin que TripStats ne continue pas à
+            # alimenter les compteurs pendant la sérialisation.
+            self.runtime.publish(
+                "session", {"state": "ENDING"}, source="session-manager"
+            )
+            current_odo = snapshot.domain("motion").get("odometer", 0.0)
+            final_stats = self.stats_service.finish_session(current_odo)
+            saved = self._save_trip_summary(final_stats, current_odo)
+            self.runtime.publish("session", {"state": "IDLE"}, source="session-manager")
             self.trip_start_time = None
             self.trip_trace.clear()
             if saved:
@@ -50,11 +59,8 @@ class TripSessionManager(BaseService):
                 self.set_warning("Trajet conservé en mémoire, écriture en attente")
 
     # Persistance de la synthèse de trajet.
-    def _save_trip_summary(self):
-        stats = self.stats_service.stats
+    def _save_trip_summary(self, stats, end_odo):
         end_time = time.time()
-
-        end_odo = self.api.get_display_data().get("odometer", 0.0)
 
         duration_sec = int(end_time - self.trip_start_time) if self.trip_start_time else 0
 
@@ -71,8 +77,12 @@ class TripSessionManager(BaseService):
                 "cost_eur": stats.get("session_cost", 0.0),
                 "avg_rpm": stats.get("avg_rpm", 0),
                 "aggressivity_pct": stats.get("aggressivity_pct", 0.0),
+                "deceleration_without_throttle_km": stats.get(
+                    "deceleration_without_throttle_km", 0.0
+                ),
+                "longitudinal_g_last": stats.get("longitudinal_g", 0.0),
             },
-            "trace": self.trip_trace
+            "trace": list(self.trip_trace)
         }
 
         if self._write_summary(trip_summary):
@@ -137,46 +147,51 @@ class TripSessionManager(BaseService):
 
     # Cycle de vie du service.
     def stop(self):
-        state = self.api.get_display_data().get("session_state")
+        super().stop()
+        state = self.runtime.snapshot().domain("session").get("state")
         if state in ["RUNNING", "PAUSED", "WAITING_IGNITION"]:
             self.print_message("Arrêt système détecté : Sauvegarde automatique du trajet.")
             self.end_trip()
-        super().stop()
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name)
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            safe_data = self.api.get_display_data()
-
-            ignition = safe_data.get("key_run", False)
-            state = safe_data.get("session_state")
+            snapshot = self.runtime.snapshot()
+            powertrain = snapshot.domain("powertrain")
+            motion = snapshot.domain("motion")
+            session = snapshot.domain("session")
+            ignition = powertrain.get("key_run", False)
+            state = session.get("state")
             current_time = time.time()
-            current_speed = safe_data.get("speed", 0.0)
+            current_speed = motion.get("speed", 0.0)
 
             # Démarre une nouvelle session.
             if ignition and state in ["IDLE", "ENDED"]:
-                self.api.update({"session_state": "RUNNING"})
+                current_odo = motion.get("odometer", 0.0)
+                self.stats_service.begin_session(current_odo)
+                self.runtime.publish("session", {"state": "RUNNING"}, source="session-manager")
                 self.trip_start_time = current_time
-                self.trip_start_odo = safe_data.get("odometer", 0.0)
+                self.trip_start_odo = current_odo
                 self.trip_trace = []
                 self.set_ok("Enregistrement en cours")
 
             # Reprise manuelle après pause.
             elif state == "WAITING_IGNITION" and (ignition or current_speed > 3.0):
-                self.api.update({"session_state": "RUNNING"})
+                self.runtime.publish("session", {"state": "RUNNING"}, source="session-manager")
                 self.set_ok("Reprise de l'enregistrement")
 
             # Reprise automatique sur mouvement véhicule.
             elif state == "PAUSED" and current_speed > 3.0:
-                self.api.update({"session_state": "RUNNING"})
+                self.runtime.publish("session", {"state": "RUNNING"}, source="session-manager")
                 self.set_ok("Reprise automatique (mouvement detecte)")
 
             # Mise en pause automatique sans contact.
             elif not ignition and state == "RUNNING":
-                self.api.update({"session_state": "PAUSED"})
+                self.runtime.publish("session", {"state": "PAUSED"}, source="session-manager")
                 self.set_warning("En attente de décision...")
 
             # Enregistre la trace de session.
@@ -184,8 +199,8 @@ class TripSessionManager(BaseService):
                 if current_time - self.last_trace_time >= 5.0:
                     point = {
                         "ts": int(current_time),
-                        "spd": round(safe_data.get("speed", 0.0), 1),
-                        "cons": self.stats_service.stats.get("inst_cons", 0.0)
+                        "spd": round(current_speed, 1),
+                        "cons": snapshot.domain("trip").get("inst_cons", 0.0)
                     }
                     if point["spd"] > 1.0:
                         self.trip_trace.append(point)

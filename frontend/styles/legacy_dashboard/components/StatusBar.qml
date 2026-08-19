@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import "../../../style" as T
+import "../../../state" as S
 
 Rectangle {
     id: statusBar
@@ -11,8 +12,8 @@ Rectangle {
     z: 100
 
     /* Recuperation des donnees de sante du systeme */
-    property var health: bridge && bridge.systemHealth !== undefined ? bridge.systemHealth : {}
-    property var storageStatus: bridge && bridge.storageStatus !== undefined ? bridge.storageStatus : ({})
+    property var health: S.UiState.serviceHealth
+    property var storageStatus: S.UiState.storageState
     property var allKeys: Object.keys(statusBar.health)
 
     /* Classification stricte des services par statut */

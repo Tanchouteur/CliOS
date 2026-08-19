@@ -55,18 +55,18 @@ Item {
 
         Repeater {
             model: [
-                { id: "turn_left", label: "◀", color: T.StyleManager.success, active: S.UiState.boolValue(S.UiState.vehicle.turn_left) || S.UiState.boolValue(S.UiState.vehicle.indicator_left) },
-                { id: "turn_right", label: "▶", color: T.StyleManager.success, active: S.UiState.boolValue(S.UiState.vehicle.turn_right) || S.UiState.boolValue(S.UiState.vehicle.indicator_right) },
-                { id: "lights", label: "FEU", color: T.StyleManager.success, active: S.UiState.boolValue(S.UiState.vehicle.lights) || S.UiState.boolValue(S.UiState.vehicle.pos_lights) || S.UiState.boolValue(S.UiState.vehicle.low_beam) },
-                { id: "high_beam", label: "ROUTE", color: "#3B82F6", active: S.UiState.boolValue(S.UiState.vehicle.high_beam) },
-                { id: "stop", label: "STOP", color: T.StyleManager.danger, active: S.UiState.boolValue(S.UiState.vehicle.parking_brake) || S.UiState.boolValue(S.UiState.vehicle.brake_warning) },
-                { id: "unbelted", label: "CEINT", color: T.StyleManager.danger, active: S.UiState.boolValue(S.UiState.vehicle.driver_unbelted) },
+                { id: "turn_left", label: "◀", color: T.StyleManager.success, active: S.UiState.turnLeftActive },
+                { id: "turn_right", label: "▶", color: T.StyleManager.success, active: S.UiState.turnRightActive },
+                { id: "lights", label: "FEU", color: T.StyleManager.success, active: S.UiState.lightsActive },
+                { id: "high_beam", label: "ROUTE", color: "#3B82F6", active: S.UiState.highBeamActive },
+                { id: "stop", label: "STOP", color: T.StyleManager.danger, active: S.UiState.handbrakeActive || S.UiState.brakeWarning },
+                { id: "unbelted", label: "CEINT", color: T.StyleManager.danger, active: S.UiState.driverUnbelted },
                 { id: "door", label: "PORTE", color: T.StyleManager.warning, active: S.UiState.doorOpen },
-                { id: "oil", label: "HUILE", color: T.StyleManager.danger, active: S.UiState.boolValue(S.UiState.vehicle.oil_warning) },
-                { id: "battery", label: "BAT", color: T.StyleManager.danger, active: S.UiState.boolValue(S.UiState.vehicle.battery_warning) },
-                { id: "abs", label: "ABS", color: T.StyleManager.warning, active: S.UiState.boolValue(S.UiState.vehicle.abs_warning) },
-                { id: "esp", label: "ESP", color: T.StyleManager.warning, active: S.UiState.boolValue(S.UiState.vehicle.esp_warning) },
-                { id: "engine", label: "MOT", color: T.StyleManager.warning, active: S.UiState.boolValue(S.UiState.vehicle.engine_warning) }
+                { id: "oil", label: "HUILE", color: T.StyleManager.danger, active: S.UiState.oilWarning },
+                { id: "battery", label: "BAT", color: T.StyleManager.danger, active: S.UiState.batteryWarning },
+                { id: "abs", label: "ABS", color: T.StyleManager.warning, active: S.UiState.absWarning },
+                { id: "esp", label: "ESP", color: T.StyleManager.warning, active: S.UiState.espWarning },
+                { id: "engine", label: "MOT", color: T.StyleManager.warning, active: S.UiState.engineWarning }
             ]
 
             Rectangle {
@@ -105,7 +105,7 @@ Item {
                 color: S.UiState.usbConnected ? T.StyleManager.success : "#4A5B6E"
             }
             Text {
-                text: "USB " + S.UiState.fixed(S.UiState.storage.free_space_mb, 0, "—") + " MB"
+                text: "USB " + S.UiState.fixed(S.UiState.storageFreeMb, 0, "—") + " MB"
                 color: "#FFFFFF"
                 font.family: T.StyleManager.fontFamily
                 font.pixelSize: 13

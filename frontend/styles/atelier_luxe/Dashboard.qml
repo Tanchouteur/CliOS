@@ -6,6 +6,7 @@ import "./components"
 
 Item {
     id: root
+    objectName: "atelierLuxeDashboardRoot"
     width: 1920
     height: 720
     clip: true

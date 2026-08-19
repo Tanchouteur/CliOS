@@ -45,7 +45,7 @@ Item {
         width: 130
         height: 28
         radius: 14
-        visible: S.UiState.cruiseStatus === "ACTIF" || S.UiState.vehicle.regulateur_statut > 0
+        visible: S.UiState.cruiseMode !== "OFF"
         color: S.UiState.cruiseStatus === "ACTIF" ? Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.22) : "#080D15"
         border.width: 1.2
         border.color: S.UiState.cruiseStatus === "ACTIF" ? T.StyleManager.accent : "#2A3C52"

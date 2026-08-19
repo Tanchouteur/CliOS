@@ -4,11 +4,12 @@ import QtQuick.Layouts 1.15
 
 import "../../../style" as T
 import "../components" as C
+import "../../../state" as S
 
 Item {
     id: root
 
-    property var serviceKeys: (bridge !== undefined && bridge.systemHealth !== undefined) ? Object.keys(bridge.systemHealth) : []
+    property var serviceKeys: Object.keys(S.UiState.serviceHealth)
 
     C.PageHeader {
         id: header
@@ -47,7 +48,7 @@ Item {
                 Behavior on height { NumberAnimation { duration: 250; easing.type: Easing.OutCirc } }
 
                 property string serviceId: modelData
-                property var srv: bridge.systemHealth[serviceId]
+                property var srv: S.UiState.serviceHealth[serviceId]
                 property bool isOn: srv !== undefined && srv.status !== "DISABLED"
 
                 // État local des paramètres du service.

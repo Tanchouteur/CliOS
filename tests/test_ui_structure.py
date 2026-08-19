@@ -7,32 +7,47 @@ from PySide6.QtQml import QQmlEngine, QQmlComponent
 
 
 class MockBridge(QObject):
-    storageStatusChanged = Signal()
+    vehicleStateChanged = Signal()
+    tripStateChanged = Signal()
+    diagnosticsStateChanged = Signal()
+    systemStateChanged = Signal()
+    sessionStateChanged = Signal()
+    calibrationStateChanged = Signal()
+    presentationStateChanged = Signal()
+    dataQualityChanged = Signal()
+    configChanged = Signal()
     notificationEvent = Signal(str, str, int)
 
     def __init__(self):
         super().__init__()
-        self._data = {
-            "speed": 0.0, "rpm": 0.0, "gear": "N", "fuel_level": 50.0, "engine_temp": 90.0,
-            "door_fl_open": False, "door_fr_open": False, "door_rl_open": False, "door_rr_open": False,
-            "trunk_open": False, "driver_unbelted": False, "session_state": "RUNNING", "outside_temp": 20.0,
-            "odometer": 100000.0, "system_version": "1.0.0",
+        self._vehicle = {
+            "powertrain": {"rpm": 0.0, "fuel_level": 50.0, "engine_temp": 90.0},
+            "motion": {"speed": 0.0, "gear": "N", "odometer": 100000.0},
+            "wheels": {}, "body": {}, "assistance": {}, "dynamics": {},
+            "environment": {"outside_temp": 20.0}, "controls": {}, "alerts": {},
         }
-        self._stats = {"distance_km": 10.0, "session_fuel_l": 0.8, "session_cost": 1.5, "autonomy": 600.0, "trip_b": 50.0, "avg_cons_b": 6.2}
+        self._trip = {"distance_km": 10.0, "session_fuel_l": 0.8, "session_cost": 1.5, "autonomy": 600.0, "trip_b": 50.0, "avg_cons_b": 6.2}
         self._config = {"theme": {"main": "#48B8FF"}, "ui": {"visual_style": "gt_modern"}}
-        self._system_health = {"service1": {"status": "OK"}}
-        self._storage_status = {"usb_connected": True, "free_space_mb": 15000.0}
+        self._system = {"version": "1.0.0", "telemetry": {}, "health": {"service1": {"status": "OK"}}, "storage": {"usb_connected": True, "free_space_mb": 15000.0}}
 
-    @Property("QVariantMap")
-    def data(self): return self._data
-    @Property("QVariantMap")
-    def stats(self): return self._stats
-    @Property("QVariantMap")
+    @Property("QVariantMap", notify=vehicleStateChanged)
+    def vehicleState(self): return self._vehicle
+    @Property("QVariantMap", notify=tripStateChanged)
+    def tripState(self): return self._trip
+    @Property("QVariantMap", notify=diagnosticsStateChanged)
+    def diagnosticsState(self): return {"codes": [], "scanning": False, "has_scanned": False}
+    @Property("QVariantMap", notify=systemStateChanged)
+    def systemState(self): return self._system
+    @Property("QVariantMap", notify=sessionStateChanged)
+    def sessionState(self): return {"state": "RUNNING"}
+    @Property("QVariantMap", notify=calibrationStateChanged)
+    def calibrationState(self): return {}
+    @Property("QVariantMap", notify=presentationStateChanged)
+    def presentationState(self): return {"startup_active": False, "domains": {}}
+    @Property("QVariantMap", notify=dataQualityChanged)
+    def dataQuality(self): return {}
+    @Property("QVariantMap", notify=configChanged)
     def config(self): return self._config
-    @Property("QVariantMap")
-    def systemHealth(self): return self._system_health
-    @Property("QVariantMap", notify=storageStatusChanged)
-    def storageStatus(self): return self._storage_status
 
     @Slot(result="QVariantList")
     def getAvailableUiStyles(self):

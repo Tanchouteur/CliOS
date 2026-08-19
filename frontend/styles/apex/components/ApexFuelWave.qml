@@ -161,9 +161,7 @@ Item {
             ctx.textBaseline = "middle"
             ctx.fillText(S.UiState.fixed(root.fuelLevel, 1, "—") + " L", w / 2, h * 0.44)
 
-            var autoVal = (S.UiState.trip && S.UiState.trip.autonomy !== undefined)
-                ? Math.round(S.UiState.trip.autonomy)
-                : "—"
+            var autoVal = Math.round(S.UiState.autonomy)
             ctx.fillStyle = Qt.rgba(1.0, 1.0, 1.0, 0.65)
             ctx.font = "bold 13px Arial"
             ctx.fillText("AUTONOMIE " + autoVal + " KM", w / 2, h * 0.78)

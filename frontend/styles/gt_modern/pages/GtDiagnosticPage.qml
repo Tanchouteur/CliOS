@@ -6,10 +6,10 @@ import "../../../state" as S
 
 Item {
     id: root
-    readonly property var codes: bridge.diagnosticCodes || []
-    readonly property bool scanning: bridge.isScanning === true
-    readonly property bool scanned: bridge.hasScanned === true
-    readonly property bool ready: S.UiState.health.Diag === undefined || S.UiState.health.Diag.status !== "ERROR"
+    readonly property var codes: S.UiState.diagnosticCodes
+    readonly property bool scanning: S.UiState.isScanning
+    readonly property bool scanned: S.UiState.hasScanned
+    readonly property bool ready: S.UiState.serviceHealth.Diag === undefined || S.UiState.serviceHealth.Diag.status !== "ERROR"
     readonly property string statusText: !ready ? "INDISPONIBLE" : scanning ? "ANALYSE" : !scanned ? "PRÊT" : codes.length ? "DÉFAUTS" : "OK"
     readonly property color statusColor: !ready ? T.StyleManager.textSecondary : scanning ? T.StyleManager.accent : codes.length ? T.StyleManager.danger : scanned ? T.StyleManager.success : T.StyleManager.text
 

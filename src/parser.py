@@ -18,6 +18,16 @@ class DbcParser:
                     sig_def.setdefault("size", 1)
                     sig_def.setdefault("start_byte", 0)
                     sig_def.setdefault("endian", "big")
+                    sig_def.setdefault("signed", False)
+                    sig_def.setdefault("unit", None)
+                    sig_def.setdefault("min_value", None)
+                    sig_def.setdefault("max_value", None)
+                    sig_def.setdefault("bit_length", sig_def["size"] * 8)
+
+                    if sig_def["endian"] not in {"big", "little"}:
+                        raise ValueError(f"Endianness invalide pour {sig_name}: {sig_def['endian']}")
+                    if int(sig_def["size"]) <= 0 or int(sig_def["start_byte"]) < 0:
+                        raise ValueError(f"Position/taille invalide pour {sig_name}")
 
                     if "mask" in sig_def:
                         sig_def["mask_val"] = int(sig_def["mask"], 16)

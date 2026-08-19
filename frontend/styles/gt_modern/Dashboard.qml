@@ -116,7 +116,7 @@ Item {
                 Layout.preferredWidth: 190; height: 38; radius: T.StyleManager.radiusSmall
                 color: S.UiState.ramMode ? Qt.rgba(T.StyleManager.danger.r, T.StyleManager.danger.g, T.StyleManager.danger.b, 0.14) : Qt.rgba(T.StyleManager.success.r, T.StyleManager.success.g, T.StyleManager.success.b, 0.12)
                 border.width: 1; border.color: S.UiState.ramMode ? T.StyleManager.danger : T.StyleManager.success
-                Text { anchors.centerIn: parent; text: S.UiState.ramMode ? "USB · MODE RAM" : "USB · " + S.UiState.fixed(S.UiState.storage.free_space_mb, 0, "0") + " MB"; color: parent.border.color; font.pixelSize: 14; font.bold: true }
+                Text { anchors.centerIn: parent; text: S.UiState.ramMode ? "USB · MODE RAM" : "USB · " + S.UiState.fixed(S.UiState.storageFreeMb, 0, "0") + " MB"; color: parent.border.color; font.pixelSize: 14; font.bold: true }
             }
             Rectangle {
                 visible: S.UiState.serviceErrorKeys.length + S.UiState.serviceWarningKeys.length > 0
@@ -155,14 +155,14 @@ Item {
                 Layout.fillWidth: true; Layout.preferredHeight: 112; title: "Carburant"
                 ColumnLayout {
                     anchors.fill: parent; spacing: 8
-                    RowLayout { Layout.fillWidth: true; Text { Layout.fillWidth: true; text: S.UiState.fixed(S.UiState.fuelLevel, 1, "—") + " L"; color: S.UiState.lowFuel ? T.StyleManager.warning : T.StyleManager.text; font.pixelSize: 24; font.weight: Font.DemiBold } Text { text: S.UiState.fixed(S.UiState.trip.autonomy, 0, "—") + " km"; color: T.StyleManager.textSecondary; font.pixelSize: 19 } }
+                    RowLayout { Layout.fillWidth: true; Text { Layout.fillWidth: true; text: S.UiState.fixed(S.UiState.fuelLevel, 1, "—") + " L"; color: S.UiState.lowFuel ? T.StyleManager.warning : T.StyleManager.text; font.pixelSize: 24; font.weight: Font.DemiBold } Text { text: S.UiState.fixed(S.UiState.autonomy, 0, "—") + " km"; color: T.StyleManager.textSecondary; font.pixelSize: 19 } }
                     GtProgress { Layout.fillWidth: true; height: 10; value: S.UiState.fuelLevel; to: S.UiState.maxFuel; fillColor: S.UiState.lowFuel ? T.StyleManager.warning : T.StyleManager.accent }
                 }
             }
             RowLayout {
                 Layout.fillWidth: true; Layout.fillHeight: true; spacing: 10
-                GtMetric { Layout.fillWidth: true; label: "Trip B"; value: S.UiState.fixed(S.UiState.trip.trip_b, 1, "0,0"); unit: "km"; valueSize: 27 }
-                GtMetric { Layout.fillWidth: true; label: "Conso moy."; value: S.UiState.fixed(S.UiState.trip.avg_cons_b, 1, "0,0"); unit: "L/100"; valueSize: 27 }
+                GtMetric { Layout.fillWidth: true; label: "Trip B"; value: S.UiState.fixed(S.UiState.tripB, 1, "0,0"); unit: "km"; valueSize: 27 }
+                GtMetric { Layout.fillWidth: true; label: "Conso moy."; value: S.UiState.fixed(S.UiState.avgConsB, 1, "0,0"); unit: "L/100"; valueSize: 27 }
             }
         }
     }
@@ -195,9 +195,9 @@ Item {
                     anchors.fill: parent; spacing: 18
                     RowLayout {
                         Layout.fillWidth: true; Layout.fillHeight: true; spacing: 36
-                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Distance"; value: S.UiState.fixed(S.UiState.trip.distance_km, 1, "0,0"); unit: "km"; alignment: Text.AlignHCenter }
-                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Carburant"; value: S.UiState.fixed(S.UiState.trip.session_fuel_l, 2, "0,00"); unit: "L"; alignment: Text.AlignHCenter }
-                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Coût"; value: S.UiState.fixed(S.UiState.trip.session_cost, 2, "0,00"); unit: "€"; alignment: Text.AlignHCenter }
+                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Distance"; value: S.UiState.fixed(S.UiState.tripDistance, 1, "0,0"); unit: "km"; alignment: Text.AlignHCenter }
+                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Carburant"; value: S.UiState.fixed(S.UiState.tripFuelLiters, 2, "0,00"); unit: "L"; alignment: Text.AlignHCenter }
+                        GtMetric { Layout.fillWidth: true; Layout.minimumWidth: 230; label: "Coût"; value: S.UiState.fixed(S.UiState.tripCost, 2, "0,00"); unit: "€"; alignment: Text.AlignHCenter }
                     }
                     Row {
                         visible: S.UiState.sessionState === "PAUSED"

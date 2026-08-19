@@ -7,11 +7,28 @@ QtObject {
     // =========================================================================
     // 1. SOURCES BRUTES SÉCURISÉES DEPUIS LE BRIDGE PYTHON
     // =========================================================================
-    readonly property var vehicle: bridge && bridge.data ? bridge.data : ({})
-    readonly property var trip: bridge && bridge.stats ? bridge.stats : ({})
-    readonly property var health: bridge && bridge.systemHealth ? bridge.systemHealth : ({})
-    readonly property var storage: bridge && bridge.storageStatus ? bridge.storageStatus : ({})
+    readonly property var vehicleState: bridge && bridge.vehicleState ? bridge.vehicleState : ({})
+    readonly property var rawTripState: bridge && bridge.tripState ? bridge.tripState : ({})
+    readonly property var diagnosticsState: bridge && bridge.diagnosticsState ? bridge.diagnosticsState : ({})
+    readonly property var sessionRuntimeState: bridge && bridge.sessionState ? bridge.sessionState : ({})
+    readonly property var calibrationState: bridge && bridge.calibrationState ? bridge.calibrationState : ({})
+    readonly property var systemState: bridge && bridge.systemState ? bridge.systemState : ({})
+    readonly property var presentationState: bridge && bridge.presentationState ? bridge.presentationState : ({})
+    readonly property var dataQuality: bridge && bridge.dataQuality ? bridge.dataQuality : ({})
     readonly property var config: bridge && bridge.config ? bridge.config : ({})
+
+    readonly property var powertrain: presentedDomain("powertrain")
+    readonly property var motion: presentedDomain("motion")
+    readonly property var wheels: presentedDomain("wheels")
+    readonly property var body: presentedDomain("body")
+    readonly property var assistance: presentedDomain("assistance")
+    readonly property var dynamics: presentedDomain("dynamics")
+    readonly property var environment: presentedDomain("environment")
+    readonly property var alerts: presentedDomain("alerts")
+    readonly property var tripState: presentedStandaloneDomain("trip", rawTripState)
+    readonly property var serviceHealth: systemState.health || ({})
+    readonly property var storageState: systemState.storage || ({})
+    readonly property var telemetryState: systemState.telemetry || ({})
 
     // =========================================================================
     // 2. CONFIGURATION DU VÉHICULE & CALIBRATIONS
@@ -40,142 +57,150 @@ QtObject {
     // =========================================================================
     // 3. MÉTROLOGIE MOTEUR, VITESSE & TRANSMISSION
     // =========================================================================
-    readonly property real speed: number(vehicle.speed, 0)
-    readonly property real rpm: number(vehicle.rpm, 0)
-    readonly property string gear: text(vehicle.gear, "N")
-    readonly property real engineTemp: number(vehicle.engine_temp, 0)
-    readonly property real outsideTemp: number(vehicle.outside_temp, 0)
-    readonly property real fuelLevel: number(vehicle.fuel_level, 0)
-    readonly property real odometer: number(vehicle.odometer, 0)
-    readonly property string sessionState: text(vehicle.session_state, "IDLE")
+    readonly property real speed: signalFresh("motion", "speed") ? number(motion.speed, 0) : 0
+    readonly property real rpm: signalFresh("powertrain", "rpm") ? number(powertrain.rpm, 0) : 0
+    readonly property string gear: text(motion.gear, "N")
+    readonly property real engineTemp: number(powertrain.engine_temp, 0)
+    readonly property real outsideTemp: number(environment.outside_temp, 0)
+    readonly property real fuelLevel: number(powertrain.fuel_level, 0)
+    readonly property real odometer: number(motion.odometer, 0)
+    readonly property string sessionState: text(sessionRuntimeState.state, "IDLE")
 
     // Pédales & Couple
-    readonly property real throttle: number(vehicle.throttle !== undefined ? vehicle.throttle : (vehicle.accel_pos !== undefined ? vehicle.accel_pos : (vehicle.throttle_pct !== undefined ? vehicle.throttle_pct : 0)), 0)
+    readonly property real throttle: number(powertrain.accel_pos, 0)
     readonly property real pedalPos: throttle
-    readonly property real accelComputed: number(vehicle.accel_computed, 0)
-    readonly property real driverTorqueRequest: number(vehicle.driver_torque_request, 0)
-    readonly property real torqueAvailable: number(vehicle.torque_available, 0)
-    readonly property real engineLoad: Math.max(0, Math.min(100,
-        vehicle.engine_load !== undefined ? number(vehicle.engine_load, 0)
-        : (vehicle.driver_torque_request !== undefined ? number(vehicle.driver_torque_request, 0) : throttle)))
-    readonly property real estimatedTorque: torqueAtRpm(rpm) * engineLoad / 100.0
-    readonly property real torque: number(vehicle.torque !== undefined ? vehicle.torque : (vehicle.torque_nm !== undefined ? vehicle.torque_nm : estimatedTorque), 0)
-    readonly property real power: number(vehicle.power !== undefined ? vehicle.power : (vehicle.power_kw !== undefined ? vehicle.power_kw : (rpm > 0 ? rpm * torque / 9549.0 : 0)), 0)
-    readonly property real powerHp: power * 1.359621617
+    readonly property real accelComputed: number(powertrain.accel_computed, 0)
+    readonly property real driverTorqueRequest: number(powertrain.driver_torque_request, 0)
+    readonly property real ecuTorqueAvailablePct: number(powertrain.torque_available, 0)
+    readonly property real engineLoad: number(powertrain.engine_load_pct, 0)
+    readonly property real availableTorque: number(powertrain.available_torque_nm, maxTorqueNm)
+    readonly property real estimatedTorque: number(powertrain.estimated_torque_nm, 0)
+    readonly property real torque: estimatedTorque
+    readonly property real power: number(powertrain.estimated_power_kw, 0)
+    readonly property real powerHp: number(powertrain.estimated_power_hp, 0)
 
     // État mécanique
-    readonly property bool brakePressed: boolValue(vehicle.brake) || boolValue(vehicle.brake_pressed)
-    readonly property bool clutchPressed: boolValue(vehicle.clutch)
-    readonly property bool handbrakeActive: boolValue(vehicle.parking_brake) || boolValue(vehicle.handbrake) || boolValue(vehicle.handbrake_status)
-    readonly property bool reverseEngaged: boolValue(vehicle.reverse_engaged) || boolValue(vehicle.reverse) || gear === "R"
-    readonly property string engineLight: text(vehicle.engine_light, "OFF") // "RED", "ORANGE", "OFF"
-    readonly property bool glowPlugActive: boolValue(vehicle.glow_plug_status)
+    readonly property bool brakePressed: boolValue(motion.brake) || boolValue(motion.brake_pressed)
+    readonly property bool clutchPressed: boolValue(motion.clutch)
+    readonly property bool handbrakeActive: boolValue(motion.handbrake)
+    readonly property bool reverseEngaged: boolValue(motion.reverse) || boolValue(motion.reverse_engaged) || gear === "R"
+    readonly property string engineLight: text(alerts.engine_light, "OFF")
+    readonly property bool glowPlugActive: boolValue(powertrain.glow_plug_status)
+    readonly property bool ignitionOn: boolValue(powertrain.key_run)
 
     // Alertes d'état moteur
-    readonly property bool lowFuel: maxFuel > 0 && fuelLevel / maxFuel <= reservePercentage
-    readonly property bool hotEngine: engineTemp >= tempWarning
-    readonly property bool redline: rpm >= redlineRpm
+    readonly property bool lowFuel: boolValue(alerts.low_fuel)
+    readonly property bool hotEngine: boolValue(alerts.hot_engine)
+    readonly property bool redline: boolValue(alerts.redline)
+    readonly property bool brakeWarning: boolValue(alerts.brake_warning) || boolValue(alerts.stop_warning)
+    readonly property bool oilWarning: boolValue(alerts.oil_warning)
+    readonly property bool batteryWarning: boolValue(alerts.battery_warning)
+    readonly property bool absWarning: boolValue(alerts.abs_warning) || boolValue(alerts.abs_error) || hasWheelLock
+    readonly property bool espWarning: boolValue(alerts.esp_warning) || boolValue(alerts.esp_active) || hasWheelSlip
+    readonly property bool engineWarning: boolValue(alerts.engine_warning) || engineLight !== "OFF"
 
     // =========================================================================
     // 4. RÉGULATEUR & LIMITEUR DE VITESSE
     // =========================================================================
-    readonly property string cruiseMode: cruiseModeLabel(vehicle.regulateur_mode)
-    readonly property string cruiseStatus: cruiseStatusLabel(vehicle.regulateur_statut)
-    readonly property real cruiseTarget: number(vehicle.vitesse_regulateur, 0)
+    readonly property string cruiseMode: cruiseModeLabel(assistance.regulateur_mode)
+    readonly property string cruiseStatus: cruiseStatusLabel(assistance.regulateur_statut)
+    readonly property real cruiseTarget: number(assistance.vitesse_regulateur, 0)
 
     // =========================================================================
     // 5. STATISTIQUES DE TRAJET & CONSOMMATION (TripStatsService)
     // =========================================================================
-    readonly property bool tripActive: trip.is_active === true || sessionState === "RUNNING"
-    readonly property real tripDistance: number(trip.distance_km, 0)
-    readonly property real tripFuelLiters: number(trip.session_fuel_l, 0)
-    readonly property real tripCost: number(trip.session_cost, 0)
-    readonly property real fuelPrice: number(trip.fuel_price, 1.70)
-    readonly property real avgRpm: number(trip.avg_rpm, 0)
-    readonly property real coastingKm: number(trip.coasting_km, 0)
-    readonly property real aggressivityPct: number(trip.aggressivity_pct, 0)
-    readonly property real shiftTimeSec: number(trip.shift_time_sec, 0)
-    readonly property real tripA: number(trip.trip_a, 0)
-    readonly property real tripB: number(trip.trip_b, 0)
-    readonly property real tripBFuel: number(trip.trip_b_fuel, 0)
-    readonly property real instantCons: number(trip.inst_cons !== undefined ? trip.inst_cons : (vehicle.inst_cons !== undefined ? vehicle.inst_cons : 0), 0)
-    readonly property real avgConsB: number(trip.avg_cons_b, 0)
-    readonly property real avgConsSession: number(trip.avg_cons_session, 0)
-    readonly property real autonomy: number(trip.autonomy, 0)
-    readonly property real kmBeforeService: number(trip.km_before_service, 0)
-    readonly property bool serviceWarning: boolValue(trip.service_warning)
-    readonly property real gForce: number(trip.g_force !== undefined ? trip.g_force : 0, 0)
+    readonly property bool tripActive: tripState.is_active === true || sessionState === "RUNNING"
+    readonly property real tripDistance: number(tripState.distance_km, 0)
+    readonly property real tripFuelLiters: number(tripState.session_fuel_l, 0)
+    readonly property real tripCost: number(tripState.session_cost, 0)
+    readonly property real fuelPrice: number(tripState.fuel_price, 1.70)
+    readonly property real avgRpm: number(tripState.avg_rpm, 0)
+    readonly property real decelerationWithoutThrottleKm: number(tripState.deceleration_without_throttle_km, 0)
+    readonly property real aggressivityPct: number(tripState.aggressivity_pct, 0)
+    readonly property real shiftTimeSec: number(tripState.shift_time_sec, 0)
+    readonly property real tripA: number(tripState.trip_a, 0)
+    readonly property real tripB: number(tripState.trip_b, 0)
+    readonly property real tripBFuel: number(tripState.trip_b_fuel, 0)
+    readonly property real instantCons: number(tripState.inst_cons, 0)
+    readonly property real avgConsB: number(tripState.avg_cons_b, 0)
+    readonly property real avgConsSession: number(tripState.avg_cons_session, 0)
+    readonly property real autonomy: number(tripState.autonomy, 0)
+    readonly property real kmBeforeService: number(tripState.km_before_service, 0)
+    readonly property bool serviceWarning: boolValue(tripState.service_warning)
+    readonly property real longitudinalG: number(tripState.longitudinal_g, 0)
 
     // =========================================================================
     // 6. CHÂSSIS, ROUES & DYNAMIQUE (DynamicsService)
     // =========================================================================
-    readonly property real wheelSpeedFl: number(vehicle.wheel_speed_fl !== undefined ? vehicle.wheel_speed_fl : vehicle.wheel_fl_speed, 0)
-    readonly property real wheelSpeedFr: number(vehicle.wheel_speed_fr !== undefined ? vehicle.wheel_speed_fr : vehicle.wheel_fr_speed, 0)
-    readonly property real wheelSpeedRl: number(vehicle.wheel_speed_rl !== undefined ? vehicle.wheel_speed_rl : vehicle.wheel_rl_speed, 0)
-    readonly property real wheelSpeedRr: number(vehicle.wheel_speed_rr !== undefined ? vehicle.wheel_speed_rr : vehicle.wheel_rr_speed, 0)
+    readonly property real wheelSpeedFl: number(wheels.wheel_fl_speed, 0)
+    readonly property real wheelSpeedFr: number(wheels.wheel_fr_speed, 0)
+    readonly property real wheelSpeedRl: number(wheels.wheel_rl_speed, 0)
+    readonly property real wheelSpeedRr: number(wheels.wheel_rr_speed, 0)
 
-    readonly property bool wheelSlipFl: boolValue(vehicle.wheel_slip_fl)
-    readonly property bool wheelSlipFr: boolValue(vehicle.wheel_slip_fr)
-    readonly property bool wheelSlipRl: boolValue(vehicle.wheel_slip_rl)
-    readonly property bool wheelSlipRr: boolValue(vehicle.wheel_slip_rr)
+    readonly property bool wheelSlipFl: boolValue(wheels.wheel_slip_fl)
+    readonly property bool wheelSlipFr: boolValue(wheels.wheel_slip_fr)
+    readonly property bool wheelSlipRl: boolValue(wheels.wheel_slip_rl)
+    readonly property bool wheelSlipRr: boolValue(wheels.wheel_slip_rr)
     readonly property bool hasWheelSlip: wheelSlipFl || wheelSlipFr || wheelSlipRl || wheelSlipRr
 
-    readonly property bool wheelLockFl: boolValue(vehicle.wheel_lock_fl)
-    readonly property bool wheelLockFr: boolValue(vehicle.wheel_lock_fr)
-    readonly property bool wheelLockRl: boolValue(vehicle.wheel_lock_rl)
-    readonly property bool wheelLockRr: boolValue(vehicle.wheel_lock_rr)
+    readonly property bool wheelLockFl: boolValue(wheels.wheel_lock_fl)
+    readonly property bool wheelLockFr: boolValue(wheels.wheel_lock_fr)
+    readonly property bool wheelLockRl: boolValue(wheels.wheel_lock_rl)
+    readonly property bool wheelLockRr: boolValue(wheels.wheel_lock_rr)
     readonly property bool hasWheelLock: wheelLockFl || wheelLockFr || wheelLockRl || wheelLockRr
 
-    readonly property real steeringAngle: number(vehicle.steering_angle, 0)
-    readonly property real steeringSpeed: number(vehicle.steering_speed, 0)
+    readonly property real steeringAngle: number(dynamics.steering_angle, 0)
+    readonly property real steeringSpeed: number(dynamics.steering_speed, 0)
 
     // =========================================================================
     // 7. CARROSSERIE, OUVRANTS & CONFORT
     // =========================================================================
-    readonly property bool doorFlOpen: boolValue(vehicle.door_fl_open)
-    readonly property bool doorFrOpen: boolValue(vehicle.door_fr_open)
-    readonly property bool doorRlOpen: boolValue(vehicle.door_rl_open)
-    readonly property bool doorRrOpen: boolValue(vehicle.door_rr_open)
-    readonly property bool trunkOpen: boolValue(vehicle.trunk_open)
+    readonly property bool doorFlOpen: boolValue(body.door_fl_open)
+    readonly property bool doorFrOpen: boolValue(body.door_fr_open)
+    readonly property bool doorRlOpen: boolValue(body.door_rl_open)
+    readonly property bool doorRrOpen: boolValue(body.door_rr_open)
+    readonly property bool trunkOpen: boolValue(body.trunk_open)
     readonly property bool doorOpen: doorFlOpen || doorFrOpen || doorRlOpen || doorRrOpen || trunkOpen
 
-    readonly property bool doorsLocked: boolValue(vehicle.doors_locked)
-    readonly property bool trunkLocked: boolValue(vehicle.trunk_locked)
-    readonly property bool driverUnbelted: boolValue(vehicle.driver_unbelted)
-    readonly property bool passengerAirbagDisabled: boolValue(vehicle.passenger_disabled)
+    readonly property bool doorsLocked: boolValue(body.doors_locked)
+    readonly property bool trunkLocked: boolValue(body.trunk_locked)
+    readonly property bool driverUnbelted: boolValue(body.driver_unbelted)
+    readonly property bool passengerAirbagDisabled: boolValue(body.passenger_disabled)
     readonly property bool attentionVehicle: driverUnbelted || doorOpen
 
     // Éclairage
-    readonly property bool lightsActive: boolValue(vehicle.lights) || boolValue(vehicle.pos_lights) || boolValue(vehicle.low_beam)
-    readonly property bool highBeamActive: boolValue(vehicle.high_beam)
-    readonly property bool fogFrontActive: boolValue(vehicle.fog_front)
-    readonly property bool fogRearActive: boolValue(vehicle.fog_rear)
-    readonly property bool turnLeftActive: boolValue(vehicle.indicator_left) || boolValue(vehicle.turn_left)
-    readonly property bool turnRightActive: boolValue(vehicle.indicator_right) || boolValue(vehicle.turn_right)
-    readonly property real brightness: number(vehicle.brightness, 100)
+    readonly property bool lightsActive: boolValue(body.pos_lights) || boolValue(body.low_beam)
+    readonly property bool highBeamActive: boolValue(body.high_beam)
+    readonly property bool fogFrontActive: boolValue(body.fog_front)
+    readonly property bool fogRearActive: boolValue(body.fog_rear)
+    readonly property bool turnLeftActive: boolValue(body.turn_left)
+    readonly property bool turnRightActive: boolValue(body.turn_right)
+    readonly property real brightness: number(body.brightness, 100)
 
     // =========================================================================
     // 8. ACOUSTIQUE HABITACLE & SURVEILLANCE SYSTÈME (Monitor / Noise / Storage)
     // =========================================================================
-    readonly property real cabinDbSpl: number(vehicle.cabin_db_spl !== undefined ? vehicle.cabin_db_spl : vehicle.cabin_noise_db, 0)
-    readonly property int cabinFreqHz: intValue(vehicle.cabin_freq_hz, 0)
-    readonly property real appCpuTotalPct: number(vehicle.app_cpu_total_pct, 0)
-    readonly property real appRamMb: number(vehicle.app_ram_mb, 0)
+    readonly property real cabinDbSpl: number(environment.cabin_db_spl, 0)
+    readonly property int cabinFreqHz: intValue(environment.cabin_freq_hz, 0)
+    readonly property real appCpuTotalPct: number(telemetryState.app_cpu_total_pct, 0)
+    readonly property real appRamMb: number(telemetryState.app_ram_mb, 0)
 
-    readonly property bool usbConnected: storage.usb_connected === true
-    readonly property bool ramMode: !usbConnected || storage.mode === "RAM"
-    readonly property real storageFreeMb: number(storage.free_space_mb, 0)
-    readonly property string storageMode: text(storage.mode, "UNKNOWN")
+    readonly property bool usbConnected: storageState.usb_connected === true
+    readonly property bool ramMode: !usbConnected || storageState.mode === "RAM"
+    readonly property real storageFreeMb: number(storageState.free_space_mb, 0)
+    readonly property string storageMode: text(storageState.mode, "UNKNOWN")
+    readonly property string systemVersion: text(systemState.version, "unknown")
 
     // Diagnostic OBD
-    readonly property bool isScanning: bridge && bridge.isScanning === true
-    readonly property bool hasScanned: bridge && bridge.hasScanned === true
-    readonly property var diagnosticCodes: bridge && bridge.diagnosticCodes ? bridge.diagnosticCodes : []
+    readonly property bool isScanning: diagnosticsState.scanning === true
+    readonly property bool hasScanned: diagnosticsState.has_scanned === true
+    readonly property var diagnosticCodes: diagnosticsState.codes || []
 
     // Services
     readonly property var serviceErrorKeys: serviceKeys("ERROR")
     readonly property var serviceWarningKeys: serviceKeys("WARNING")
     readonly property bool complexInteraction: speed > 5
+    readonly property var debugSignals: buildDebugSignals()
 
     // =========================================================================
     // 9. TABLEAU UNIVERSEL DES VOYANTS DU COMBINÉ
@@ -184,14 +209,14 @@ QtObject {
         { code: "G", label: "Clignotant gauche", active: turnLeftActive, color: "#4DDB8A", blink: true },
         { code: "D", label: "Clignotant droit", active: turnRightActive, color: "#4DDB8A", blink: true },
         { code: "FEU", label: "Feux", active: lightsActive || highBeamActive || fogFrontActive || fogRearActive, color: "#4DDB8A", blink: false },
-        { code: "STOP", label: "Frein", active: handbrakeActive || boolValue(vehicle.brake_warning) || boolValue(vehicle.stop_warning), color: "#FF4D5A", blink: false },
+        { code: "STOP", label: "Frein", active: handbrakeActive || brakeWarning, color: "#FF4D5A", blink: false },
         { code: "CEINT", label: "Ceinture", active: driverUnbelted, color: "#FF4D5A", blink: false },
         { code: "PORTE", label: "Porte", active: doorOpen, color: "#FFB33B", blink: false },
-        { code: "HUILE", label: "Huile", active: boolValue(vehicle.oil_warning), color: "#FF4D5A", blink: false },
-        { code: "BAT", label: "Batterie", active: boolValue(vehicle.battery_warning), color: "#FF4D5A", blink: false },
-        { code: "ABS", label: "ABS", active: boolValue(vehicle.abs_warning) || boolValue(vehicle.abs_error) || hasWheelLock, color: "#FFB33B", blink: false },
-        { code: "ESP", label: "ESP", active: boolValue(vehicle.esp_warning) || boolValue(vehicle.esp_active) || hasWheelSlip, color: "#FFB33B", blink: false },
-        { code: "MOT", label: "Moteur", active: boolValue(vehicle.engine_warning) || engineLight !== "OFF", color: "#FFB33B", blink: false }
+        { code: "HUILE", label: "Huile", active: oilWarning, color: "#FF4D5A", blink: false },
+        { code: "BAT", label: "Batterie", active: batteryWarning, color: "#FF4D5A", blink: false },
+        { code: "ABS", label: "ABS", active: absWarning, color: "#FFB33B", blink: false },
+        { code: "ESP", label: "ESP", active: espWarning, color: "#FFB33B", blink: false },
+        { code: "MOT", label: "Moteur", active: engineWarning, color: "#FFB33B", blink: false }
     ]
 
     // =========================================================================
@@ -231,32 +256,64 @@ QtObject {
         return isFinite(parsed) ? parsed.toFixed(decimals) : (fallback || "—")
     }
 
-    function torqueAtRpm(currentRpm) {
-        const points = engineCurve
-        if (!points || points.length === 0)
-            return maxTorqueNm
-        const rpmValue = Math.max(0, number(currentRpm, 0))
-        if (rpmValue <= number(points[0].rpm, 0))
-            return number(points[0].torque_nm, 0)
-        for (let i = 1; i < points.length; ++i) {
-            const rightRpm = number(points[i].rpm, 0)
-            if (rpmValue <= rightRpm) {
-                const leftRpm = number(points[i - 1].rpm, 0)
-                const leftTorque = number(points[i - 1].torque_nm, 0)
-                const rightTorque = number(points[i].torque_nm, leftTorque)
-                const span = Math.max(1, rightRpm - leftRpm)
-                return leftTorque + (rightTorque - leftTorque) * (rpmValue - leftRpm) / span
-            }
-        }
-        return number(points[points.length - 1].torque_nm, 0)
+    function presentedDomain(domainName) {
+        const actual = vehicleState[domainName] || {}
+        if (!presentationState.startup_active)
+            return actual
+        const overrideDomains = presentationState.domains || {}
+        const override = overrideDomains[domainName] || {}
+        const merged = {}
+        Object.keys(actual).forEach(function(key) { merged[key] = actual[key] })
+        Object.keys(override).forEach(function(key) { merged[key] = override[key] })
+        return merged
+    }
+
+    function presentedStandaloneDomain(domainName, actual) {
+        if (!presentationState.startup_active)
+            return actual
+        const overrideDomains = presentationState.domains || {}
+        const override = overrideDomains[domainName] || {}
+        const merged = {}
+        Object.keys(actual).forEach(function(key) { merged[key] = actual[key] })
+        Object.keys(override).forEach(function(key) { merged[key] = override[key] })
+        return merged
+    }
+
+    function signalFresh(domainName, signalName) {
+        if (presentationState.startup_active)
+            return true
+        const domainQuality = dataQuality[domainName] || {}
+        const signal = domainQuality[signalName]
+        return signal === undefined || signal.quality !== "STALE"
     }
 
     function serviceKeys(status) {
-        if (!health) return []
-        const keys = Object.keys(health)
+        const keys = Object.keys(serviceHealth)
         return keys.filter(function(key) {
-            return health[key] && health[key].status === status
+            return serviceHealth[key] && serviceHealth[key].status === status
         })
+    }
+
+    function buildDebugSignals() {
+        const rows = []
+        const domainNames = ["powertrain", "motion", "wheels", "body", "assistance", "dynamics", "environment", "controls", "alerts"]
+        domainNames.forEach(function(domainName) {
+            const values = vehicleState[domainName] || {}
+            const quality = dataQuality[domainName] || {}
+            Object.keys(values).sort().forEach(function(key) {
+                const metadata = quality[key] || {}
+                rows.push({
+                    domain: domainName,
+                    key: key,
+                    value: values[key],
+                    unit: metadata.unit || "",
+                    source: metadata.source || "",
+                    quality: metadata.quality || "UNKNOWN",
+                    ageMs: number(metadata.age_ms, 0)
+                })
+            })
+        })
+        return rows
     }
 
     function profileName() {

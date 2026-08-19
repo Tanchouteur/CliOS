@@ -171,7 +171,7 @@ Item {
 
                         // Distance parcourue (Grand Format)
                         Text {
-                            text: S.UiState.fixed(S.UiState.trip.distance_km, 1, "0,0") + " km"
+                            text: S.UiState.fixed(S.UiState.tripDistance, 1, "0,0") + " km"
                             color: "#FFFFFF"
                             font.family: T.StyleManager.fontFamily
                             font.pixelSize: 42
@@ -190,7 +190,7 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: 2
                                 Text { text: "CARBURANT"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
-                                Text { text: S.UiState.fixed(S.UiState.trip.session_fuel_l, 2, "0,00") + " L"; color: "#FFFFFF"; font.pixelSize: 22; font.weight: Font.Bold }
+                                Text { text: S.UiState.fixed(S.UiState.tripFuelLiters, 2, "0,00") + " L"; color: "#FFFFFF"; font.pixelSize: 22; font.weight: Font.Bold }
                             }
 
                             Rectangle { width: 1; Layout.fillHeight: true; color: "#1E2C40" }
@@ -200,25 +200,25 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: 2
                                 Text { text: "COÛT ESTIMÉ"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
-                                Text { text: S.UiState.fixed(S.UiState.trip.session_cost, 2, "0,00") + " €"; color: T.StyleManager.accent; font.pixelSize: 22; font.weight: Font.Bold }
+                                Text { text: S.UiState.fixed(S.UiState.tripCost, 2, "0,00") + " €"; color: T.StyleManager.accent; font.pixelSize: 22; font.weight: Font.Bold }
                             }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#1E2C40" }
 
-                        // Éco-conduite : Roue libre
+                        // Éco-conduite : décélération sans accélérateur
                         RowLayout {
                             Layout.fillWidth: true
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 2
-                                Text { text: "DISTANCE EN ROUE LIBRE"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
-                                Text { text: S.UiState.fixed(S.UiState.trip.coasting_km, 1, "0,0") + " km"; color: T.StyleManager.success; font.pixelSize: 20; font.weight: Font.Bold }
+                                Text { text: "DÉCÉLÉRATION SANS GAZ"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
+                                Text { text: S.UiState.fixed(S.UiState.decelerationWithoutThrottleKm, 1, "0,0") + " km"; color: T.StyleManager.success; font.pixelSize: 20; font.weight: Font.Bold }
                             }
                             ColumnLayout {
                                 spacing: 2
                                 Text { text: "AGRESSIVITÉ"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
-                                Text { text: S.UiState.fixed(S.UiState.trip.aggressivity_pct, 0, "0") + " %"; color: "#FFFFFF"; font.pixelSize: 20; font.weight: Font.Bold }
+                                Text { text: S.UiState.fixed(S.UiState.aggressivityPct, 0, "0") + " %"; color: "#FFFFFF"; font.pixelSize: 20; font.weight: Font.Bold }
                             }
                         }
                     }
@@ -284,7 +284,7 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: 2
                                 Text {
-                                    text: S.UiState.fixed(S.UiState.trip.trip_b, 1, "0,0") + " km"
+                                    text: S.UiState.fixed(S.UiState.tripB, 1, "0,0") + " km"
                                     color: "#FFFFFF"
                                     font.family: T.StyleManager.fontFamily
                                     font.pixelSize: 32
@@ -299,7 +299,7 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: 2
                                 Text {
-                                    text: S.UiState.fixed(S.UiState.trip.avg_cons_b, 1, "0,0") + " L"
+                                    text: S.UiState.fixed(S.UiState.avgConsB, 1, "0,0") + " L"
                                     color: T.StyleManager.accent
                                     font.family: T.StyleManager.fontFamily
                                     font.pixelSize: 32
@@ -318,10 +318,10 @@ Item {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: "FORCE G LATÉRALE"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
+                                Text { text: "ACCÉLÉRATION LONG."; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
                                 Item { Layout.fillWidth: true }
                                 Text {
-                                    text: S.UiState.fixed(S.UiState.gForce, 2, "0.00") + " G"
+                                    text: S.UiState.fixed(S.UiState.longitudinalG, 2, "0.00") + " G"
                                     color: "#FFFFFF"
                                     font.family: T.StyleManager.fontFamily
                                     font.pixelSize: 18
@@ -336,7 +336,7 @@ Item {
                                 color: "#182436"
 
                                 Rectangle {
-                                    width: parent.width * Math.min(1.0, Math.max(0.0, Math.abs(S.UiState.gForce) / 1.5))
+                                    width: parent.width * Math.min(1.0, Math.max(0.0, Math.abs(S.UiState.longitudinalG) / 1.5))
                                     height: parent.height
                                     radius: 3
                                     color: T.StyleManager.accent
@@ -355,8 +355,8 @@ Item {
                                 spacing: 2
                                 Text { text: "RÉVISION ENTRETIEN"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
                                 Text {
-                                    text: S.UiState.fixed(S.UiState.trip.km_before_service, 0, "—") + " km restants"
-                                    color: S.UiState.trip.service_warning ? T.StyleManager.warning : "#FFFFFF"
+                                    text: S.UiState.fixed(S.UiState.kmBeforeService, 0, "—") + " km restants"
+                                    color: S.UiState.serviceWarning ? T.StyleManager.warning : "#FFFFFF"
                                     font.family: T.StyleManager.fontFamily
                                     font.pixelSize: 16
                                     font.weight: Font.Bold
@@ -364,7 +364,7 @@ Item {
                             }
                             Rectangle {
                                 width: 10; height: 10; radius: 5
-                                color: S.UiState.trip.service_warning ? T.StyleManager.warning : T.StyleManager.success
+                                color: S.UiState.serviceWarning ? T.StyleManager.warning : T.StyleManager.success
                             }
                         }
                     }

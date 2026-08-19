@@ -63,13 +63,13 @@ Item {
                 GtMetric {
                     Layout.fillWidth: true
                     label: "Instantanée"
-                    value: S.UiState.fixed(S.UiState.trip.inst_cons, 1, "0,0")
+                    value: S.UiState.fixed(S.UiState.instantCons, 1, "0,0")
                     unit: "L/100"
                 }
                 GtMetric {
                     Layout.fillWidth: true
                     label: "Moyenne trajet"
-                    value: S.UiState.fixed(S.UiState.trip.avg_cons_session, 1, "0,0")
+                    value: S.UiState.fixed(S.UiState.avgConsSession, 1, "0,0")
                     unit: "L/100"
                     valueSize: 28
                 }
@@ -83,9 +83,9 @@ Item {
             RowLayout {
                 anchors.fill: parent
                 spacing: 28
-                GtMetric { Layout.fillWidth: true; label: "Trip A"; value: S.UiState.fixed(S.UiState.trip.trip_a, 1, "0,0"); unit: "km" }
-                GtMetric { Layout.fillWidth: true; label: "Trip B"; value: S.UiState.fixed(S.UiState.trip.trip_b, 1, "0,0"); unit: "km" }
-                GtMetric { Layout.fillWidth: true; label: "Moy. B"; value: S.UiState.fixed(S.UiState.trip.avg_cons_b, 1, "0,0"); unit: "L/100" }
+                GtMetric { Layout.fillWidth: true; label: "Trip A"; value: S.UiState.fixed(S.UiState.tripA, 1, "0,0"); unit: "km" }
+                GtMetric { Layout.fillWidth: true; label: "Trip B"; value: S.UiState.fixed(S.UiState.tripB, 1, "0,0"); unit: "km" }
+                GtMetric { Layout.fillWidth: true; label: "Moy. B"; value: S.UiState.fixed(S.UiState.avgConsB, 1, "0,0"); unit: "L/100" }
             }
         }
 
@@ -98,18 +98,18 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width * 0.44
                 label: "Révision"
-                value: S.UiState.fixed(S.UiState.trip.km_before_service, 0, "—")
+                value: S.UiState.fixed(S.UiState.kmBeforeService, 0, "—")
                 unit: "km"
-                valueColor: S.UiState.trip.service_warning ? T.StyleManager.warning : T.StyleManager.text
+                valueColor: S.UiState.serviceWarning ? T.StyleManager.warning : T.StyleManager.text
             }
             GtProgress {
                 anchors.left: parent.horizontalCenter
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 height: 12
-                value: S.UiState.number(S.UiState.trip.km_before_service, 0)
+                value: S.UiState.number(S.UiState.kmBeforeService, 0)
                 to: 20000
-                fillColor: S.UiState.trip.service_warning ? T.StyleManager.warning : T.StyleManager.success
+                fillColor: S.UiState.serviceWarning ? T.StyleManager.warning : T.StyleManager.success
             }
         }
 
@@ -133,7 +133,7 @@ Item {
                 Column {
                     Layout.preferredWidth: 155
                     spacing: 5
-                    Text { text: S.UiState.vehicle.driver_unbelted ? "Ceinture conducteur" : "Ceinture bouclée"; color: T.StyleManager.textSecondary; font.pixelSize: 17 }
+                    Text { text: S.UiState.driverUnbelted ? "Ceinture conducteur" : "Ceinture bouclée"; color: T.StyleManager.textSecondary; font.pixelSize: 17 }
                     Text { text: S.UiState.doorOpen ? "Ouvrant ouvert" : "Ouvrants contrôlés"; color: T.StyleManager.textSecondary; font.pixelSize: 17 }
                 }
             }

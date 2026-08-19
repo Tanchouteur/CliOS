@@ -8,9 +8,9 @@ from src.services.param_types import ServiceParamType
 
 
 class PowerManagementService(BaseService):
-    def __init__(self, api, storage, orchestrator):
+    def __init__(self, runtime, storage, orchestrator):
         super().__init__("PowerManager", storage)
-        self.api = api
+        self.runtime = runtime
         self.off_timer = None
         self.orchestrator = orchestrator
         self.has_been_started = False
@@ -23,7 +23,10 @@ class PowerManagementService(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(
+            target=self._run, args=(stop_event,), daemon=True, name=self.service_name
+        )
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         self.set_ok("Surveillance alim : En attente du contact")
@@ -38,13 +41,13 @@ class PowerManagementService(BaseService):
                 stop_event.wait(1.0)
                 continue
 
-            safe_data = self.api.get_display_data()
+            powertrain = self.runtime.snapshot().domain("powertrain")
             delay = self._params["shutdown_delay"]["value"]
             wait_for_key = self._params["wait_key_removal"]["value"]
 
             # Extraction des donnees CAN pertinentes
-            is_engine_running = safe_data.get("rpm", 0) > 400
-            is_key_acc = bool(safe_data.get("key_acc", False))
+            is_engine_running = powertrain.get("rpm", 0) > 400
+            is_key_acc = bool(powertrain.get("key_acc", False))
 
             # Definition de l'etat d'activite selon le mode choisi
             if wait_for_key:
@@ -87,4 +90,4 @@ class PowerManagementService(BaseService):
             stop_event.wait(1.0)
 
     def stop(self):
-        pass
+        super().stop()

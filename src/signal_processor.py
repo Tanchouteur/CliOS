@@ -43,6 +43,19 @@ class SignalProcessor:
                 if sig_def["shift"] > 0:
                     raw_int >>= sig_def["shift"]
 
-                results[sig_name] = (raw_int * sig_def["factor"]) + sig_def["offset"]
+                if sig_def.get("signed", False):
+                    bit_length = int(sig_def.get("bit_length", size * 8))
+                    sign_bit = 1 << (bit_length - 1)
+                    if raw_int & sign_bit:
+                        raw_int -= 1 << bit_length
+
+                physical = (raw_int * sig_def["factor"]) + sig_def["offset"]
+                min_value = sig_def.get("min_value")
+                max_value = sig_def.get("max_value")
+                if min_value is not None and physical < min_value:
+                    continue
+                if max_value is not None and physical > max_value:
+                    continue
+                results[sig_name] = physical
 
         return results

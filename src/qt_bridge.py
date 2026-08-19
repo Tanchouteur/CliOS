@@ -5,25 +5,30 @@ import threading
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
 from src.logging_runtime import get_logger, get_recent_events
 from src.diagnostic_bundle import create_diagnostic_bundle
+from src.state_store import VEHICLE_DOMAINS
 
 
 class DashboardBridge(QObject):
     """Pont de communication sécurisé (Thread-Safe)."""
 
-    dataChanged = Signal()
-    diagDataChanged = Signal()
+    vehicleStateChanged = Signal()
+    tripStateChanged = Signal()
+    diagnosticsStateChanged = Signal()
+    systemStateChanged = Signal()
+    sessionStateChanged = Signal()
+    calibrationStateChanged = Signal()
+    presentationStateChanged = Signal()
+    dataQualityChanged = Signal()
     configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
-    statsChanged = Signal()
-    systemHealthChanged = Signal()
-    storageStatusChanged = Signal()
 
-    def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
+    def __init__(self, runtime, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
         super().__init__()
         self.logger = get_logger("DashboardBridge")
         self.session_manager = session_manager
-        self.api = api
+        self.runtime = runtime
+        self.storage = getattr(runtime, "storage", None)
         self.led_service = led_service
         self.stats_service = stats_service
         self.diag_service = diag_service
@@ -32,18 +37,29 @@ class DashboardBridge(QObject):
         self.gear_calib_service = gear_calib_service
         self._storage_manager = storage_manager
         self._config_lock = threading.RLock()
+        self._config_write_lock = threading.Lock()
+        self._config_write_requested = threading.Event()
+        self._config_writer_stop = threading.Event()
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self._ui_styles_dir = os.path.join(project_root, "frontend", "styles")
 
         self._config_path = config_path
-        self._data = {}
-        self._stats = {}
-        self._system_health = {}
-        self._storage_status = self._read_storage_status()
-        self._diag_state = (False, False, ())
+        self._vehicle_state = {}
+        self._trip_state = {}
+        self._diagnostics_state = {}
+        self._system_state = {}
+        self._session_state = {}
+        self._calibration_state = {}
+        self._presentation_state = {}
+        self._data_quality = {}
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
+
+        self._config_writer_thread = threading.Thread(
+            target=self._config_writer_loop, daemon=True, name="ConfigWriter"
+        )
+        self._config_writer_thread.start()
 
         # --- Configuration des frequences de rafraichissement ---
 
@@ -52,12 +68,7 @@ class DashboardBridge(QObject):
         self.timer_fast.timeout.connect(self._update_fast_data)
         self.timer_fast.start(16)
 
-        # 2. Voie Moyenne (24 Hz / 41ms) - Télémétrie et consommation
-        self.timer_medium = QTimer()
-        self.timer_medium.timeout.connect(self._update_stats)
-        self.timer_medium.start(41)
-
-        # 3. Voie Lente (1 Hz / 1000ms) - Sante du systeme et logs
+        # 2. Voie Lente (1 Hz / 1000ms) - Sante du systeme et qualité
         self.timer_slow = QTimer()
         self.timer_slow.timeout.connect(self._update_health)
         self.timer_slow.start(1000)
@@ -66,39 +77,54 @@ class DashboardBridge(QObject):
 
     # Boucles de rafraîchissement.
     def _update_fast_data(self):
-        new_data = self._sanitize_for_qml(self.api.get_display_data())
+        snapshot = self.runtime.snapshot()
+        new_vehicle_state = self._sanitize_for_qml(snapshot.as_dict(VEHICLE_DOMAINS))
+        if new_vehicle_state != self._vehicle_state:
+            self._vehicle_state = new_vehicle_state
+            self.vehicleStateChanged.emit()
 
-        if new_data != self._data:
-            self._data = new_data
-            self.dataChanged.emit()
+        new_trip = self._sanitize_for_qml(snapshot.domain("trip"))
+        if new_trip != self._trip_state:
+            self._trip_state = new_trip
+            self.tripStateChanged.emit()
 
-            new_diag_state = self._extract_diag_state(new_data)
-            if new_diag_state != self._diag_state:
-                self._diag_state = new_diag_state
-                self.diagDataChanged.emit()
+        new_diagnostics = self._sanitize_for_qml(snapshot.domain("diagnostics"))
+        if new_diagnostics != self._diagnostics_state:
+            self._diagnostics_state = new_diagnostics
+            self.diagnosticsStateChanged.emit()
 
-    def _extract_diag_state(self, data: dict) -> tuple:
-        scanning = bool(data.get("diag_scanning", False))
-        has_scanned = bool(data.get("diag_has_scanned", False))
-        codes = tuple(data.get("diag_codes", []))
-        return scanning, has_scanned, codes
+        new_session = self._sanitize_for_qml(snapshot.domain("session"))
+        if new_session != self._session_state:
+            self._session_state = new_session
+            self.sessionStateChanged.emit()
 
-    def _update_stats(self):
-        if self.stats_service:
-            new_stats = self._sanitize_for_qml(self.stats_service.stats.copy())
-            if new_stats != self._stats:
-                self._stats = new_stats
-                self.statsChanged.emit()
+        new_calibration = self._sanitize_for_qml(snapshot.domain("calibration"))
+        if new_calibration != self._calibration_state:
+            self._calibration_state = new_calibration
+            self.calibrationStateChanged.emit()
+
+        new_presentation = self._sanitize_for_qml(self.runtime.presentation_snapshot())
+        if new_presentation != self._presentation_state:
+            self._presentation_state = new_presentation
+            self.presentationStateChanged.emit()
 
     def _update_health(self):
-        new_health = self._sanitize_for_qml(self.orchestrator.get_system_health())
-        if new_health != self._system_health:
-            self._system_health = new_health
-            self.systemHealthChanged.emit()
-        new_storage_status = self._read_storage_status()
-        if new_storage_status != self._storage_status:
-            self._storage_status = new_storage_status
-            self.storageStatusChanged.emit()
+        system = self.runtime.snapshot().domain("system")
+        version = system.get("system_version", "unknown")
+        telemetry = {key: value for key, value in system.items() if key != "system_version"}
+        new_system = self._sanitize_for_qml({
+            "version": version,
+            "telemetry": telemetry,
+            "health": self.orchestrator.get_system_health(),
+            "storage": self._read_storage_status(),
+        })
+        if new_system != self._system_state:
+            self._system_state = new_system
+            self.systemStateChanged.emit()
+        new_quality = self._sanitize_for_qml(self.runtime.metadata_snapshot())
+        if new_quality != self._data_quality:
+            self._data_quality = new_quality
+            self.dataQualityChanged.emit()
 
     def _read_storage_status(self):
         if not self._storage_manager:
@@ -127,25 +153,41 @@ class DashboardBridge(QObject):
 
         return str(value)
 
-    @Property('QVariant', notify=dataChanged)
-    def data(self):
-        return self._data
+    @Property('QVariant', notify=vehicleStateChanged)
+    def vehicleState(self):
+        return self._vehicle_state
+
+    @Property('QVariant', notify=tripStateChanged)
+    def tripState(self):
+        return self._trip_state
+
+    @Property('QVariant', notify=diagnosticsStateChanged)
+    def diagnosticsState(self):
+        return self._diagnostics_state
+
+    @Property('QVariant', notify=systemStateChanged)
+    def systemState(self):
+        return self._system_state
+
+    @Property('QVariant', notify=sessionStateChanged)
+    def sessionState(self):
+        return self._session_state
+
+    @Property('QVariant', notify=calibrationStateChanged)
+    def calibrationState(self):
+        return self._calibration_state
+
+    @Property('QVariant', notify=presentationStateChanged)
+    def presentationState(self):
+        return self._presentation_state
+
+    @Property('QVariant', notify=dataQualityChanged)
+    def dataQuality(self):
+        return self._data_quality
 
     @Property('QVariant', notify=configChanged)
     def config(self):
         return self._config
-
-    @Property('QVariant', notify=statsChanged)
-    def stats(self):
-        return self._stats
-
-    @Property('QVariant', notify=systemHealthChanged)
-    def systemHealth(self):
-        return self._system_health
-
-    @Property('QVariant', notify=storageStatusChanged)
-    def storageStatus(self):
-        return self._storage_status
 
     @Slot(result='QVariantList')
     def getAvailableUiStyles(self):
@@ -201,22 +243,9 @@ class DashboardBridge(QObject):
 
     @Slot(str)
     def setSessionState(self, state: str):
-        allowed = {"IDLE", "RUNNING", "PAUSED", "WAITING_IGNITION", "ENDED"}
+        allowed = {"IDLE", "RUNNING", "PAUSED", "WAITING_IGNITION", "ENDING", "ENDED"}
         if state in allowed:
-            self.api.update({"session_state": state})
-
-    # Lit l'état local déjà sérialisé pour éviter les accès concurrents à l'API.
-    @Property(bool, notify=diagDataChanged)
-    def isScanning(self):
-        return bool(self._data.get("diag_scanning", False))
-
-    @Property(bool, notify=diagDataChanged)
-    def hasScanned(self):
-        return bool(self._data.get("diag_has_scanned", False))
-
-    @Property('QVariantList', notify=diagDataChanged)
-    def diagnosticCodes(self):
-        return list(self._data.get("diag_codes", []))
+            self.runtime.publish("session", {"state": state}, source="dashboard")
 
     @Slot()
     def resetTripB(self):
@@ -264,14 +293,23 @@ class DashboardBridge(QObject):
             current_dict[keys[-1]] = value
         self.configChanged.emit()
 
-        def write_worker():
-            if self._write_current_config():
-                self.logger.info(f"Parametre sauvegarde: {key_path}", extra={"error_code": "CONFIG_SAVED"})
-            else:
-                self.logger.error(f"Echec sauvegarde config {key_path}", extra={"error_code": "CONFIG_SAVE_ERROR"})
-                self.send_notification("WARNING", "Réglage conservé en mémoire uniquement", 4000)
+        self._config_write_requested.set()
 
-        threading.Thread(target=write_worker, daemon=True).start()
+    def _config_writer_loop(self):
+        """Écrivain unique avec debounce : aucun fichier .tmp partagé entre threads."""
+        while not self._config_writer_stop.is_set():
+            if not self._config_write_requested.wait(0.5):
+                continue
+            self._config_write_requested.clear()
+            # Regroupe les glissements tactiles successifs d'un même réglage.
+            self._config_writer_stop.wait(0.08)
+            if self._config_write_requested.is_set():
+                continue
+            if self._write_current_config():
+                self.logger.info("Configuration sauvegardee", extra={"error_code": "CONFIG_SAVED"})
+            else:
+                self.logger.error("Echec sauvegarde configuration", extra={"error_code": "CONFIG_SAVE_ERROR"})
+                self.send_notification("WARNING", "Réglage conservé en mémoire uniquement", 4000)
 
     def relocate_config(self, new_config_path: str) -> bool:
         with self._config_lock:
@@ -279,25 +317,35 @@ class DashboardBridge(QObject):
         return self._write_current_config()
 
     def _write_current_config(self) -> bool:
-        with self._config_lock:
-            target = self._config_path
-            snapshot = json.loads(json.dumps(self._config))
-        tmp_path = target + ".tmp"
-        try:
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(snapshot, f, indent=4)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, target)
-            return True
-        except OSError:
+        with self._config_write_lock:
+            with self._config_lock:
+                target = self._config_path
+                snapshot = json.loads(json.dumps(self._config))
+            tmp_path = target + ".tmp"
             try:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(snapshot, f, indent=4)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, target)
+                return True
             except OSError:
-                pass
-            return False
+                try:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except OSError:
+                    pass
+                return False
+
+    def close(self):
+        """Vide la dernière configuration et arrête l'écrivain sérialisé."""
+        saved = self._write_current_config()
+        self._config_writer_stop.set()
+        self._config_write_requested.set()
+        if self._config_writer_thread is not threading.current_thread():
+            self._config_writer_thread.join(timeout=1.0)
+        return saved
 
     @Slot(float)
     def updateFuelPrice(self, new_price: float):
@@ -308,7 +356,7 @@ class DashboardBridge(QObject):
     @Slot(str, bool)
     def toggleService(self, service_name: str, enable: bool):
         storage_key = f"services.{service_name}.enabled"
-        if hasattr(self, 'storage'):
+        if self.storage is not None:
             self.storage.set(storage_key, enable)
 
         if enable:
@@ -316,8 +364,7 @@ class DashboardBridge(QObject):
         else:
             self.orchestrator.stop_service(service_name)
 
-        self._system_health = self.orchestrator.get_system_health()
-        self.systemHealthChanged.emit()
+        self._update_health()
 
     def send_notification(self, level: str, message: str, duration: int = 3000):
         self.notificationEvent.emit(level, message, duration)
@@ -466,6 +513,7 @@ class DashboardBridge(QObject):
         time.sleep(1.0)
 
         # Arrêt de l'orchestrateur (déclenche le .stop() de chaque service pour sauvegarder)
+        self.close()
         self.orchestrator.stop_all()
         time.sleep(0.8)
 

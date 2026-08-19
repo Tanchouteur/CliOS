@@ -1,5 +1,6 @@
 import QtQuick
 import "../../../style"
+import "../../../state" as S
 
 Item {
     id: root
@@ -7,7 +8,7 @@ Item {
     height: 400
 
     // --- Propriétés (Données Véhicule) ---
-    property real fuelLevel: bridge.data.fuel_level !== undefined ? bridge.data.fuel_level : 75.0
+    property real fuelLevel: S.UiState.fuelLevel
     property real smoothFuel: fuelLevel
 
     property real minFuel: 0.0

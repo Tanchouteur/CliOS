@@ -9,18 +9,18 @@ from src.services.param_types import ServiceParamType
 class CabinNoiseService(BaseService):
     """Capte l'audio du micro pour mesurer le SPL et la fréquence dominante."""
 
-    def __init__(self, api, storage=None):
+    def __init__(self, runtime, storage=None):
         super().__init__("Noise", storage)
-        self.api = api
+        self.runtime = runtime
         self._stream = None
 
         self._last_fft_time = 0
 
         # Initialise les métriques audio exposées à l'interface.
-        self.api.update({
+        self.runtime.publish("environment", {
             "cabin_db_spl": 0.0,
             "cabin_freq_hz": 0
-        })
+        }, source="cabin-noise")
 
         # Paramètres de calibration audio.
         self.register_param("calib_offset", "Calibration Micro (dB)", ServiceParamType.SLIDER, 87.0,
@@ -32,7 +32,8 @@ class CabinNoiseService(BaseService):
 
     def start(self, stop_event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name)
+        self._thread.start()
 
     def _audio_callback(self, indata, frames, time_info, status):
         audio_data = indata[:, 0]
@@ -46,9 +47,8 @@ class CabinNoiseService(BaseService):
             raw_db = 20 * np.log10(rms)
             db_spl = raw_db + calib
 
-            # Prépare les valeurs à publier dans l'API.
+            # Prépare les valeurs à publier dans le runtime.
             updates = {
-                "audio_db_text": f"{db_spl:.1f}",
                 "cabin_db_spl": db_spl
             }
 
@@ -65,7 +65,10 @@ class CabinNoiseService(BaseService):
                 self._last_fft_time = now
 
             # Publie la mise à jour groupée.
-            self.api.update(updates)
+            self.runtime.publish(
+                "environment", updates, source="cabin-noise", ttl_s=1.0,
+                units={"cabin_db_spl": "dB SPL", "cabin_freq_hz": "Hz"},
+            )
 
     def _run(self, stop_event):
         try:

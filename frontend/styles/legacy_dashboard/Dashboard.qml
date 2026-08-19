@@ -2,11 +2,12 @@ import QtQuick
 import "components"
 import "pages"
 import "../../style"
+import "../../state" as S
 
 Item {
     id: root
     objectName: "legacyDashboardRoot"
-    property string sessionState: bridge.data && bridge.data.session_state !== undefined ? bridge.data.session_state : "IDLE"
+    property string sessionState: S.UiState.sessionState
 
     Rectangle { anchors.fill: parent; color: "#000000" }
 
@@ -109,9 +110,9 @@ Item {
                 Row {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 55
-                    LegacyMetric { label: "Distance"; value: bridge.stats && bridge.stats.distance_km !== undefined ? Number(bridge.stats.distance_km).toFixed(1) + " km" : "0,0 km" }
-                    LegacyMetric { label: "Carburant"; value: bridge.stats && bridge.stats.session_fuel_l !== undefined ? Number(bridge.stats.session_fuel_l).toFixed(2) + " L" : "0,00 L" }
-                    LegacyMetric { label: "Coût"; value: bridge.stats && bridge.stats.session_cost !== undefined ? Number(bridge.stats.session_cost).toFixed(2) + " €" : "0,00 €" }
+                    LegacyMetric { label: "Distance"; value: S.UiState.tripDistance.toFixed(1) + " km" }
+                    LegacyMetric { label: "Carburant"; value: S.UiState.tripFuelLiters.toFixed(2) + " L" }
+                    LegacyMetric { label: "Coût"; value: S.UiState.tripCost.toFixed(2) + " €" }
                 }
 
                 Row {
@@ -139,14 +140,14 @@ Item {
         Text {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: "Autonomie  " + (bridge.stats && bridge.stats.autonomy !== undefined ? Number(bridge.stats.autonomy).toFixed(0) : "—") + " km"
+            text: "Autonomie  " + S.UiState.autonomy.toFixed(0) + " km"
             color: "white"
             font.family: "Arial"
             font.pixelSize: 22
         }
         Text {
             anchors.centerIn: parent
-            text: bottomBar.timeText + "     " + (bridge.data && bridge.data.odometer !== undefined ? Number(bridge.data.odometer).toFixed(0) : "0") + " km"
+            text: bottomBar.timeText + "     " + S.UiState.odometer.toFixed(0) + " km"
             color: "white"
             font.family: "Arial"
             font.pixelSize: 22
@@ -154,7 +155,7 @@ Item {
         Text {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: (bridge.data && bridge.data.outside_temp !== undefined ? Number(bridge.data.outside_temp).toFixed(1) : "—") + " °C"
+            text: S.UiState.outsideTemp.toFixed(1) + " °C"
             color: "white"
             font.family: "Arial"
             font.pixelSize: 22

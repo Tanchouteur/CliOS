@@ -2,21 +2,14 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../../../style" as T
+import "../../../state" as S
 
 Item {
     id: statsPage
 
-    property real fuelPrice: 1.85
-    property real fuelUsedB: 0.0
-    property real distanceB: 0.0
-
-    Component.onCompleted: {
-        if (bridge.stats) {
-            if (bridge.stats.fuel_price !== undefined) statsPage.fuelPrice = bridge.stats.fuel_price
-            if (bridge.stats.trip_b_fuel !== undefined) statsPage.fuelUsedB = bridge.stats.trip_b_fuel
-            if (bridge.stats.trip_b !== undefined) statsPage.distanceB = bridge.stats.trip_b
-        }
-    }
+    property real fuelPrice: S.UiState.fuelPrice
+    property real fuelUsedB: S.UiState.tripBFuel
+    property real distanceB: S.UiState.tripB
 
     Item {
         id: header

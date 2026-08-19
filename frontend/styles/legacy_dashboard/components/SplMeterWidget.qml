@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import "../../../style" as T
+import "../../../state" as S
 
 Rectangle {
     id: root
@@ -11,9 +12,9 @@ Rectangle {
     border.color: Qt.rgba(1, 1, 1, 0.1)
     border.width: 1
 
-    property string displayDb: "0.0"
-    property real numericDb: 0.0
-    property int freqHz: 0
+    property string displayDb: S.UiState.cabinDbSpl.toFixed(1)
+    property real numericDb: S.UiState.cabinDbSpl
+    property int freqHz: S.UiState.cabinFreqHz
 
     function getFreqLabel(hz) {
         if (numericDb < 40.0 || hz === 0) return "Calme";
@@ -22,26 +23,6 @@ Rectangle {
         if (hz < 2000) return "Voix / Médium";
         if (hz < 5000) return "Aigu";
         return "Sifflement";
-    }
-
-    Timer {
-        interval: 100
-        running: true
-        repeat: true
-        onTriggered: {
-            if (bridge !== undefined && bridge.data !== undefined) {
-                let dbStr = bridge.data["audio_db_text"];
-                let freq = bridge.data["cabin_freq_hz"];
-
-                if (dbStr !== undefined) {
-                    root.displayDb = dbStr;
-                    root.numericDb = Number(dbStr);
-                }
-                if (freq !== undefined) {
-                    root.freqHz = freq;
-                }
-            }
-        }
     }
 
     RowLayout {
