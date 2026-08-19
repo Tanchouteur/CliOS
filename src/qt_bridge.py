@@ -534,21 +534,33 @@ class DashboardBridge(QObject):
         """Retourne les infos système pour le menu de maintenance (JSON)."""
         import socket
         import subprocess
+        import platform
 
-        # 1. IP locale réelle (sans dépendre d'une connexion internet externe)
+        # 1. IP locale réelle (Socket UDP en priorité, avec fallback hostname -I et ifconfig)
         ip_addr = ""
-        try:
-            # Sur Linux / Raspberry Pi OS : hostname -I
-            out = subprocess.check_output(["hostname", "-I"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
-            ips = [ip for ip in out.split() if not ip.startswith("127.") and not ip.startswith("169.254.")]
-            if ips:
-                ip_addr = ips[0]
-        except Exception:
-            pass
+        for target in ["8.8.8.8", "1.1.1.1", "192.168.1.1", "10.0.0.1"]:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect((target, 80))
+                ip = s.getsockname()[0]
+                s.close()
+                if ip and not ip.startswith("127."):
+                    ip_addr = ip
+                    break
+            except Exception:
+                pass
 
         if not ip_addr:
             try:
-                # Fallback ifconfig (Linux / macOS)
+                out = subprocess.check_output(["hostname", "-I"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
+                ips = [ip for ip in out.split() if not ip.startswith("127.") and not ip.startswith("169.254.")]
+                if ips:
+                    ip_addr = ips[0]
+            except Exception:
+                pass
+
+        if not ip_addr:
+            try:
                 out = subprocess.check_output(["ifconfig"], stderr=subprocess.DEVNULL, text=True, timeout=1)
                 for line in out.splitlines():
                     line = line.strip()
@@ -559,20 +571,6 @@ class DashboardBridge(QObject):
                             break
             except Exception:
                 pass
-
-        if not ip_addr:
-            # Fallback socket UDP
-            for target in ["1.1.1.1", "8.8.8.8", "192.168.1.1", "10.0.0.1"]:
-                try:
-                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    s.connect((target, 80))
-                    ip = s.getsockname()[0]
-                    s.close()
-                    if ip and not ip.startswith("127."):
-                        ip_addr = ip
-                        break
-                except Exception:
-                    pass
 
         if not ip_addr:
             ip_addr = "Hors-ligne"
@@ -611,7 +609,6 @@ class DashboardBridge(QObject):
 
         # 2. SSID Wi-Fi connecté
         wifi_ssid = ""
-        # Méthode A: nmcli connection active (Raspberry Pi OS Bookworm)
         try:
             out = subprocess.check_output(
                 ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
@@ -620,13 +617,12 @@ class DashboardBridge(QObject):
             for line in out.splitlines():
                 if ":" in line:
                     name, ctype = line.rsplit(":", 1)
-                    if "wireless" in ctype.lower() or "wifi" in ctype.lower() or "802-11" in ctype.lower():
+                    if any(k in ctype.lower() for k in ["wireless", "wifi", "802-11"]):
                         wifi_ssid = name.strip()
                         break
         except Exception:
             pass
 
-        # Méthode B: nmcli dev wifi
         if not wifi_ssid:
             try:
                 out = subprocess.check_output(
@@ -640,7 +636,6 @@ class DashboardBridge(QObject):
             except Exception:
                 pass
 
-        # Méthode C: iwgetid (wireless-tools)
         if not wifi_ssid:
             for cmd in ["iwgetid", "/usr/sbin/iwgetid", "/sbin/iwgetid"]:
                 try:
@@ -651,7 +646,6 @@ class DashboardBridge(QObject):
                 except Exception:
                     pass
 
-        # Méthode D: iw dev link
         if not wifi_ssid:
             for dev in ["wlan0", "wlan1"]:
                 try:
@@ -665,7 +659,6 @@ class DashboardBridge(QObject):
                 except Exception:
                     pass
 
-        # Méthode E: wpa_cli
         if not wifi_ssid:
             try:
                 out = subprocess.check_output(["wpa_cli", "status"], stderr=subprocess.DEVNULL, text=True, timeout=1)
@@ -676,7 +669,6 @@ class DashboardBridge(QObject):
             except Exception:
                 pass
 
-        # Méthode F: macOS fallback dev
         if not wifi_ssid and platform.system() == "Darwin":
             try:
                 out = subprocess.check_output(["ipconfig", "getsummary", "en0"], stderr=subprocess.DEVNULL, text=True, timeout=1)
@@ -686,6 +678,9 @@ class DashboardBridge(QObject):
                         break
             except Exception:
                 pass
+
+        system = self.runtime.snapshot().domain("system")
+        version = system.get("system_version", "unknown")
 
         return json.dumps({
             "version": version,
