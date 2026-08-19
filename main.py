@@ -250,6 +250,11 @@ def main():
             bridge.storage = storage
             engine.rootContext().setContextProperty("bridge", bridge)
 
+            # Installation du filtre de geste tactile 4 doigts (transparent pour le tactile normal)
+            from src.qt_bridge import TouchGestureFilter
+            touch_filter = TouchGestureFilter(bridge, app)
+            app.installEventFilter(touch_filter)
+
             # Notifications Système
             notif_service = NotificationService(runtime, bridge.send_notification, storage)
             orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))

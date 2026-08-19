@@ -17,6 +17,8 @@ class MockBridge(QObject):
     dataQualityChanged = Signal()
     configChanged = Signal()
     notificationEvent = Signal(str, str, int)
+    openMaintenanceRequested = Signal()
+    maintenanceHoldProgressChanged = Signal(bool)
 
     def __init__(self):
         super().__init__()

@@ -2,7 +2,7 @@ import json
 import os
 import threading
 
-from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
+from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication, QEvent
 from src.logging_runtime import get_logger, get_recent_events
 from src.diagnostic_bundle import create_diagnostic_bundle
 from src.state_store import VEHICLE_DOMAINS
@@ -21,6 +21,8 @@ class DashboardBridge(QObject):
     dataQualityChanged = Signal()
     configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
+    openMaintenanceRequested = Signal()
+    maintenanceHoldProgressChanged = Signal(bool)
 
     def __init__(self, runtime, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
@@ -767,3 +769,44 @@ class DashboardBridge(QObject):
         else:
             # os._exit(0) est plus radical que quit() pour s'assurer que le thread principal s'arrête
             os._exit(0)
+
+
+class TouchGestureFilter(QObject):
+    """Filtre d'événements global pour détecter le maintien à 4 doigts sans jamais bloquer le tactile normal."""
+
+    def __init__(self, bridge: DashboardBridge, parent=None):
+        super().__init__(parent)
+        self.bridge = bridge
+        self._timer = QTimer(self)
+        self._timer.setInterval(4000)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._on_held)
+        self._active = False
+
+    def _on_held(self):
+        self._active = False
+        self.bridge.maintenanceHoldProgressChanged.emit(False)
+        self.bridge.openMaintenanceRequested.emit()
+
+    def eventFilter(self, obj, event):
+        t = event.type()
+        if t in (QEvent.Type.TouchBegin, QEvent.Type.TouchUpdate, QEvent.Type.TouchEnd, QEvent.Type.TouchCancel):
+            pts = getattr(event, "points", None)
+            if pts is None:
+                pts = getattr(event, "touchPoints", None)
+            count = len(pts()) if callable(pts) else (len(pts) if pts is not None else 0)
+
+            if t in (QEvent.Type.TouchEnd, QEvent.Type.TouchCancel) or count < 4:
+                if self._active:
+                    self._active = False
+                    self._timer.stop()
+                    self.bridge.maintenanceHoldProgressChanged.emit(False)
+            elif count >= 4:
+                if not self._active:
+                    self._active = True
+                    self._timer.start()
+                    self.bridge.maintenanceHoldProgressChanged.emit(True)
+
+        # Crucial : NE JAMAIS CONSOMMER L'ÉVÉNEMENT (return False)
+        # Permet à tous les clics, drags, et gestes tactiles à 1 doigt de passer directement au QML !
+        return False

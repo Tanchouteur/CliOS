@@ -25,41 +25,25 @@ ApplicationWindow {
         source: Qt.resolvedUrl(StyleManager.dashboardSource)
     }
 
-    // Détecteur tactile multi-points : 4 doigts maintenus 4 secondes
-    MultiPointTouchArea {
-        id: touchSensor
-        anchors.fill: parent
-        mouseEnabled: false
-        touchPoints: [
-            TouchPoint { id: tp1 },
-            TouchPoint { id: tp2 },
-            TouchPoint { id: tp3 },
-            TouchPoint { id: tp4 }
-        ]
-
-        readonly property int touchCount: (tp1.pressed ? 1 : 0) + (tp2.pressed ? 1 : 0) + (tp3.pressed ? 1 : 0) + (tp4.pressed ? 1 : 0)
-        readonly property bool fourFingersActive: touchCount >= 4
-
-        onFourFingersActiveChanged: {
-            if (fourFingersActive && !maintenanceOverlay.visible) {
-                holdTimer.start()
-                holdAnim.restart()
-            } else {
-                holdTimer.stop()
-                holdAnim.stop()
-                holdProgressBar.width = 0
-            }
-        }
-    }
-
-    Timer {
-        id: holdTimer
-        interval: 4000
-        repeat: false
-        onTriggered: {
+    // Réception des événements de maintien 4 doigts depuis le filtre C++/Python (aucun blocage tactile QML)
+    Connections {
+        target: bridge
+        ignoreUnknownSignals: true
+        function onOpenMaintenanceRequested() {
             holdAnim.stop()
             holdProgressBar.width = 0
+            holdIndicator.visible = false
             maintenanceOverlay.open()
+        }
+        function onMaintenanceHoldProgressChanged(active) {
+            if (active && !maintenanceOverlay.visible) {
+                holdIndicator.visible = true
+                holdAnim.restart()
+            } else {
+                holdAnim.stop()
+                holdProgressBar.width = 0
+                holdIndicator.visible = false
+            }
         }
     }
 
@@ -74,7 +58,7 @@ ApplicationWindow {
         border.width: 2
         border.color: StyleManager.accent
         z: 9997
-        visible: touchSensor.fourFingersActive && !maintenanceOverlay.visible
+        visible: false
         clip: true
 
         RowLayout {
@@ -119,6 +103,39 @@ ApplicationWindow {
                 from: 0
                 to: holdIndicator.width
                 duration: 4000
+            }
+        }
+    }
+
+    // Raccourci secret tactile 1 doigt dans le coin supérieur droit (5 clics rapides ou appui long 3s)
+    Item {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        width: 70
+        height: 70
+        z: 9996
+
+        property int tapCount: 0
+        Timer {
+            id: secretTapReset
+            interval: 1200
+            onTriggered: parent.tapCount = 0
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            pressAndHoldInterval: 3000
+            onClicked: {
+                parent.tapCount += 1
+                secretTapReset.restart()
+                if (parent.tapCount >= 5) {
+                    parent.tapCount = 0
+                    maintenanceOverlay.toggle()
+                }
+            }
+            onPressAndHold: {
+                parent.tapCount = 0
+                maintenanceOverlay.open()
             }
         }
     }
