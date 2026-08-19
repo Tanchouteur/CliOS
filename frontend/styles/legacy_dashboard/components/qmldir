@@ -1,0 +1,15 @@
+BigFuelGauge 1.0 BigFuelGauge.qml
+BigTempGauge 1.0 BigTempGauge.qml
+CarStatusWidget 1.0 CarStatusWidget.qml
+CenterHub 1.0 CenterHub.qml
+EngineTempGaugeBmw 1.0 EngineTempGaugeBmw.qml
+InstantConsGaugeBmw 1.0 InstantConsGaugeBmw.qml
+PageHeader 1.0 PageHeader.qml
+SpeedometerBmw 1.0 SpeedometerBmw.qml
+SplMeterWidget 1.0 SplMeterWidget.qml
+StatusBar 1.0 StatusBar.qml
+TachometerBmw 1.0 TachometerBmw.qml
+Voyant 1.0 Voyant.qml
+VoyantIcon 1.0 VoyantIcon.qml
+VoyantTriState 1.0 VoyantTriState.qml
+VoyantTriStateIcon 1.0 VoyantTriStateIcon.qml

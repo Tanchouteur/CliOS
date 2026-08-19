@@ -1,0 +1,14 @@
+AmbiancePage 1.0 AmbiancePage.qml
+ConsolePage 1.0 ConsolePage.qml
+DebugTab 1.0 DebugTab.qml
+DiagTab 1.0 DiagTab.qml
+InfoPage 1.0 InfoPage.qml
+NonBuildPage 1.0 NonBuildPage.qml
+RaceTab 1.0 RaceTab.qml
+ServicesPage 1.0 ServicesPage.qml
+SettingsTab 1.0 SettingsTab.qml
+StatsTab 1.0 StatsTab.qml
+SystemePage 1.0 SystemePage.qml
+VehiclePage 1.0 VehiclePage.qml
+VehicleProfiles 1.0 VehicleProfiles.qml
+VehicleStats 1.0 VehicleStats.qml
