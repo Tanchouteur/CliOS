@@ -18,7 +18,7 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 16; spacing: 14
-        GtPageHeader {
+        PageHeader {
             Layout.fillWidth: true
             title: "Apparence & Ambiance"
             subtitle: "Personnalisation des thèmes graphiques et de l'éclairage d'accent"
@@ -38,7 +38,7 @@ Item {
                 boundsBehavior: Flickable.DragAndOvershootBounds
                 model: T.StyleManager.styles
 
-                delegate: GtCard {
+                delegate: Card {
                     width: 350
                     height: ListView.view.height
                     title: modelData.label
@@ -64,7 +64,7 @@ Item {
                                 Rectangle { width: 64; height: 12; radius: 6; color: T.StyleManager.accent }
                             }
                         }
-                        GtButton {
+                        Button {
                             Layout.fillWidth: true
                             text: T.StyleManager.styleId === modelData.id ? "STYLE ACTIF" : "APPLIQUER"
                             primary: T.StyleManager.styleId === modelData.id
@@ -75,7 +75,7 @@ Item {
             }
 
             // Carte Roue Chromatique
-            GtCard {
+            Card {
                 Layout.preferredWidth: 350
                 Layout.minimumWidth: 350
                 Layout.maximumWidth: 350

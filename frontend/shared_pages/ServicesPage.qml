@@ -12,7 +12,7 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 16; spacing: 12
-        GtPageHeader { Layout.fillWidth: true; title: "Services"; subtitle: root.serviceKeys.length + " module(s) supervisé(s)"; onBackClicked: root.backRequested() }
+        PageHeader { Layout.fillWidth: true; title: "Services"; subtitle: root.serviceKeys.length + " module(s) supervisé(s)"; onBackClicked: root.backRequested() }
         ListView {
             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 10; model: root.serviceKeys
             delegate: Rectangle {
@@ -36,8 +36,8 @@ Item {
                         Text { text: serviceRow.serviceId; color: T.StyleManager.text; font.pixelSize: 20; font.weight: Font.DemiBold }
                         Text { Layout.fillWidth: true; text: details.message || details.status || "État inconnu"; color: T.StyleManager.textSecondary; font.pixelSize: 14; elide: Text.ElideRight }
                     }
-                    GtButton { visible: serviceRow.params.length > 0; width: 150; height: 56; text: serviceRow.expanded ? "FERMER" : "RÉGLAGES"; onClicked: serviceRow.expanded = !serviceRow.expanded }
-                    GtToggle { checked: serviceRow.running; onToggled: checked => bridge.toggleService(serviceRow.serviceId, checked) }
+                    Button { visible: serviceRow.params.length > 0; width: 150; height: 56; text: serviceRow.expanded ? "FERMER" : "RÉGLAGES"; onClicked: serviceRow.expanded = !serviceRow.expanded }
+                    Toggle { checked: serviceRow.running; onToggled: checked => bridge.toggleService(serviceRow.serviceId, checked) }
                 }
                 RowLayout {
                     visible: serviceRow.expanded; x: 24; y: 88; width: parent.width - 48; height: 65; spacing: 20
@@ -46,7 +46,7 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true; spacing: 10
                             Text { text: modelData.label; color: T.StyleManager.textSecondary; font.pixelSize: 15; Layout.fillWidth: true; elide: Text.ElideRight }
-                            GtToggle { visible: modelData.type === "toggle"; checked: modelData.value; onToggled: checked => bridge.setServiceParameter(serviceRow.serviceId, modelData.key, checked) }
+                            Toggle { visible: modelData.type === "toggle"; checked: modelData.value; onToggled: checked => bridge.setServiceParameter(serviceRow.serviceId, modelData.key, checked) }
                             Slider { visible: modelData.type === "slider"; Layout.preferredWidth: 180; from: modelData.min_val || 0; to: modelData.max_val || 100; value: modelData.value || 0; onMoved: bridge.setServiceParameter(serviceRow.serviceId, modelData.key, value) }
                             ComboBox { visible: modelData.type === "list"; Layout.preferredWidth: 180; model: modelData.options || []; onActivated: bridge.setServiceParameter(serviceRow.serviceId, modelData.key, currentText) }
                         }

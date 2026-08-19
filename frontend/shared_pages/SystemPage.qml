@@ -28,22 +28,22 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 16; spacing: 12
-        GtPageHeader { Layout.fillWidth: true; title: "Système"; subtitle: "CliOS " + S.UiState.systemVersion; onBackClicked: root.backRequested() }
+        PageHeader { Layout.fillWidth: true; title: "Système"; subtitle: "CliOS " + S.UiState.systemVersion; onBackClicked: root.backRequested() }
         RowLayout {
             Layout.fillWidth: true; Layout.preferredHeight: 150; spacing: 12
             Layout.maximumHeight: 150
-            GtCard { Layout.fillWidth: true; Layout.fillHeight: true; title: "CPU"; GtMetric { anchors.centerIn: parent; width: parent.width; label: "Charge application"; value: S.UiState.fixed(S.UiState.appCpuTotalPct, 1, "0,0"); unit: "%"; alignment: Text.AlignHCenter } }
-            GtCard { Layout.fillWidth: true; Layout.fillHeight: true; title: "RAM"; GtMetric { anchors.centerIn: parent; width: parent.width; label: "Mémoire application"; value: S.UiState.fixed(S.UiState.appRamMb, 0, "0"); unit: "MB"; alignment: Text.AlignHCenter } }
-            GtCard {
+            Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "CPU"; Metric { anchors.centerIn: parent; width: parent.width; label: "Charge application"; value: S.UiState.fixed(S.UiState.appCpuTotalPct, 1, "0,0"); unit: "%"; alignment: Text.AlignHCenter } }
+            Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "RAM"; Metric { anchors.centerIn: parent; width: parent.width; label: "Mémoire application"; value: S.UiState.fixed(S.UiState.appRamMb, 0, "0"); unit: "MB"; alignment: Text.AlignHCenter } }
+            Card {
                 Layout.fillWidth: true; Layout.fillHeight: true; title: "Stockage USB"; highlighted: S.UiState.ramMode
                 Column { anchors.centerIn: parent; spacing: 5
                     Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.usbConnected ? "PERSISTANT" : "MODE RAM"; color: S.UiState.usbConnected ? T.StyleManager.success : T.StyleManager.danger; font.pixelSize: 25; font.bold: true }
                     Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.fixed(S.UiState.storageFreeMb, 0, "0") + " MB libres"; color: T.StyleManager.textSecondary; font.pixelSize: 16 }
                 }
             }
-            GtCard { Layout.fillWidth: true; Layout.fillHeight: true; title: "CAN"; GtMetric { anchors.centerIn: parent; width: parent.width; label: "Service moteur"; value: S.UiState.serviceHealth.CAN_Moteur ? S.UiState.serviceHealth.CAN_Moteur.status : "—"; alignment: Text.AlignHCenter; valueSize: 26 } }
+            Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "CAN"; Metric { anchors.centerIn: parent; width: parent.width; label: "Service moteur"; value: S.UiState.serviceHealth.CAN_Moteur ? S.UiState.serviceHealth.CAN_Moteur.status : "—"; alignment: Text.AlignHCenter; valueSize: 26 } }
         }
-        GtCard {
+        Card {
             Layout.fillWidth: true; Layout.fillHeight: true; title: "Journal système"
             ScrollView {
                 anchors.fill: parent; clip: true
@@ -52,10 +52,10 @@ Item {
         }
         RowLayout {
             Layout.fillWidth: true; Layout.preferredHeight: 72; spacing: 12
-            GtButton { Layout.fillWidth: true; text: "EXPORTER LE DIAGNOSTIC"; primary: true; subtext: root.exportPath ? root.exportPath : "Logs, configuration et santé"; onClicked: root.exportPath = bridge.exportDiagnosticBundle() }
-            GtButton { Layout.fillWidth: true; text: "QUITTER CLIOS"; onClicked: root.actionRequested("quit") }
-            GtButton { Layout.fillWidth: true; text: "REDÉMARRER"; destructive: true; onClicked: root.actionRequested("restart") }
-            GtButton { Layout.fillWidth: true; text: "ÉTEINDRE"; destructive: true; onClicked: root.actionRequested("shutdown") }
+            Button { Layout.fillWidth: true; text: "EXPORTER LE DIAGNOSTIC"; primary: true; subtext: root.exportPath ? root.exportPath : "Logs, configuration et santé"; onClicked: root.exportPath = bridge.exportDiagnosticBundle() }
+            Button { Layout.fillWidth: true; text: "QUITTER CLIOS"; onClicked: root.actionRequested("quit") }
+            Button { Layout.fillWidth: true; text: "REDÉMARRER"; destructive: true; onClicked: root.actionRequested("restart") }
+            Button { Layout.fillWidth: true; text: "ÉTEINDRE"; destructive: true; onClicked: root.actionRequested("shutdown") }
         }
     }
 }

@@ -15,7 +15,7 @@ Item {
 
     RowLayout {
         anchors.fill: parent; anchors.margins: 16; spacing: 14
-        GtCard {
+        Card {
             Layout.preferredWidth: 350; Layout.fillHeight: true; title: "Diagnostic moteur"; highlighted: root.codes.length > 0
             ColumnLayout {
                 anchors.fill: parent; spacing: 20
@@ -32,11 +32,11 @@ Item {
                     color: T.StyleManager.textSecondary; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
                 }
                 Item { Layout.fillHeight: true }
-                GtButton { Layout.fillWidth: true; text: root.scanning ? "ANALYSE EN COURS" : "LANCER LE SCAN"; primary: true; enabled: root.ready && !root.scanning; onClicked: bridge.requestDiagnosticScan() }
-                GtButton { Layout.fillWidth: true; text: "EFFACER LES DÉFAUTS"; destructive: true; enabled: false; subtext: "Backend non disponible" }
+                Button { Layout.fillWidth: true; text: root.scanning ? "ANALYSE EN COURS" : "LANCER LE SCAN"; primary: true; enabled: root.ready && !root.scanning; onClicked: bridge.requestDiagnosticScan() }
+                Button { Layout.fillWidth: true; text: "EFFACER LES DÉFAUTS"; destructive: true; enabled: false; subtext: "Backend non disponible" }
             }
         }
-        GtCard {
+        Card {
             Layout.fillWidth: true; Layout.fillHeight: true; title: "Rapport DTC"
             ListView {
                 anchors.fill: parent; clip: true; spacing: 10; model: root.codes

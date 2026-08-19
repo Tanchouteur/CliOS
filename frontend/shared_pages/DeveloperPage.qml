@@ -11,8 +11,8 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 16; spacing: 12
-        GtPageHeader { Layout.fillWidth: true; title: "Développeur · CAN"; subtitle: root.signals.length + " signaux structurés"; onBackClicked: root.backRequested() }
-        GtCard {
+        PageHeader { Layout.fillWidth: true; title: "Développeur · CAN"; subtitle: root.signals.length + " signaux structurés"; onBackClicked: root.backRequested() }
+        Card {
             Layout.fillWidth: true; Layout.fillHeight: true; title: "Données brutes normalisées"
             GridView {
                 anchors.fill: parent; clip: true

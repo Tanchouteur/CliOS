@@ -50,8 +50,8 @@ Rectangle {
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 20
-                GtButton { text: "ANNULER"; width: 250; onClicked: root.rejected() }
-                GtButton {
+                Button { text: "ANNULER"; width: 250; onClicked: root.rejected() }
+                Button {
                     text: root.acceptText
                     width: 300
                     primary: !root.dangerous
