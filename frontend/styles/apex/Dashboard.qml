@@ -125,13 +125,13 @@ Item {
             target: pageLoader.item
             ignoreUnknownSignals: true
             function onNavigateRequested(tgt) {
-                // Pages secondaires (Apparence, Véhicule, etc.)
+                // Pages secondaires partagées (Apparence, Véhicule, Services, Système, Développeur)
                 var subPages = {
-                    appearance: "../gt_modern/pages/GtAppearancePage.qml",
-                    vehicle:    "../gt_modern/pages/GtVehiclePage.qml",
-                    services:   "../gt_modern/pages/GtServicesPage.qml",
-                    system:     "../gt_modern/pages/GtSystemPage.qml",
-                    developer:  "../gt_modern/pages/GtDeveloperPage.qml"
+                    appearance: "../../shared_pages/AppearancePage.qml",
+                    vehicle:    "../../shared_pages/VehiclePage.qml",
+                    services:   "../../shared_pages/ServicesPage.qml",
+                    system:     "../../shared_pages/SystemPage.qml",
+                    developer:  "../../shared_pages/DeveloperPage.qml"
                 }
                 if (subPages[tgt]) {
                     subPageLoader.source = Qt.resolvedUrl(subPages[tgt])

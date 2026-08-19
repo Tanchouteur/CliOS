@@ -26,11 +26,11 @@ Item {
         for (let i = 0; i < destinations.length; ++i)
             if (destinations[i].id === id) return destinations[i]
         const deep = {
-            appearance: {id:"appearance", source:"pages/GtAppearancePage.qml", complex:true},
-            vehicle: {id:"vehicle", source:"pages/GtVehiclePage.qml", complex:true},
-            services: {id:"services", source:"pages/GtServicesPage.qml", complex:true},
-            system: {id:"system", source:"pages/GtSystemPage.qml", complex:true},
-            developer: {id:"developer", source:"pages/GtDeveloperPage.qml", complex:true}
+            appearance: {id:"appearance", source:"../../shared_pages/AppearancePage.qml", complex:true},
+            vehicle: {id:"vehicle", source:"../../shared_pages/VehiclePage.qml", complex:true},
+            services: {id:"services", source:"../../shared_pages/ServicesPage.qml", complex:true},
+            system: {id:"system", source:"../../shared_pages/SystemPage.qml", complex:true},
+            developer: {id:"developer", source:"../../shared_pages/DeveloperPage.qml", complex:true}
         }
         return deep[id] || destinations[0]
     }

@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
-import "../components"
-import "../../../style" as T
+import "components"
+import "../style" as T
 
 Item {
     id: root
