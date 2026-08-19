@@ -4,6 +4,13 @@ CliOS est un tableau de bord automobile modulaire en Python, PySide6 et QML,
 destiné à un écran tactile ultra-large 1920×720 installé dans l’habitacle.
 Il centralise la télémétrie CAN/OBD, les statistiques de trajet, le diagnostic,
 le stockage résilient et plusieurs interfaces visuelles.
+### Voici quelques captures d’écran de l’interface graphique
+Apex : 
+![apex.jpg](docs/images/apex.jpg)
+![CliOS Apex](docs/images/apex-3.jpg)
+
+Atelier Luxe :
+![CliOS Atelier Luxe](docs/images/atelier_luxe.jpg)
 
 ## Fonctionnalités
 
