@@ -127,11 +127,11 @@ Item {
             function onNavigateRequested(tgt) {
                 // Pages secondaires (Apparence, Véhicule, etc.)
                 var subPages = {
-                    appearance: "../../pages/GtAppearancePage.qml",
-                    vehicle:    "../../pages/GtVehiclePage.qml",
-                    services:   "../../pages/GtServicesPage.qml",
-                    system:     "../../pages/GtSystemPage.qml",
-                    developer:  "../../pages/GtDeveloperPage.qml"
+                    appearance: "../gt_modern/pages/GtAppearancePage.qml",
+                    vehicle:    "../gt_modern/pages/GtVehiclePage.qml",
+                    services:   "../gt_modern/pages/GtServicesPage.qml",
+                    system:     "../gt_modern/pages/GtSystemPage.qml",
+                    developer:  "../gt_modern/pages/GtDeveloperPage.qml"
                 }
                 if (subPages[tgt]) {
                     subPageLoader.source = Qt.resolvedUrl(subPages[tgt])

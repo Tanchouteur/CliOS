@@ -1,8 +1,8 @@
 import QtQuick
-import "../../views" as Views
+import "../gt_modern" as GtModern
 
-// Ce point d'entrée réutilise la disposition GT avec la palette du manifeste.
-// Remplacez Views.Dash par votre propre Item pour changer toute la disposition.
-Views.Dash {
+// Ce point d'entrée réutilise le cockpit GT avec la palette du manifeste.
+// Remplacez GtModern.Dashboard par votre propre Item pour changer toute la disposition.
+GtModern.Dashboard {
     anchors.fill: parent
 }
