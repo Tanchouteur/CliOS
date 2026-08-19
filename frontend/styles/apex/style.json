@@ -1,23 +1,23 @@
 {
     "id": "apex",
-    "label": "Apex",
-    "description": "Obsidienne vivante · Effets 3D · Animations constantes · Taillé pour la console centrale",
+    "label": "Apex Obsidian",
+    "description": "Cockpit panoramique sculpté · Haute lisibilité · Commandes tactiles",
     "order": 1,
     "dashboard": "Dashboard.qml",
     "palette": {
-        "background":    "#03050A",
-        "surface":       "#0B1018",
-        "surfaceRaised": "#111C26",
-        "surfaceSoft":   "#182435",
+        "background":    "#020407",
+        "surface":       "#0B111A",
+        "surfaceRaised": "#111B27",
+        "surfaceSoft":   "#192838",
         "text":          "#FFFFFF",
-        "textSecondary": "#C8D4E0",
-        "outline":       "#1E3045",
-        "gaugeTrack":    "#122030"
+        "textSecondary": "#D0DAE4",
+        "outline":       "#30465C",
+        "gaugeTrack":    "#172635"
     },
     "metrics": {
-        "radiusSmall":  10,
-        "radiusMedium": 18,
-        "radiusLarge":  28,
+        "radiusSmall":  12,
+        "radiusMedium": 22,
+        "radiusLarge":  32,
         "borderWidth":  1
     }
 }

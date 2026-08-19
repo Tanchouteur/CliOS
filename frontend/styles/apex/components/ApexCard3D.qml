@@ -1,111 +1,99 @@
 import QtQuick
 import "../../../style" as T
 
-// Carte avec effet 3D : Biseau cristal + Reflet supérieur + Double ombre d'élévation (GPU pur)
+// Surface tactile en aluminium noir : relief net, sans ombre floue coûteuse.
 Item {
     id: root
-    property string title:       ""
-    property bool   highlighted: false
-    property color  glowColor:   T.StyleManager.accent
-    property alias  content:     contentItem.data
+    property string title: ""
+    property bool highlighted: false
+    property color glowColor: T.StyleManager.accent
     default property alias contentData: contentItem.data
 
-    // Animation d'apparition fluide 3D
-    property real entryProgress: 0.0
-    NumberAnimation on entryProgress {
-        from: 0.0; to: 1.0; duration: 380; easing.type: Easing.OutCubic
-        running: true
-    }
+    transform: Translate { y: root.entered ? 0 : 8 }
+    opacity: entered ? 1.0 : 0.0
+    property bool entered: false
+    Component.onCompleted: entered = true
+    Behavior on opacity { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
-    opacity: entryProgress
-    transform: Translate { y: (1.0 - root.entryProgress) * 12 }
-
-    // ── 1. Double ombre portée 3D (Effet de lévitation au-dessus du fond) ─────
     Rectangle {
         anchors.fill: parent
-        anchors.topMargin: 6
-        anchors.leftMargin: 3
-        anchors.rightMargin: 3
-        radius: T.StyleManager.radiusMedium
-        color: Qt.rgba(0, 0, 0, 0.60)
-        z: -2
-    }
-    Rectangle {
-        anchors.fill: parent
-        anchors.topMargin: 3
-        anchors.leftMargin: 1
-        anchors.rightMargin: 1
-        radius: T.StyleManager.radiusMedium
-        color: Qt.rgba(0, 0, 0, 0.35)
-        z: -1
+        anchors.topMargin: 9
+        anchors.leftMargin: 7
+        anchors.rightMargin: 7
+        radius: 24
+        color: "#8F000000"
     }
 
-    // ── 2. Corps de la carte en verre fumé et titane ─────────────────────────
     Rectangle {
-        id: cardBody
+        id: body
         anchors.fill: parent
-        radius: T.StyleManager.radiusMedium
+        radius: 22
         gradient: Gradient {
             orientation: Gradient.Vertical
-            GradientStop { position: 0.0; color: "#0F1826" }
-            GradientStop { position: 0.5; color: "#0A101A" }
-            GradientStop { position: 1.0; color: "#060A12" }
+            GradientStop { position: 0.0; color: root.highlighted ? "#14232D" : "#111A25" }
+            GradientStop { position: 0.08; color: "#0B111A" }
+            GradientStop { position: 1.0; color: "#070B11" }
         }
-
         border.width: 1
         border.color: root.highlighted
-            ? Qt.rgba(root.glowColor.r, root.glowColor.g, root.glowColor.b, 0.55)
-            : Qt.rgba(root.glowColor.r, root.glowColor.g, root.glowColor.b, 0.14)
+            ? Qt.rgba(root.glowColor.r, root.glowColor.g, root.glowColor.b, 0.82)
+            : "#26394B"
 
-        Behavior on border.color { ColorAnimation { duration: 250 } }
-
-        // ── 3. Biseau supérieur biseauté (Lumière zénithale 3D) ───────────────
         Rectangle {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
+            anchors.leftMargin: 22
+            anchors.rightMargin: 22
             height: 1
-            radius: parent.radius
-            color: Qt.rgba(1.0, 1.0, 1.0, 0.14)
+            color: root.highlighted ? root.glowColor : "#4FFFFFFF"
         }
 
-        // Ligne d'accent supérieure dynamique (si highlighted)
         Rectangle {
             visible: root.highlighted
-            anchors.top: parent.top
             anchors.left: parent.left
-            anchors.right: parent.right
-            height: 2
-            radius: parent.radius
+            anchors.verticalCenter: parent.verticalCenter
+            width: 3
+            height: Math.min(parent.height * 0.52, 120)
+            radius: 2
             color: root.glowColor
         }
     }
 
-    // ── 4. Titre gravé haute lisibilité ──────────────────────────────────────
-    Text {
-        id: titleText
+    Row {
+        id: header
         visible: root.title !== ""
-        anchors.top: parent.top
         anchors.left: parent.left
-        anchors.topMargin: 12
-        anchors.leftMargin: 16
-        text: root.title.toUpperCase()
-        color: Qt.rgba(1.0, 1.0, 1.0, 0.45)
-        font.pixelSize: 11
-        font.weight: Font.Bold
-        font.letterSpacing: 2.0
+        anchors.top: parent.top
+        anchors.leftMargin: 18
+        anchors.topMargin: 15
+        spacing: 9
+
+        Rectangle {
+            width: 18
+            height: 3
+            radius: 2
+            color: root.highlighted ? root.glowColor : T.StyleManager.accent
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        Text {
+            text: root.title
+            color: "#C2D0DC"
+            font.pixelSize: 12
+            font.weight: Font.Bold
+            font.letterSpacing: 1.8
+        }
     }
 
-    // ── 5. Conteneur des éléments internes ───────────────────────────────────
     Item {
         id: contentItem
-        anchors {
-            left:   parent.left
-            right:  parent.right
-            bottom: parent.bottom
-            top:    root.title !== "" ? titleText.bottom : parent.top
-        }
-        anchors.margins:   12
-        anchors.topMargin: root.title !== "" ? 8 : 12
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.top: root.title !== "" ? header.bottom : parent.top
+        anchors.leftMargin: 18
+        anchors.rightMargin: 18
+        anchors.bottomMargin: 16
+        anchors.topMargin: root.title !== "" ? 13 : 16
     }
 }

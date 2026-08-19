@@ -1,10 +1,8 @@
 import QtQuick
 import QtQuick.Layouts
-import "../../../state" as S
 import "../../../style" as T
 import "../components"
 
-// Page menu simplifié — grille 3×2 de cartes 3D animées
 Item {
     id: root
     anchors.fill: parent
@@ -13,186 +11,171 @@ Item {
     signal actionRequested(string action)
 
     readonly property var sections: [
-        { id: "appearance", icon: "◈", label: "APPARENCE",   sub: "Thèmes & accents" },
-        { id: "vehicle",    icon: "◎", label: "VÉHICULE",    sub: "Profil & capteurs" },
-        { id: "services",   icon: "◉", label: "SERVICES",    sub: "Modules backend" },
-        { id: "system",     icon: "◇", label: "SYSTÈME",     sub: "Logs & stockage" },
-        { id: "developer",  icon: "◈", label: "DÉVELOPPEUR", sub: "CAN & debug" },
-        { id: "_power",     icon: "◎", label: "ALIMENTATION", sub: "Quitter / Éteindre" }
+        { id: "appearance", number: "01", label: "APPARENCE", sub: "Ambiance, couleurs et style du cockpit", tone: "accent" },
+        { id: "vehicle", number: "02", label: "VÉHICULE", sub: "Profil actif, capteurs et étalonnage", tone: "normal" },
+        { id: "services", number: "03", label: "SERVICES", sub: "Modules et fonctions embarquées", tone: "normal" },
+        { id: "system", number: "04", label: "SYSTÈME", sub: "Santé, stockage et journaux", tone: "normal" },
+        { id: "developer", number: "05", label: "DÉVELOPPEUR", sub: "CAN, diagnostic et outils avancés", tone: "normal" },
+        { id: "_power", number: "06", label: "ALIMENTATION", sub: "Redémarrer, quitter ou éteindre", tone: "danger" }
     ]
 
     GridLayout {
         anchors.fill: parent
-        anchors.margins: 12
+        anchors.margins: 14
         columns: 3
-        rowSpacing: 10
-        columnSpacing: 10
+        rowSpacing: 14
+        columnSpacing: 14
 
         Repeater {
             model: root.sections
             delegate: ApexCard3D {
+                id: menuCard
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                id: cardItem
-                property int entryDelay: (index || 0) * 60
-                Component.onCompleted: {
-                    opacity = 0
-                    entryTimer.start()
-                }
-                Timer {
-                    id: entryTimer
-                    interval: Math.max(1, cardItem.entryDelay)
-                    onTriggered: {
-                        cardItem.opacity = 0
-                        entryAnim.start()
-                    }
-                }
-                NumberAnimation {
-                    id: entryAnim
-                    target: cardItem
-                    property: "opacity"
-                    from: 0; to: 1
-                    duration: 380
-                    easing.type: Easing.OutCubic
+                highlighted: modelData.tone === "accent"
+                glowColor: modelData.tone === "danger" ? "#FF6670" : T.StyleManager.accent
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 18
+                    color: cardTouch.pressed
+                        ? (modelData.tone === "danger" ? "#25131A" : "#132B3A")
+                        : "transparent"
                 }
 
                 Column {
-                    anchors.centerIn: parent
-                    spacing: 8
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
 
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: modelData.icon
-                        color: modelData.id === "_power"
-                            ? "#FF4444"
-                            : Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.7)
-                        font.pixelSize: 28
+                        text: modelData.number
+                        color: modelData.tone === "danger" ? "#FF7780" : T.StyleManager.accent
+                        font.pixelSize: 13
+                        font.weight: Font.Black
+                        font.letterSpacing: 2.0
                     }
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
                         text: modelData.label
                         color: "#FFFFFF"
-                        font.pixelSize: 17
+                        font.pixelSize: 23
                         font.weight: Font.Black
-                        font.letterSpacing: 2.5
+                        font.letterSpacing: 2.2
                     }
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
                         text: modelData.sub
-                        color: Qt.rgba(1, 1, 1, 0.35)
-                        font.pixelSize: 13
+                        color: "#B1BFCC"
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                    }
+                }
+
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 52
+                    height: 52
+                    radius: 18
+                    color: modelData.tone === "danger" ? "#28141B" : "#102231"
+                    border.width: 1
+                    border.color: modelData.tone === "danger" ? "#8B3A45" : "#36546C"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "›"
+                        color: modelData.tone === "danger" ? "#FF7780" : "#FFFFFF"
+                        font.pixelSize: 32
+                        font.weight: Font.Light
                     }
                 }
 
                 MouseArea {
+                    id: cardTouch
                     anchors.fill: parent
-                    onPressed:  parent.opacity = 0.75
-                    onReleased: parent.opacity = 1.0
                     onClicked: {
-                        if (modelData.id === "_power") {
-                            powerMenu.visible = true
-                        } else {
-                            root.navigateRequested(modelData.id)
-                        }
+                        if (modelData.id === "_power") powerMenu.visible = true
+                        else root.navigateRequested(modelData.id)
                     }
                 }
             }
         }
     }
 
-    // Sous-menu alimentation flottant
     Rectangle {
         id: powerMenu
-        visible: false
         anchors.fill: parent
-        color: Qt.rgba(0.02, 0.04, 0.08, 0.92)
+        visible: false
+        color: "#E603060A"
+        z: 100
+
+        MouseArea { anchors.fill: parent; onClicked: powerMenu.visible = false }
 
         Rectangle {
             anchors.centerIn: parent
-            width: 480; height: 280
-            radius: T.StyleManager.radiusLarge
-            color: "#0E1828"
+            width: 720
+            height: 344
+            radius: 30
+            color: "#0B121B"
             border.width: 1
-            border.color: Qt.rgba(1, 0.2, 0.2, 0.4)
+            border.color: "#41576C"
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 28
+                anchors.margins: 26
                 spacing: 14
 
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "ALIMENTATION"
-                    color: "#FFFFFF"
-                    font.pixelSize: 18
-                    font.weight: Font.Black
-                    font.letterSpacing: 3
+                RowLayout {
+                    Layout.fillWidth: true
+                    Column {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        Text { text: "ALIMENTATION"; color: "#FFFFFF"; font.pixelSize: 22; font.bold: true; font.letterSpacing: 2.4 }
+                        Text { text: "Choisissez une action système"; color: "#B2C0CC"; font.pixelSize: 14 }
+                    }
+                    Rectangle {
+                        width: 52; height: 52; radius: 18; color: closeTouch.pressed ? "#22303D" : "#141E28"; border.width: 1; border.color: "#3C5063"
+                        Text { anchors.centerIn: parent; text: "×"; color: "#FFFFFF"; font.pixelSize: 28 }
+                        MouseArea { id: closeTouch; anchors.fill: parent; onClicked: powerMenu.visible = false }
+                    }
                 }
 
-                Item { Layout.fillHeight: true }
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#31465A" }
 
-                Repeater {
-                    model: [
-                        { label: "QUITTER CLIOS",  action: "quit",     danger: false },
-                        { label: "REDÉMARRER",      action: "restart",  danger: true  },
-                        { label: "ÉTEINDRE",        action: "shutdown", danger: true  }
-                    ]
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 48
-                        radius: T.StyleManager.radiusSmall
-                        color: modelData.danger
-                            ? Qt.rgba(1.0, 0.2, 0.1, 0.10)
-                            : Qt.rgba(0.1, 0.3, 0.6, 0.10)
-                        border.width: 1
-                        border.color: modelData.danger
-                            ? Qt.rgba(1.0, 0.2, 0.1, 0.4)
-                            : Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.35)
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: modelData.label
-                            color: modelData.danger ? "#FF4444" : T.StyleManager.accent
-                            font.pixelSize: 14
-                            font.weight: Font.Bold
-                            font.letterSpacing: 2
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            onPressed: parent.opacity = 0.7
-                            onReleased: parent.opacity = 1.0
-                            onClicked: {
-                                powerMenu.visible = false
-                                root.actionRequested(modelData.action)
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 12
+                    Repeater {
+                        model: [
+                            { label: "QUITTER CLIOS", action: "quit", danger: false },
+                            { label: "REDÉMARRER", action: "restart", danger: false },
+                            { label: "ÉTEINDRE", action: "shutdown", danger: true }
+                        ]
+                        delegate: Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            radius: 20
+                            color: actionTouch.pressed ? (modelData.danger ? "#4A1C24" : "#173246") : (modelData.danger ? "#28141B" : "#101D29")
+                            border.width: 1
+                            border.color: modelData.danger ? "#B34854" : "#36536B"
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 12
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.danger ? "!" : "•"; color: modelData.danger ? "#FF7780" : T.StyleManager.accent; font.pixelSize: 32; font.bold: true }
+                                Text { text: modelData.label; color: "#FFFFFF"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.4 }
+                            }
+                            MouseArea {
+                                id: actionTouch
+                                anchors.fill: parent
+                                onClicked: {
+                                    powerMenu.visible = false
+                                    root.actionRequested(modelData.action)
+                                }
                             }
                         }
                     }
                 }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 48
-                    radius: T.StyleManager.radiusSmall
-                    color: Qt.rgba(1, 1, 1, 0.06)
-                    border.width: 1
-                    border.color: Qt.rgba(1, 1, 1, 0.12)
-                    Text {
-                        anchors.centerIn: parent
-                        text: "ANNULER"
-                        color: Qt.rgba(1, 1, 1, 0.45)
-                        font.pixelSize: 14
-                        font.weight: Font.Bold
-                        font.letterSpacing: 2
-                    }
-                    MouseArea { anchors.fill: parent; onClicked: powerMenu.visible = false }
-                }
             }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            z: -1
-            onClicked: powerMenu.visible = false
         }
     }
 }

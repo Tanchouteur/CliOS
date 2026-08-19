@@ -12,6 +12,29 @@
         "color_normal": "#00aaff",
         "color_redline": "#ff0033"
     },
+    "engine": {
+        "label": "1.5 dCi 86",
+        "max_power_kw": 63,
+        "max_power_rpm": 3750,
+        "max_torque_nm": 200,
+        "max_torque_rpm": 1900,
+        "performance_curve": [
+            { "rpm": 800,  "torque_nm": 78 },
+            { "rpm": 1000, "torque_nm": 105 },
+            { "rpm": 1250, "torque_nm": 145 },
+            { "rpm": 1500, "torque_nm": 180 },
+            { "rpm": 1750, "torque_nm": 198 },
+            { "rpm": 1900, "torque_nm": 200 },
+            { "rpm": 2250, "torque_nm": 198 },
+            { "rpm": 2500, "torque_nm": 194 },
+            { "rpm": 3000, "torque_nm": 184 },
+            { "rpm": 3500, "torque_nm": 169 },
+            { "rpm": 3750, "torque_nm": 160 },
+            { "rpm": 4000, "torque_nm": 143 },
+            { "rpm": 4500, "torque_nm": 105 },
+            { "rpm": 5000, "torque_nm": 65 }
+        ]
+    },
     "speedometer": {
         "max_speed": 200
     },

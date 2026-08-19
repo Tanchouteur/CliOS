@@ -12,6 +12,25 @@
         "color_normal": "#00aaff",
         "color_redline": "#ff0033"
     },
+    "engine": {
+        "label": "2.0 16V 200",
+        "max_power_kw": 147,
+        "max_power_rpm": 7250,
+        "max_torque_nm": 215,
+        "max_torque_rpm": 5550,
+        "performance_curve": [
+            { "rpm": 900,  "torque_nm": 95 },
+            { "rpm": 1500, "torque_nm": 130 },
+            { "rpm": 2500, "torque_nm": 165 },
+            { "rpm": 3500, "torque_nm": 185 },
+            { "rpm": 4500, "torque_nm": 202 },
+            { "rpm": 5550, "torque_nm": 215 },
+            { "rpm": 6500, "torque_nm": 208 },
+            { "rpm": 7000, "torque_nm": 201 },
+            { "rpm": 7250, "torque_nm": 194 },
+            { "rpm": 7500, "torque_nm": 180 }
+        ]
+    },
     "speedometer": {
         "max_speed": 250
     },

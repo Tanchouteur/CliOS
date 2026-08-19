@@ -45,10 +45,21 @@ class FakeBridge(QObject):
         }
         self._config = {
             "theme": {"main": "#48B8FF"}, "ui": {"visual_style": "gt_modern"},
-            "tachometer": {"max_rpm": 7000, "redline_rpm": 6500},
-            "speedometer": {"max_speed": 250},
+            "tachometer": {"max_rpm": 6000, "redline_rpm": 5100},
+            "speedometer": {"max_speed": 200},
             "fuel": {"max_liters": 55},
             "engine_temp": {"warning": 105, "max_display": 120},
+            "engine": {
+                "label": "1.5 dCi 86", "max_power_kw": 63, "max_power_rpm": 3750,
+                "max_torque_nm": 200, "max_torque_rpm": 1900,
+                "performance_curve": [
+                    {"rpm": 800, "torque_nm": 78}, {"rpm": 1250, "torque_nm": 145},
+                    {"rpm": 1500, "torque_nm": 180}, {"rpm": 1900, "torque_nm": 200},
+                    {"rpm": 2500, "torque_nm": 194}, {"rpm": 3000, "torque_nm": 184},
+                    {"rpm": 3750, "torque_nm": 160}, {"rpm": 4000, "torque_nm": 143},
+                    {"rpm": 4500, "torque_nm": 105}, {"rpm": 5000, "torque_nm": 65},
+                ],
+            },
         }
         self._health = {
             "CAN_Moteur": {"status": "OK", "message": "Bus CAN connecté"},
@@ -130,6 +141,18 @@ class FakeBridge(QObject):
                 },
                 "metrics": {"radiusSmall": 8, "radiusMedium": 14, "radiusLarge": 20, "borderWidth": 1},
             },
+            {
+                "id": "apex", "label": "Apex",
+                "description": "Cockpit panoramique haute lisibilite",
+                "order": 1, "dashboard": "styles/apex/Dashboard.qml",
+                "palette": {
+                    "background": "#030509", "surface": "#090E15",
+                    "surfaceRaised": "#101925", "surfaceSoft": "#162231",
+                    "text": "#FFFFFF", "textSecondary": "#B9C6D4",
+                    "outline": "#23354A", "gaugeTrack": "#142131",
+                },
+                "metrics": {"radiusSmall": 10, "radiusMedium": 18, "radiusLarge": 28, "borderWidth": 1},
+            },
         ]
 
     @Slot(result="QVariantList")
@@ -142,7 +165,7 @@ class FakeBridge(QObject):
 
     @Slot(result=str)
     def getActiveProfile(self):
-        return "clio3_rs"
+        return "clio3diesel"
 
     @Slot(int, result=str)
     def getRecentLogs(self, _limit):
@@ -203,9 +226,11 @@ def main():
     window.setVisibility(QQuickWindow.Windowed)
     window.setWidth(1920)
     window.setHeight(720)
-    routes = ["drive", "trip", "performance", "diagnostic", "menu", "appearance", "vehicle", "services", "system", "developer"]
-    styles = ["gt_modern"]
-    dashboard = window.findChild(QObject, "dashboardRoot")
+    routes_by_style = {
+        "gt_modern": ["drive", "trip", "performance", "diagnostic", "menu", "appearance", "vehicle", "services", "system", "developer"],
+        "apex": ["drive", "perf", "menu"],
+    }
+    styles = ["gt_modern", "apex"]
     failures = []
 
     if args.output:
@@ -255,7 +280,9 @@ def main():
             QTimer.singleShot(350, finish_legacy)
             return
 
-        dashboard.navigate("drive")
+        dashboard = window.findChild(QObject, "dashboardRoot")
+        if dashboard is not None:
+            dashboard.navigate("drive")
         banner = window.findChild(QObject, "attentionBanner")
         if banner:
             banner.setProperty("shown", False)
@@ -279,7 +306,8 @@ def main():
             bridge._stats = {}
             bridge.dataChanged.emit(); bridge.statsChanged.emit()
         elif name == "confirmation":
-            dashboard.askConfirmation("shutdown")
+            if dashboard is not None:
+                dashboard.askConfirmation("shutdown")
 
         def finish_special():
             save_frame("state-" + name)
@@ -293,9 +321,19 @@ def main():
             QTimer.singleShot(100, run_special)
             return
         style = styles[state["style"]]
+        routes = routes_by_style[style]
         route = routes[state["route"]]
         bridge.save_setting("ui.visual_style", style)
-        dashboard.navigate(route)
+
+        def navigate_and_capture():
+            object_name = "apexDashboardRoot" if style == "apex" else "dashboardRoot"
+            active_dashboard = window.findChild(QObject, object_name)
+            if active_dashboard is None:
+                failures.append(f"dashboard introuvable: {style}")
+            else:
+                active_dashboard.navigate(route)
+
+            QTimer.singleShot(400, capture)
 
         def capture():
             save_frame(f"{style}-{route}")
@@ -305,14 +343,15 @@ def main():
                 state["style"] += 1
             QTimer.singleShot(80, advance)
 
-        QTimer.singleShot(160, capture)
+        QTimer.singleShot(260, navigate_and_capture)
 
     QTimer.singleShot(200, advance)
     app.exec()
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print(f"QML OK: {len(routes) * len(styles)} vues et {len(specials)} états à 1920x720")
+    view_count = sum(len(routes_by_style[style]) for style in styles)
+    print(f"QML OK: {view_count} vues et {len(specials)} états à 1920x720")
     return 0
 
 

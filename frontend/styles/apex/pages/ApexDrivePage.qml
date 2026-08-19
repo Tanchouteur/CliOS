@@ -4,7 +4,6 @@ import "../../../state" as S
 import "../../../style" as T
 import "../components"
 
-// Page de conduite principale — Hypercar Concept Layout 1920×720 (Haute Lisibilité Plein Jour)
 Item {
     id: root
     anchors.fill: parent
@@ -14,429 +13,366 @@ Item {
 
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 14
-        spacing: 16
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
+        anchors.topMargin: 10
+        anchors.bottomMargin: 10
+        spacing: 14
 
-        // ══════════════════════════════════════════════════════════════════════
-        //  AILE GAUCHE (460 px) — Régulateur/Limiteur HUD & Ordinateur de bord
-        // ══════════════════════════════════════════════════════════════════════
+        // Aile gauche : énergie et trajet, lisibles par le conducteur comme le passager.
         ColumnLayout {
-            Layout.preferredWidth: 460
-            Layout.minimumWidth: 440
-            Layout.maximumWidth: 480
+            Layout.preferredWidth: 382
+            Layout.minimumWidth: 382
             Layout.fillHeight: true
             spacing: 14
 
-            // ── 1. Régulateur / Limiteur HUD Grand Format ────────────────────
             ApexCard3D {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 180
-                title: "Régulateur / Limiteur"
-                highlighted: S.UiState.cruiseMode !== "OFF"
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 16
-
-                    Column {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        Text {
-                            text: S.UiState.cruiseMode
-                            color: S.UiState.cruiseMode !== "OFF" ? T.StyleManager.accent : Qt.rgba(1,1,1,0.40)
-                            font.pixelSize: 32
-                            font.weight: Font.Black
-                            font.letterSpacing: 2.0
-                            Behavior on color { ColorAnimation { duration: 200 } }
-                        }
-
-                        Rectangle {
-                            width: cruiseStatusText.implicitWidth + 16
-                            height: 26
-                            radius: 6
-                            color: S.UiState.cruiseStatus === "ACTIF" ? Qt.rgba(0, 0.9, 0.45, 0.2) : Qt.rgba(1,1,1,0.08)
-                            border.width: 1
-                            border.color: S.UiState.cruiseStatus === "ACTIF" ? "#00E676" : Qt.rgba(1,1,1,0.2)
-
-                            Text {
-                                id: cruiseStatusText
-                                anchors.centerIn: parent
-                                text: S.UiState.cruiseStatus
-                                color: S.UiState.cruiseStatus === "ACTIF" ? "#00E676" : Qt.rgba(1,1,1,0.50)
-                                font.pixelSize: 13
-                                font.weight: Font.Black
-                                font.letterSpacing: 1.5
-                            }
-                        }
-                    }
-
-                    Row {
-                        visible: S.UiState.cruiseTarget > 0
-                        spacing: 6
-                        Layout.alignment: Qt.AlignVCenter
-
-                        Text {
-                            text: Math.round(S.UiState.cruiseTarget)
-                            color: "#FFFFFF"
-                            font.pixelSize: 58
-                            font.weight: Font.Black
-                            font.letterSpacing: -1.5
-                        }
-                        Text {
-                            text: "KM/H"
-                            color: Qt.rgba(1,1,1,0.50)
-                            font.pixelSize: 15
-                            font.weight: Font.Bold
-                            anchors.baseline: parent.children[0].baseline
-                        }
-                    }
-
-                    Text {
-                        visible: S.UiState.cruiseTarget <= 0
-                        text: "—"
-                        color: Qt.rgba(1,1,1,0.25)
-                        font.pixelSize: 44
-                        font.weight: Font.Bold
-                    }
-                }
-            }
-
-            // ── 2. Ordinateur de Bord & Trajets Grand Format ─────────────────
-            ApexCard3D {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                title: "Ordinateur de Bord"
+                Layout.preferredHeight: 280
+                title: "ÉNERGIE À BORD"
+                highlighted: S.UiState.lowFuel
+                glowColor: S.UiState.lowFuel ? "#FFB84D" : T.StyleManager.accent
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 12
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 14
+                        Layout.preferredHeight: 90
 
-                        ApexMetric {
+                        Column {
                             Layout.fillWidth: true
-                            label: "Trip A"
-                            value: S.UiState.fixed(S.UiState.tripA, 1, "0,0")
-                            unit: "km"
-                            valueSize: 32
+                            spacing: -3
+                            Text {
+                                text: Math.round(S.UiState.autonomy)
+                                color: "#FFFFFF"
+                                font.pixelSize: 58
+                                font.weight: Font.Black
+                                font.letterSpacing: -2
+                            }
+                            Text {
+                                text: "KM D'AUTONOMIE"
+                                color: "#AABACA"
+                                font.pixelSize: 13
+                                font.weight: Font.Bold
+                                font.letterSpacing: 1.7
+                            }
                         }
 
-                        ApexMetric {
-                            Layout.fillWidth: true
-                            label: "Trip B"
-                            value: S.UiState.fixed(S.UiState.tripB, 1, "0,0")
-                            unit: "km"
-                            valueSize: 32
+                        Column {
+                            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                            spacing: 1
+                            Text {
+                                anchors.right: parent.right
+                                text: S.UiState.fixed(S.UiState.fuelLevel, 1, "—") + " L"
+                                color: S.UiState.lowFuel ? "#FFB84D" : T.StyleManager.accent
+                                font.pixelSize: 26
+                                font.weight: Font.Black
+                            }
+                            Text {
+                                anchors.right: parent.right
+                                text: "CARBURANT"
+                                color: "#AABACA"
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                                font.letterSpacing: 1.4
+                            }
                         }
                     }
 
+                    // Jauge large : visible même lorsque les nuances sombres disparaissent.
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 1
-                        color: Qt.rgba(1, 1, 1, 0.08)
+                        height: 22
+                        radius: 11
+                        color: "#070D13"
+                        border.width: 1
+                        border.color: "#31465A"
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 4
+                            width: Math.max(12, (parent.width - 8) * Math.max(0, Math.min(1, S.UiState.fuelLevel / Math.max(1, S.UiState.maxFuel))))
+                            radius: 7
+                            color: S.UiState.lowFuel ? "#FFB84D" : T.StyleManager.accent
+                            Behavior on width { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+                        }
+
+                        Rectangle {
+                            x: parent.width * S.UiState.reservePercentage
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 2
+                            height: parent.height + 8
+                            color: "#FFB84D"
+                        }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 14
+                        Text { text: "RÉSERVE"; color: "#FFCB70"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.2 }
+                        Item { Layout.fillWidth: true }
+                        Text { text: Math.round(100 * S.UiState.fuelLevel / Math.max(1, S.UiState.maxFuel)) + " %"; color: "#FFFFFF"; font.pixelSize: 14; font.bold: true }
+                    }
 
-                        ApexMetric {
-                            Layout.fillWidth: true
-                            label: "Conso Moy. B"
-                            value: S.UiState.fixed(S.UiState.avgConsB, 1, "0,0")
-                            unit: "L/100"
-                            valueSize: 30
-                        }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#2A3D50" }
 
-                        ApexMetric {
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Column {
                             Layout.fillWidth: true
-                            label: "Odomètre Total"
-                            value: S.UiState.fixed(S.UiState.odometer, 0, "0")
-                            unit: "km"
-                            valueSize: 26
+                            Text { text: S.UiState.fixed(S.UiState.instantCons, 1, "—"); color: "#FFFFFF"; font.pixelSize: 28; font.bold: true }
+                            Text { text: "L/100 INSTANT."; color: "#AABACA"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.1 }
                         }
+                        Rectangle { width: 1; height: 42; color: "#30465A" }
+                        Column {
+                            Layout.fillWidth: true
+                            leftPadding: 22
+                            Text { text: S.UiState.fixed(S.UiState.avgConsB, 1, "—"); color: T.StyleManager.accent; font.pixelSize: 28; font.bold: true }
+                            Text { text: "L/100 MOYENNE"; color: "#AABACA"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.1 }
+                        }
+                    }
+                }
+            }
+
+            ApexCard3D {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                title: "SESSION EN COURS"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 12
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: S.UiState.fixed(S.UiState.tripDistance, 1, "0,0")
+                            color: "#FFFFFF"
+                            font.pixelSize: 46
+                            font.weight: Font.Black
+                            font.letterSpacing: -1
+                        }
+                        Text { text: "KM"; color: "#B3C1CE"; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 9 }
+                        Item { Layout.fillWidth: true }
+                        Rectangle {
+                            width: stateText.implicitWidth + 22
+                            height: 34
+                            radius: 17
+                            color: S.UiState.sessionState === "PAUSED" ? "#2F2310" : "#10281F"
+                            border.width: 1
+                            border.color: S.UiState.sessionState === "PAUSED" ? "#FFB84D" : "#54E3A5"
+                            Text {
+                                id: stateText
+                                anchors.centerIn: parent
+                                text: S.UiState.sessionState === "PAUSED" ? "EN PAUSE" : "ACTIVE"
+                                color: S.UiState.sessionState === "PAUSED" ? "#FFD17D" : "#69EDB2"
+                                font.pixelSize: 12
+                                font.bold: true
+                                font.letterSpacing: 1.3
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+                        ApexMetric { Layout.fillWidth: true; label: "TRIP A"; value: S.UiState.fixed(S.UiState.tripA, 1, "0,0"); unit: "km"; valueSize: 24 }
+                        ApexMetric { Layout.fillWidth: true; label: "TRIP B"; value: S.UiState.fixed(S.UiState.tripB, 1, "0,0"); unit: "km"; valueSize: 24 }
                     }
 
                     Item { Layout.fillHeight: true }
 
-                    // Bouton Tactile d'Action de Trajet
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 48
-                        radius: 10
-                        color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.16)
-                        border.width: 1.5
-                        border.color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.60)
+                        height: 62
+                        radius: 18
+                        color: sessionTouch.pressed ? "#1D4C5C" : "#123040"
+                        border.width: 1
+                        border.color: T.StyleManager.accent
 
-                        Text {
+                        Row {
                             anchors.centerIn: parent
-                            text: S.UiState.sessionState === "PAUSED" ? "REPRENDRE TRAJET" : "PAUSE TRAJET"
-                            color: "#FFFFFF"
-                            font.pixelSize: 14
-                            font.weight: Font.Black
-                            font.letterSpacing: 2.0
+                            spacing: 12
+                            Rectangle { width: 10; height: 10; radius: 5; color: T.StyleManager.accent; anchors.verticalCenter: parent.verticalCenter }
+                            Text {
+                                text: S.UiState.sessionState === "PAUSED" ? "REPRENDRE LE TRAJET" : "TERMINER LE TRAJET"
+                                color: "#FFFFFF"
+                                font.pixelSize: 15
+                                font.bold: true
+                                font.letterSpacing: 1.7
+                            }
+                        }
+                        MouseArea {
+                            id: sessionTouch
+                            anchors.fill: parent
+                            onClicked: {
+                                if (S.UiState.sessionState === "PAUSED") bridge.resumeTripSession()
+                                else root.actionRequested("end_trip")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        ApexVelocityCore {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.minimumWidth: 760
+        }
+
+        // Aile droite : santé mécanique et contexte routier.
+        ColumnLayout {
+            Layout.preferredWidth: 410
+            Layout.minimumWidth: 410
+            Layout.fillHeight: true
+            spacing: 14
+
+            ApexCard3D {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 326
+                title: "ÉQUILIBRE MÉCANIQUE"
+                highlighted: S.UiState.hotEngine
+                glowColor: S.UiState.hotEngine ? "#FF5964" : T.StyleManager.accent
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 14
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Column {
+                            Layout.fillWidth: true
+                            spacing: -2
+                            Row {
+                                spacing: 6
+                                Text {
+                                    text: Math.round(S.UiState.engineTemp)
+                                    color: S.UiState.hotEngine ? "#FF6670" : "#FFFFFF"
+                                    font.pixelSize: 66
+                                    font.weight: Font.Black
+                                    font.letterSpacing: -2
+                                }
+                                Text { text: "°C"; color: S.UiState.hotEngine ? "#FF6670" : T.StyleManager.accent; font.pixelSize: 25; font.bold: true; anchors.baseline: parent.children[0].baseline }
+                            }
+                            Text {
+                                text: S.UiState.hotEngine ? "TEMPÉRATURE CRITIQUE" : (S.UiState.engineTemp < 70 ? "MISE EN TEMPÉRATURE" : "PLAGE OPTIMALE")
+                                color: S.UiState.hotEngine ? "#FF7881" : (S.UiState.engineTemp < 70 ? "#75D9FF" : "#69EDB2")
+                                font.pixelSize: 13
+                                font.bold: true
+                                font.letterSpacing: 1.2
+                            }
                         }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            onPressed:  parent.opacity = 0.70
-                            onReleased: parent.opacity = 1.00
-                            onClicked: {
-                                if (S.UiState.sessionState === "PAUSED") {
-                                    bridge.resumeTripSession()
-                                } else {
-                                    root.actionRequested("end_trip")
+                        // Anneau simple, épais et visible.
+                        Canvas {
+                            Layout.preferredWidth: 112
+                            Layout.preferredHeight: 112
+                            property real value: S.UiState.engineTemp
+                            onValueChanged: requestPaint()
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+                                var c = width / 2
+                                var ratio = Math.max(0, Math.min(1, (value - S.UiState.tempMin) / Math.max(1, S.UiState.tempMax - S.UiState.tempMin)))
+                                ctx.lineCap = "round"
+                                ctx.lineWidth = 11
+                                ctx.beginPath(); ctx.arc(c, c, c - 12, Math.PI * 0.72, Math.PI * 2.28); ctx.strokeStyle = "#172636"; ctx.stroke()
+                                ctx.beginPath(); ctx.arc(c, c, c - 12, Math.PI * 0.72, Math.PI * (0.72 + ratio * 1.56)); ctx.strokeStyle = S.UiState.hotEngine ? "#FF5964" : T.StyleManager.accent; ctx.stroke()
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#2A3D50" }
+
+                    Repeater {
+                        model: [
+                            { label: "CHARGE MOTEUR", value: S.UiState.engineLoad, text: S.UiState.fixed(S.UiState.engineLoad, 0, "0") + " %", color: T.StyleManager.accent },
+                            { label: "PUISSANCE", value: 100 * S.UiState.power / Math.max(1, S.UiState.maxPowerKw), text: S.UiState.fixed(S.UiState.powerHp, 0, "0") + " / " + S.UiState.fixed(S.UiState.maxPowerHp, 0, "0") + " ch", color: "#6EE8FF" },
+                            { label: "FORCE LATÉRALE", value: Math.min(100, Math.abs(S.UiState.gForce) * 100), text: S.UiState.fixed(S.UiState.gForce, 2, "0,00") + " G", color: "#FFCA68" }
+                        ]
+                        delegate: ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { text: modelData.label; color: "#AABACA"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.2 }
+                                Item { Layout.fillWidth: true }
+                                Text { text: modelData.text; color: "#FFFFFF"; font.pixelSize: 15; font.bold: true }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true; height: 8; radius: 4; color: "#101C27"
+                                Rectangle {
+                                    width: Math.max(6, parent.width * modelData.value / 100)
+                                    height: parent.height; radius: parent.radius; color: modelData.color
+                                    Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // ══════════════════════════════════════════════════════════════════════
-        //  CŒUR CENTRAL (Grand Compteur 3D 520 px)
-        // ══════════════════════════════════════════════════════════════════════
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumWidth: 500
-
-            ApexSpeedometer {
-                anchors.centerIn: parent
-                width: Math.min(parent.width - 10, parent.height - 10)
-                height: width
-            }
-        }
-
-        // ══════════════════════════════════════════════════════════════════════
-        //  AILE DROITE (460 px) — Température Moteur XXL, Puissance, Conso
-        // ══════════════════════════════════════════════════════════════════════
-        ColumnLayout {
-            Layout.preferredWidth: 460
-            Layout.minimumWidth: 440
-            Layout.maximumWidth: 480
-            Layout.fillHeight: true
-            spacing: 14
-
-            // ── 1. Température Moteur GRAND FORMAT HAUTE LISIBILITÉ ───────────
-            ApexCard3D {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 180
-                title: "Température Moteur"
-                highlighted: S.UiState.hotEngine
-                glowColor: S.UiState.hotEngine ? "#FF1744" : T.StyleManager.accent
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 16
-
-                    ApexGaugeArc {
-                        Layout.preferredWidth: 145
-                        Layout.preferredHeight: 145
-                        label: "Moteur"
-                        unit: "°C"
-                        value: S.UiState.engineTemp
-                        from: S.UiState.tempMin > 0 ? S.UiState.tempMin : 40
-                        to: S.UiState.tempMax > 40 ? S.UiState.tempMax : 120
-                        warningAt: S.UiState.tempWarning > 0 ? (S.UiState.tempWarning - 40) / (S.UiState.tempMax - 40) : 0.85
-                        baseColor: S.UiState.hotEngine ? "#FF1744" : (S.UiState.engineTemp < 70 ? "#00E5FF" : "#00E676")
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        // Chiffre géant température
-                        Row {
-                            spacing: 4
-                            Text {
-                                text: Math.round(S.UiState.engineTemp)
-                                color: S.UiState.hotEngine ? "#FF1744" : "#FFFFFF"
-                                font.pixelSize: 48
-                                font.weight: Font.Black
-                                font.letterSpacing: -1.0
-                            }
-                            Text {
-                                text: "°C"
-                                color: S.UiState.hotEngine ? "#FF1744" : T.StyleManager.accent
-                                font.pixelSize: 24
-                                font.weight: Font.Bold
-                                anchors.baseline: parent.children[0].baseline
-                            }
-                        }
-
-                        // État textuel très visible
-                        Text {
-                            text: S.UiState.hotEngine ? "SURCHAUFFE !" : (S.UiState.engineTemp < 70 ? "MOTEUR FROID" : "TEMPÉRATURE OPTIMALE")
-                            color: S.UiState.hotEngine ? "#FF1744" : (S.UiState.engineTemp < 70 ? "#00E5FF" : "#00E676")
-                            font.pixelSize: 14
-                            font.weight: Font.Black
-                            font.letterSpacing: 1.2
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
-                        }
-
-                        ApexMetric {
-                            label: "Temp. Admission"
-                            value: S.UiState.fixed(S.UiState.intakeTemp, 0, "—")
-                            unit: "°C"
-                            valueSize: 24
-                        }
-                    }
-                }
-            }
-
-            // ── 2. Puissance & Couple ─────────────────────────────────────────
-            ApexCard3D {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 140
-                title: "Puissance & Charge"
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 14
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-
-                        ApexMetric {
-                            label: "Puissance"
-                            value: S.UiState.fixed(S.UiState.power, 0, "0")
-                            unit: "kW"
-                            valueSize: 34
-                            valueColor: T.StyleManager.accent
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 6
-                            radius: 3
-                            color: "#0B1522"
-
-                            Rectangle {
-                                width: Math.min(1.0, S.UiState.power / 200.0) * parent.width
-                                height: parent.height
-                                radius: 3
-                                color: T.StyleManager.accent
-                                Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                            }
-                        }
-                    }
-
-                    Rectangle { width: 1; Layout.fillHeight: true; color: Qt.rgba(1,1,1,0.08) }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-
-                        ApexMetric {
-                            label: "Couple"
-                            value: S.UiState.fixed(S.UiState.torque, 0, "0")
-                            unit: "N·m"
-                            valueSize: 34
-                            valueColor: "#FFFFFF"
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 6
-                            radius: 3
-                            color: "#0B1522"
-
-                            Rectangle {
-                                width: Math.min(1.0, S.UiState.torque / 350.0) * parent.width
-                                height: parent.height
-                                radius: 3
-                                color: "#00E5FF"
-                                Behavior on width { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── 3. Consommation Instantanée & Dynamique ───────────────────────
             ApexCard3D {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                title: "Consommation Instantanée"
+                title: "ROUTE & ENVIRONNEMENT"
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 8
+                    spacing: 12
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
-
-                        ApexMetric {
+                        Column {
                             Layout.fillWidth: true
-                            label: "Instantanée"
-                            value: S.UiState.fixed(S.UiState.instantCons, 1, "0,0")
-                            unit: "L/100"
-                            valueSize: 38
-                            valueColor: S.UiState.instantCons > 14 ? "#FFB300" : "#00E676"
+                            Text { text: S.UiState.fixed(S.UiState.outsideTemp, 1, "—") + "°"; color: "#FFFFFF"; font.pixelSize: 40; font.bold: true }
+                            Text { text: "EXTÉRIEUR"; color: "#AABACA"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.3 }
                         }
-
-                        ApexMetric {
-                            label: "Papillon"
-                            value: S.UiState.fixed(S.UiState.throttle, 0, "0")
-                            unit: "%"
-                            valueSize: 26
+                        Column {
+                            Layout.fillWidth: true
+                            Text { text: S.UiState.fixed(S.UiState.odometer, 0, "—"); color: "#FFFFFF"; font.pixelSize: 27; font.bold: true }
+                            Text { text: "ODOMÈTRE KM"; color: "#AABACA"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.3 }
                         }
                     }
 
-                    // Barre de débit instantané
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#2A3D50" }
+
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 10
-                        radius: 5
-                        color: "#0A1422"
+                        Layout.fillHeight: true
+                        radius: 16
+                        color: S.UiState.attentionVehicle ? "#301920" : "#0D1B22"
+                        border.width: 1
+                        border.color: S.UiState.attentionVehicle ? "#FF6670" : "#2B4B59"
 
-                        Rectangle {
-                            width: Math.min(1.0, Math.max(0, S.UiState.instantCons / (S.UiState.instantConsMax > 0 ? S.UiState.instantConsMax : 20.0))) * parent.width
-                            height: parent.height
-                            radius: 5
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#00E676" }
-                                GradientStop { position: 0.6; color: "#FFB300" }
-                                GradientStop { position: 1.0; color: "#FF1744" }
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            Rectangle {
+                                width: 14; height: 14; radius: 7
+                                color: S.UiState.attentionVehicle ? "#FF6670" : "#54E3A5"
                             }
-                            Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        }
-                    }
-
-                    Item { Layout.fillHeight: true }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 12
-
-                        ApexMetric {
-                            Layout.fillWidth: true
-                            label: "Pression Turbo"
-                            value: S.UiState.fixed(S.UiState.boostPsi, 1, "0,0")
-                            unit: "psi"
-                            valueSize: 22
-                        }
-
-                        ApexMetric {
-                            Layout.fillWidth: true
-                            label: "Accél. G"
-                            value: S.UiState.fixed(S.UiState.gForce, 2, "0,00")
-                            unit: "G"
-                            valueSize: 22
+                            Column {
+                                Layout.fillWidth: true
+                                spacing: 3
+                                Text {
+                                    text: S.UiState.attentionVehicle ? "ATTENTION REQUISE" : "VÉHICULE PRÊT"
+                                    color: "#FFFFFF"
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    font.letterSpacing: 1.2
+                                }
+                                Text {
+                                    text: S.UiState.attentionVehicle ? "Vérifiez ceinture et ouvrants" : "Tous les systèmes sont opérationnels"
+                                    color: "#B6C4D0"
+                                    font.pixelSize: 12
+                                }
+                            }
                         }
                     }
                 }

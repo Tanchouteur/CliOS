@@ -27,6 +27,13 @@ QtObject {
     readonly property real tempWarning: number(config.engine_temp && config.engine_temp.warning, 105)
     readonly property real tempMax: number(config.engine_temp && config.engine_temp.max_display, 120)
     readonly property real instantConsMax: number(config.instant_fuel_consumption && config.instant_fuel_consumption.max_display, 20.0)
+    readonly property string engineLabel: text(config.engine && config.engine.label, "Moteur")
+    readonly property real maxPowerKw: number(config.engine && config.engine.max_power_kw, 100)
+    readonly property real maxPowerHp: maxPowerKw * 1.359621617
+    readonly property real maxPowerRpm: number(config.engine && config.engine.max_power_rpm, maxRpm * 0.8)
+    readonly property real maxTorqueNm: number(config.engine && config.engine.max_torque_nm, 200)
+    readonly property real maxTorqueRpm: number(config.engine && config.engine.max_torque_rpm, maxRpm * 0.45)
+    readonly property var engineCurve: config.engine && config.engine.performance_curve ? config.engine.performance_curve : []
     readonly property real revisionIntervalKm: number(config.maintenance && config.maintenance.revision && config.maintenance.revision.interval_km, 20000)
     readonly property real revisionWarningKm: number(config.maintenance && config.maintenance.revision && config.maintenance.revision.warning_threshold_km, 2000)
 
@@ -48,8 +55,13 @@ QtObject {
     readonly property real accelComputed: number(vehicle.accel_computed, 0)
     readonly property real driverTorqueRequest: number(vehicle.driver_torque_request, 0)
     readonly property real torqueAvailable: number(vehicle.torque_available, 0)
-    readonly property real torque: number(vehicle.torque !== undefined ? vehicle.torque : (vehicle.torque_nm !== undefined ? vehicle.torque_nm : driverTorqueRequest), 0)
-    readonly property real power: number(vehicle.power !== undefined ? vehicle.power : (vehicle.power_kw !== undefined ? vehicle.power_kw : (rpm > 0 && driverTorqueRequest ? (rpm * driverTorqueRequest / 9549) : 0)), 0)
+    readonly property real engineLoad: Math.max(0, Math.min(100,
+        vehicle.engine_load !== undefined ? number(vehicle.engine_load, 0)
+        : (vehicle.driver_torque_request !== undefined ? number(vehicle.driver_torque_request, 0) : throttle)))
+    readonly property real estimatedTorque: torqueAtRpm(rpm) * engineLoad / 100.0
+    readonly property real torque: number(vehicle.torque !== undefined ? vehicle.torque : (vehicle.torque_nm !== undefined ? vehicle.torque_nm : estimatedTorque), 0)
+    readonly property real power: number(vehicle.power !== undefined ? vehicle.power : (vehicle.power_kw !== undefined ? vehicle.power_kw : (rpm > 0 ? rpm * torque / 9549.0 : 0)), 0)
+    readonly property real powerHp: power * 1.359621617
 
     // État mécanique
     readonly property bool brakePressed: boolValue(vehicle.brake) || boolValue(vehicle.brake_pressed)
@@ -217,6 +229,26 @@ QtObject {
     function fixed(value, decimals, fallback) {
         const parsed = Number(value)
         return isFinite(parsed) ? parsed.toFixed(decimals) : (fallback || "—")
+    }
+
+    function torqueAtRpm(currentRpm) {
+        const points = engineCurve
+        if (!points || points.length === 0)
+            return maxTorqueNm
+        const rpmValue = Math.max(0, number(currentRpm, 0))
+        if (rpmValue <= number(points[0].rpm, 0))
+            return number(points[0].torque_nm, 0)
+        for (let i = 1; i < points.length; ++i) {
+            const rightRpm = number(points[i].rpm, 0)
+            if (rpmValue <= rightRpm) {
+                const leftRpm = number(points[i - 1].rpm, 0)
+                const leftTorque = number(points[i - 1].torque_nm, 0)
+                const rightTorque = number(points[i].torque_nm, leftTorque)
+                const span = Math.max(1, rightRpm - leftRpm)
+                return leftTorque + (rightTorque - leftTorque) * (rpmValue - leftRpm) / span
+            }
+        }
+        return number(points[points.length - 1].torque_nm, 0)
     }
 
     function serviceKeys(status) {

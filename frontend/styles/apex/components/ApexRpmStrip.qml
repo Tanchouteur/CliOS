@@ -2,99 +2,55 @@ import QtQuick
 import "../../../state" as S
 import "../../../style" as T
 
-// Barre tachymétrique panoramique F1 / Hypercar — Segments LED dynamiques avec flash Rupteur
 Item {
     id: root
-    width: parent.width
-    height: 14
+    implicitHeight: 20
 
-    property real rpm:      S.UiState.rpm
-    property real maxRpm:   S.UiState.maxRpm > 0 ? S.UiState.maxRpm : 7000
-    property real redline:  S.UiState.redlineRpm > 0 ? S.UiState.redlineRpm : 6000
-    property real ratio:    Math.min(1.0, Math.max(0, rpm / maxRpm))
-    property bool isRed:    S.UiState.redline
-    property real flashOpacity: 1.0
+    readonly property real ratio: Math.max(0, Math.min(1, S.UiState.rpm / Math.max(1, S.UiState.maxRpm)))
+    readonly property bool redline: S.UiState.redline
+    property real animatedRatio: ratio
+    property real flash: 1.0
 
-    // Flash rupteur
-    SequentialAnimation on flashOpacity {
-        running: root.isRed
+    Behavior on animatedRatio { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+    SequentialAnimation on flash {
+        running: root.redline
         loops: Animation.Infinite
-        NumberAnimation { to: 0.30; duration: 130 }
-        NumberAnimation { to: 1.00; duration: 130 }
+        NumberAnimation { to: 0.35; duration: 120 }
+        NumberAnimation { to: 1.0; duration: 120 }
     }
-    onIsRedChanged: { if (!isRed) flashOpacity = 1.0 }
+    onRedlineChanged: if (!redline) flash = 1.0
 
-    Canvas {
-        id: canvas
+    // Rail inférieur embossé.
+    Rectangle {
         anchors.fill: parent
-        renderStrategy: Canvas.Cooperative
+        radius: height / 2
+        color: "#081019"
+        border.width: 1
+        border.color: "#24384A"
+    }
 
-        property real ratio:   root.ratio
-        property bool isRed:   root.isRed
-        property real flash:   root.flashOpacity
+    Row {
+        anchors.fill: parent
+        anchors.margins: 4
+        spacing: 4
 
-        onRatioChanged: requestPaint()
-        onIsRedChanged: requestPaint()
-        onFlashChanged: requestPaint()
-
-        onPaint: {
-            var ctx = getContext("2d")
-            ctx.reset()
-            var w = width
-            var h = height
-
-            if (w < 20 || h < 4) return
-
-            // Fond noir profond
-            ctx.fillStyle = "#03060C"
-            ctx.fillRect(0, 0, w, h)
-
-            var numSegments = 64
-            var gap = 2
-            var segW = (w - (numSegments - 1) * gap) / numSegments
-            var activeCount = Math.floor(ratio * numSegments)
-
-            for (var i = 0; i < numSegments; i++) {
-                var segRatio = i / numSegments
-                var sx = i * (segW + gap)
-                var isActive = i <= activeCount
-
-                if (isActive) {
-                    var segColor
-                    if (segRatio < 0.50) {
-                        segColor = "#00E5FF" // Cyan
-                    } else if (segRatio < 0.72) {
-                        segColor = "#00FF88" // Vert émeraude
-                    } else if (segRatio < 0.86) {
-                        segColor = "#FFB300" // Ambre
-                    } else {
-                        segColor = "#FF1744" // Rouge flamme
-                    }
-
-                    var alpha = (segRatio >= 0.86 && isRed) ? flash : 0.95
-                    ctx.fillStyle = Qt.rgba(
-                        Qt.color(segColor).r,
-                        Qt.color(segColor).g,
-                        Qt.color(segColor).b,
-                        alpha
-                    )
-                } else {
-                    // Segment inactif éteint
-                    ctx.fillStyle = Qt.rgba(0.08, 0.14, 0.22, 0.35)
+        Repeater {
+            model: 32
+            Rectangle {
+                readonly property real p: index / 31
+                readonly property bool active: p <= root.animatedRatio
+                width: Math.max(2, (parent.width - 31 * parent.spacing) / 32)
+                height: parent.height
+                radius: 3
+                opacity: root.redline && p > 0.82 ? root.flash : 1.0
+                color: {
+                    if (!active) return p > 0.82 ? "#332127" : "#17232E"
+                    if (p > 0.88) return "#FF4E5B"
+                    if (p > 0.72) return "#FFB84D"
+                    return T.StyleManager.accent
                 }
-
-                ctx.beginPath()
-                ctx.rect(sx, 2, segW, h - 4)
-                ctx.fill()
+                Behavior on color { ColorAnimation { duration: 90 } }
             }
-
-            // Liseré de bas de barre
-            ctx.strokeStyle = Qt.rgba(1, 1, 1, 0.05)
-            ctx.lineWidth = 1
-            ctx.beginPath()
-            ctx.moveTo(0, h)
-            ctx.lineTo(w, h)
-            ctx.stroke()
         }
     }
 }

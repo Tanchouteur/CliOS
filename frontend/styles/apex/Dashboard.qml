@@ -231,8 +231,10 @@ Item {
         id: attentionBanner
         anchors.horizontalCenter: parent.horizontalCenter
         y: shown ? topBar.height + 10 : -60
-        width: 400; height: 40; radius: 8
-        color: "#FFB300"
+        width: 480; height: 44; radius: 16
+        color: "#F21C170B"
+        border.width: 1
+        border.color: "#FFB84D"
         property bool shown: false
         z: 300
 
@@ -240,9 +242,10 @@ Item {
 
         Text {
             anchors.centerIn: parent
-            text: "Interaction complexe — restez attentif"
-            color: "#000000"
-            font.pixelSize: 14; font.weight: Font.Bold
+            text: "ATTENTION  ·  COMMANDES LIMITÉES EN CONDUITE"
+            color: "#FFD17D"
+            font.pixelSize: 13; font.weight: Font.Bold
+            font.letterSpacing: 1.2
         }
     }
 
