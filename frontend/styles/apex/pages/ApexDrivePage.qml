@@ -4,7 +4,7 @@ import "../../../state" as S
 import "../../../style" as T
 import "../components"
 
-// Page de conduite principale — Hypercar Concept Layout 1920×720
+// Page de conduite principale — Hypercar Concept Layout 1920×720 (Haute Lisibilité Plein Jour)
 Item {
     id: root
     anchors.fill: parent
@@ -18,78 +18,76 @@ Item {
         spacing: 16
 
         // ══════════════════════════════════════════════════════════════════════
-        //  AILE GAUCHE (460 px) — Carburant, Régulateur, Ordinateur de bord
+        //  AILE GAUCHE (460 px) — Régulateur/Limiteur HUD & Ordinateur de bord
         // ══════════════════════════════════════════════════════════════════════
         ColumnLayout {
             Layout.preferredWidth: 460
             Layout.minimumWidth: 440
             Layout.maximumWidth: 480
             Layout.fillHeight: true
-            spacing: 12
+            spacing: 14
 
-            // ── 1. Carburant liquide & Autonomie ──────────────────────────────
+            // ── 1. Régulateur / Limiteur HUD Grand Format ────────────────────
             ApexCard3D {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 160
-                title: "Niveau Carburant"
-                highlighted: S.UiState.lowFuel
-                glowColor: S.UiState.lowFuel ? "#FF1744" : T.StyleManager.accent
-
-                ApexFuelWave {
-                    anchors.fill: parent
-                    anchors.margins: 2
-                }
-            }
-
-            // ── 2. Régulateur / Limiteur de vitesse ───────────────────────────
-            ApexCard3D {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 130
+                Layout.preferredHeight: 180
                 title: "Régulateur / Limiteur"
                 highlighted: S.UiState.cruiseMode !== "OFF"
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 8
+                    anchors.margins: 12
                     spacing: 16
 
                     Column {
                         Layout.fillWidth: true
-                        spacing: 4
+                        spacing: 6
 
                         Text {
                             text: S.UiState.cruiseMode
                             color: S.UiState.cruiseMode !== "OFF" ? T.StyleManager.accent : Qt.rgba(1,1,1,0.40)
-                            font.pixelSize: 26
+                            font.pixelSize: 32
                             font.weight: Font.Black
-                            font.letterSpacing: 1.5
+                            font.letterSpacing: 2.0
                             Behavior on color { ColorAnimation { duration: 200 } }
                         }
-                        Text {
-                            text: S.UiState.cruiseStatus
-                            color: S.UiState.cruiseStatus === "ACTIF" ? "#00E676" : Qt.rgba(1,1,1,0.45)
-                            font.pixelSize: 14
-                            font.weight: Font.Bold
-                            font.letterSpacing: 2.0
+
+                        Rectangle {
+                            width: cruiseStatusText.implicitWidth + 16
+                            height: 26
+                            radius: 6
+                            color: S.UiState.cruiseStatus === "ACTIF" ? Qt.rgba(0, 0.9, 0.45, 0.2) : Qt.rgba(1,1,1,0.08)
+                            border.width: 1
+                            border.color: S.UiState.cruiseStatus === "ACTIF" ? "#00E676" : Qt.rgba(1,1,1,0.2)
+
+                            Text {
+                                id: cruiseStatusText
+                                anchors.centerIn: parent
+                                text: S.UiState.cruiseStatus
+                                color: S.UiState.cruiseStatus === "ACTIF" ? "#00E676" : Qt.rgba(1,1,1,0.50)
+                                font.pixelSize: 13
+                                font.weight: Font.Black
+                                font.letterSpacing: 1.5
+                            }
                         }
                     }
 
                     Row {
                         visible: S.UiState.cruiseTarget > 0
-                        spacing: 4
+                        spacing: 6
                         Layout.alignment: Qt.AlignVCenter
 
                         Text {
                             text: Math.round(S.UiState.cruiseTarget)
                             color: "#FFFFFF"
-                            font.pixelSize: 46
+                            font.pixelSize: 58
                             font.weight: Font.Black
-                            font.letterSpacing: -1.0
+                            font.letterSpacing: -1.5
                         }
                         Text {
                             text: "KM/H"
-                            color: Qt.rgba(1,1,1,0.45)
-                            font.pixelSize: 13
+                            color: Qt.rgba(1,1,1,0.50)
+                            font.pixelSize: 15
                             font.weight: Font.Bold
                             anchors.baseline: parent.children[0].baseline
                         }
@@ -98,14 +96,14 @@ Item {
                     Text {
                         visible: S.UiState.cruiseTarget <= 0
                         text: "—"
-                        color: Qt.rgba(1,1,1,0.30)
-                        font.pixelSize: 36
+                        color: Qt.rgba(1,1,1,0.25)
+                        font.pixelSize: 44
                         font.weight: Font.Bold
                     }
                 }
             }
 
-            // ── 3. Ordinateur de bord & Trajet ────────────────────────────────
+            // ── 2. Ordinateur de Bord & Trajets Grand Format ─────────────────
             ApexCard3D {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -113,48 +111,54 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 4
-                    spacing: 10
+                    anchors.margins: 10
+                    spacing: 12
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 12
+                        spacing: 14
 
                         ApexMetric {
                             Layout.fillWidth: true
                             label: "Trip A"
-                            value: S.UiState.fixed(S.UiState.trip ? S.UiState.trip.trip_a : 0, 1, "0,0")
+                            value: S.UiState.fixed(S.UiState.tripA, 1, "0,0")
                             unit: "km"
-                            valueSize: 24
+                            valueSize: 32
                         }
 
                         ApexMetric {
                             Layout.fillWidth: true
                             label: "Trip B"
-                            value: S.UiState.fixed(S.UiState.trip ? S.UiState.trip.trip_b : 0, 1, "0,0")
+                            value: S.UiState.fixed(S.UiState.tripB, 1, "0,0")
                             unit: "km"
-                            valueSize: 24
+                            valueSize: 32
                         }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: Qt.rgba(1, 1, 1, 0.08)
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 12
+                        spacing: 14
 
                         ApexMetric {
                             Layout.fillWidth: true
                             label: "Conso Moy. B"
-                            value: S.UiState.fixed(S.UiState.trip ? S.UiState.trip.avg_cons_b : 0, 1, "0,0")
+                            value: S.UiState.fixed(S.UiState.avgConsB, 1, "0,0")
                             unit: "L/100"
-                            valueSize: 24
+                            valueSize: 30
                         }
 
                         ApexMetric {
                             Layout.fillWidth: true
-                            label: "Odomètre"
+                            label: "Odomètre Total"
                             value: S.UiState.fixed(S.UiState.odometer, 0, "0")
                             unit: "km"
-                            valueSize: 20
+                            valueSize: 26
                         }
                     }
 
@@ -163,17 +167,17 @@ Item {
                     // Bouton Tactile d'Action de Trajet
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 44
+                        height: 48
                         radius: 10
-                        color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.14)
+                        color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.16)
                         border.width: 1.5
-                        border.color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.55)
+                        border.color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.60)
 
                         Text {
                             anchors.centerIn: parent
                             text: S.UiState.sessionState === "PAUSED" ? "REPRENDRE TRAJET" : "PAUSE TRAJET"
                             color: "#FFFFFF"
-                            font.pixelSize: 13
+                            font.pixelSize: 14
                             font.weight: Font.Black
                             font.letterSpacing: 2.0
                         }
@@ -196,7 +200,7 @@ Item {
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  CŒUR CENTRAL (Grand Compteur 3D Holographique)
+        //  CŒUR CENTRAL (Grand Compteur 3D 520 px)
         // ══════════════════════════════════════════════════════════════════════
         Item {
             Layout.fillWidth: true
@@ -211,48 +215,68 @@ Item {
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  AILE DROITE (460 px) — Température Moteur, Performance, Flux Conso
+        //  AILE DROITE (460 px) — Température Moteur XXL, Puissance, Conso
         // ══════════════════════════════════════════════════════════════════════
         ColumnLayout {
             Layout.preferredWidth: 460
             Layout.minimumWidth: 440
             Layout.maximumWidth: 480
             Layout.fillHeight: true
-            spacing: 12
+            spacing: 14
 
-            // ── 1. Température Moteur ─────────────────────────────────────────
+            // ── 1. Température Moteur GRAND FORMAT HAUTE LISIBILITÉ ───────────
             ApexCard3D {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 160
+                Layout.preferredHeight: 180
                 title: "Température Moteur"
                 highlighted: S.UiState.hotEngine
                 glowColor: S.UiState.hotEngine ? "#FF1744" : T.StyleManager.accent
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 4
-                    spacing: 12
+                    anchors.margins: 8
+                    spacing: 16
 
                     ApexGaugeArc {
-                        Layout.preferredWidth: 130
-                        Layout.preferredHeight: 130
+                        Layout.preferredWidth: 145
+                        Layout.preferredHeight: 145
                         label: "Moteur"
                         unit: "°C"
                         value: S.UiState.engineTemp
-                        from: 40
+                        from: S.UiState.tempMin > 0 ? S.UiState.tempMin : 40
                         to: S.UiState.tempMax > 40 ? S.UiState.tempMax : 120
-                        warningAt: 0.88
-                        baseColor: S.UiState.hotEngine ? "#FF1744" : "#00E676"
+                        warningAt: S.UiState.tempWarning > 0 ? (S.UiState.tempWarning - 40) / (S.UiState.tempMax - 40) : 0.85
+                        baseColor: S.UiState.hotEngine ? "#FF1744" : (S.UiState.engineTemp < 70 ? "#00E5FF" : "#00E676")
                     }
 
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 8
 
+                        // Chiffre géant température
+                        Row {
+                            spacing: 4
+                            Text {
+                                text: Math.round(S.UiState.engineTemp)
+                                color: S.UiState.hotEngine ? "#FF1744" : "#FFFFFF"
+                                font.pixelSize: 48
+                                font.weight: Font.Black
+                                font.letterSpacing: -1.0
+                            }
+                            Text {
+                                text: "°C"
+                                color: S.UiState.hotEngine ? "#FF1744" : T.StyleManager.accent
+                                font.pixelSize: 24
+                                font.weight: Font.Bold
+                                anchors.baseline: parent.children[0].baseline
+                            }
+                        }
+
+                        // État textuel très visible
                         Text {
                             text: S.UiState.hotEngine ? "SURCHAUFFE !" : (S.UiState.engineTemp < 70 ? "MOTEUR FROID" : "TEMPÉRATURE OPTIMALE")
                             color: S.UiState.hotEngine ? "#FF1744" : (S.UiState.engineTemp < 70 ? "#00E5FF" : "#00E676")
-                            font.pixelSize: 13
+                            font.pixelSize: 14
                             font.weight: Font.Black
                             font.letterSpacing: 1.2
                             wrapMode: Text.WordWrap
@@ -260,10 +284,10 @@ Item {
                         }
 
                         ApexMetric {
-                            label: "Admission"
+                            label: "Temp. Admission"
                             value: S.UiState.fixed(S.UiState.intakeTemp, 0, "—")
                             unit: "°C"
-                            valueSize: 22
+                            valueSize: 24
                         }
                     }
                 }
@@ -272,13 +296,13 @@ Item {
             // ── 2. Puissance & Couple ─────────────────────────────────────────
             ApexCard3D {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 130
+                Layout.preferredHeight: 140
                 title: "Puissance & Charge"
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 6
-                    spacing: 12
+                    anchors.margins: 8
+                    spacing: 14
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -288,11 +312,10 @@ Item {
                             label: "Puissance"
                             value: S.UiState.fixed(S.UiState.power, 0, "0")
                             unit: "kW"
-                            valueSize: 32
+                            valueSize: 34
                             valueColor: T.StyleManager.accent
                         }
 
-                        // Barre de progression Puissance
                         Rectangle {
                             Layout.fillWidth: true
                             height: 6
@@ -319,11 +342,10 @@ Item {
                             label: "Couple"
                             value: S.UiState.fixed(S.UiState.torque, 0, "0")
                             unit: "N·m"
-                            valueSize: 32
+                            valueSize: 34
                             valueColor: "#FFFFFF"
                         }
 
-                        // Barre de progression Couple
                         Rectangle {
                             Layout.fillWidth: true
                             height: 6
@@ -350,7 +372,7 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 6
+                    anchors.margins: 8
                     spacing: 8
 
                     RowLayout {
@@ -382,7 +404,7 @@ Item {
                         color: "#0A1422"
 
                         Rectangle {
-                            width: Math.min(1.0, Math.max(0, S.UiState.instantCons / 25.0)) * parent.width
+                            width: Math.min(1.0, Math.max(0, S.UiState.instantCons / (S.UiState.instantConsMax > 0 ? S.UiState.instantConsMax : 20.0))) * parent.width
                             height: parent.height
                             radius: 5
                             gradient: Gradient {
@@ -406,7 +428,7 @@ Item {
                             label: "Pression Turbo"
                             value: S.UiState.fixed(S.UiState.boostPsi, 1, "0,0")
                             unit: "psi"
-                            valueSize: 20
+                            valueSize: 22
                         }
 
                         ApexMetric {
@@ -414,7 +436,7 @@ Item {
                             label: "Accél. G"
                             value: S.UiState.fixed(S.UiState.gForce, 2, "0,00")
                             unit: "G"
-                            valueSize: 20
+                            valueSize: 22
                         }
                     }
                 }

@@ -9,10 +9,10 @@ Item {
     implicitHeight: 540
 
     property real speed:    S.UiState.speed
-    property real maxSpeed: 260
+    property real maxSpeed: S.UiState.maxSpeed > 0 ? S.UiState.maxSpeed : 250
     property real rpm:      S.UiState.rpm
     property real maxRpm:   S.UiState.maxRpm > 0 ? S.UiState.maxRpm : 7000
-    property real redline:  S.UiState.redlineRpm > 0 ? S.UiState.redlineRpm : 6000
+    property real redline:  S.UiState.redlineRpm > 0 ? S.UiState.redlineRpm : 6500
     property real rpmRatio: Math.min(1.0, Math.max(0, rpm / maxRpm))
     property bool isRedline: S.UiState.redline
 
@@ -232,7 +232,7 @@ Item {
                             ctx.save()
                             ctx.translate(lx, ly)
                             ctx.fillStyle = isPassed ? "#FFFFFF" : Qt.rgba(0.75, 0.88, 1.0, 0.40)
-                            ctx.font = "bold 13px Arial"
+                            ctx.font = "bold 13px sans-serif"
                             ctx.textAlign = "center"
                             ctx.textBaseline = "middle"
                             ctx.fillText(valText, 0, 0)

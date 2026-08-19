@@ -157,7 +157,8 @@ Item {
                     label: "L/100"
                     unit: "L/100"
                     value: Math.min(S.UiState.instantCons, 25)
-                    from: 0; to: 25
+                    from: 0
+                    to: S.UiState.instantConsMax > 0 ? S.UiState.instantConsMax : 25
                     warningAt: 0.60
                     baseColor: S.UiState.instantCons > 15 ? "#FF6B00" : "#00E676"
                 }
@@ -180,22 +181,21 @@ Item {
                     ApexMetric {
                         Layout.fillWidth: true
                         label: "Moy. B"
-                        value: S.UiState.fixed(S.UiState.trip ? S.UiState.trip.avg_cons_b : 0, 1, "—")
+                        value: S.UiState.fixed(S.UiState.avgConsB, 1, "—")
                         unit: "L/100"
-                        valueSize: 20
+                        valueSize: 22
                         alignment: Text.AlignHCenter
                     }
                     ApexMetric {
                         Layout.fillWidth: true
-                        label: "Boost"
+                        label: "Turbo"
                         value: S.UiState.fixed(S.UiState.boostPsi, 1, "—")
                         unit: "psi"
-                        valueSize: 20
+                        valueSize: 22
                         alignment: Text.AlignHCenter
                     }
                 }
 
-                // Session
                 Rectangle {
                     Layout.fillWidth: true
                     height: 1
@@ -208,16 +208,17 @@ Item {
                     ApexMetric {
                         Layout.fillWidth: true
                         label: "Distance"
-                        value: S.UiState.fixed(S.UiState.trip ? S.UiState.trip.distance_km : 0, 1, "0")
+                        value: S.UiState.fixed(S.UiState.tripDistance, 1, "0")
                         unit: "km"
-                        valueSize: 18
+                        valueSize: 20
                         alignment: Text.AlignHCenter
                     }
                     ApexMetric {
                         Layout.fillWidth: true
-                        label: "Durée"
-                        value: (S.UiState.trip && S.UiState.trip.elapsed) ? S.UiState.trip.elapsed : "—"
-                        valueSize: 18
+                        label: "Régime Moy."
+                        value: Math.round(S.UiState.avgRpm)
+                        unit: "RPM"
+                        valueSize: 20
                         alignment: Text.AlignHCenter
                     }
                 }

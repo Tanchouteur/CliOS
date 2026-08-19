@@ -80,17 +80,7 @@ Item {
         z: 0
     }
 
-    // ── 2. Barre RPM panoramique (entre top bar et contenu) ───────────────────
-    ApexRpmStrip {
-        id: rpmStrip
-        anchors.top: topBar.bottom
-        anchors.topMargin: 0
-        anchors.left: parent.left
-        anchors.right: parent.right
-        z: 10
-    }
-
-    // ── 3. Barre d'état minimaliste ───────────────────────────────────────────
+    // ── 2. Barre d'état supérieure ───────────────────────────────────────────
     ApexTopBar {
         id: topBar
         anchors.top: parent.top
@@ -99,16 +89,16 @@ Item {
         z: 20
     }
 
-    // ── 4. Zone de contenu (entre RPM strip et nav bar) ───────────────────────
+    // ── 3. Zone de contenu principale (pleine hauteur) ───────────────────────
     Item {
         id: contentArea
         anchors {
-            top:    rpmStrip.bottom
+            top:    topBar.bottom
             bottom: navBar.top
             left:   parent.left
             right:  parent.right
-            topMargin:    4
-            bottomMargin: 4
+            topMargin:    6
+            bottomMargin: 6
         }
         z: 5
 
@@ -240,7 +230,7 @@ Item {
     Rectangle {
         id: attentionBanner
         anchors.horizontalCenter: parent.horizontalCenter
-        y: shown ? topBar.height + rpmStrip.height + 10 : -60
+        y: shown ? topBar.height + 10 : -60
         width: 400; height: 40; radius: 8
         color: "#FFB300"
         property bool shown: false

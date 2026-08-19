@@ -81,7 +81,7 @@ Item {
 
             // Valeur centrale
             ctx.fillStyle = isWarning ? "#FF4444" : "#FFFFFF"
-            ctx.font = "bold " + Math.round(w * 0.20) + "px Arial"
+            ctx.font = "bold " + Math.round(w * 0.24) + "px sans-serif"
             ctx.textAlign = "center"
             ctx.textBaseline = "middle"
             var numVal = isFinite(Number(root.value)) ? Number(root.value) : 0
@@ -91,8 +91,8 @@ Item {
             ctx.fillText(displayVal, cx, cy - 6)
 
             // Unité
-            ctx.fillStyle = Qt.rgba(1.0, 1.0, 1.0, 0.50)
-            ctx.font = "bold 12px Arial"
+            ctx.fillStyle = Qt.rgba(1.0, 1.0, 1.0, 0.60)
+            ctx.font = "bold 13px sans-serif"
             ctx.fillText(root.unit, cx, cy + 18)
         }
     }
