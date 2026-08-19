@@ -40,6 +40,25 @@ Les domaines décrivent le véhicule, pas l'organisation des services :
 Plusieurs services peuvent enrichir un domaine. Le frontend ne dépend donc pas
 du nom du service producteur.
 
+## Responsabilités des services
+
+| Service | Entrées principales | Domaines publiés | Cadence |
+|---|---|---|---|
+| `CAN_Moteur` | trames SocketCAN + catalogue DBC | domaines CAN, `system.can_decode_errors` | selon les trames |
+| `VehicleMetrics` | `powertrain` brut + profil moteur | `powertrain`, `alerts` | 20 Hz |
+| `TripStats` | `powertrain`, `motion`, `session` | `trip` | calcul 50 Hz, publication 20 Hz |
+| `Dynamics` | vitesse, régime, roues, transmission | `wheels`, `motion`, `dynamics` | 20 Hz |
+| `SessionManager` | contact, vitesse, état de session | `session` + fichiers trajet | 2 Hz |
+| `Diag` | contact et réponses OBD | `diagnostics` | 2 Hz / à la demande |
+| `Monitor` | processus Python et threads | `system.telemetry` | configurable, 1 Hz par défaut |
+| `Noise` | microphone | `environment` | callback audio, FFT configurable |
+| `USB_Storage` | `StorageManager` | `system.storage*` | 0,5 Hz |
+
+Un service métier ne lit pas le bridge Qt. Il reçoit `VehicleRuntime` et lit des
+snapshots ; seul le bridge traduit ensuite ces domaines pour QML. Les services
+qui doivent déclencher une notification reçoivent un callback d’événement, ce
+qui évite une dépendance inverse vers l’interface.
+
 ## Publication et lecture
 
 ```python
@@ -75,6 +94,12 @@ Les anciens contrats `bridge.data`, `bridge.stats`, `bridge.systemHealth` et
 `bridge.storageStatus` ont été supprimés. Les alias `coasting_km` et `g_force`
 n'existent plus ; les noms physiques sont
 `deceleration_without_throttle_km` et `longitudinal_g`.
+
+La surface Qt est volontairement limitée à : `vehicleState`, `tripState`,
+`diagnosticsState`, `systemState`, `sessionState`, `calibrationState`,
+`presentationState`, `dataQuality` et `config`. Les signaux Qt portent le même
+nom avec le suffixe `Changed`. Les commandes restent des slots explicites
+(`resetTripA`, `endTripSession`, `requestDiagnosticScan`, etc.).
 
 ## Fréquences et responsabilités
 

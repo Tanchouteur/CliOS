@@ -39,6 +39,19 @@ Toute intégration de code doit respecter le flux de travail suivant :
 L'uniformité de la base de code est une priorité absolue.
 
 - **Python** : Le code doit être conforme à la norme PEP 8. L'utilisation des annotations de type (Type Hints) est obligatoire pour les signatures de fonctions et de classes.
-- **QML** : La séparation des préoccupations est stricte. Aucune logique métier complexe ne doit résider dans les fichiers `.qml`. Le moteur UI ne doit faire que du rendu et de la transmission de signaux au pont (Bridge) Python.
+- **QML** : La séparation des préoccupations est stricte. Aucune logique métier complexe ne doit résider dans les fichiers `.qml`. Les dashboards lisent les propriétés sémantiques de `frontend/state/UiState.qml` et utilisent le bridge uniquement pour les commandes et la configuration ; ils ne lisent pas `bridge.vehicleState` directement et ne recréent pas de vue plate.
+- **Runtime** : Toute publication backend passe par `VehicleRuntime.publish()` ou `publish_many()` avec un domaine explicite. Un nouveau signal CAN doit être ajouté à `src/signal_catalog.py`, avec unité et TTL adaptés.
+- **Sessions** : Les statistiques rapides restent à 50 Hz, leurs publications à 20 Hz. Une clôture de session doit capturer les valeurs finales avant de remettre l’accumulateur à zéro.
 - **Commentaires** : Les commentaires doivent justifier les choix architecturaux complexes. Ils doivent adopter un ton technique, impersonnel et concis.
 - **Historique** : Les messages de commit doivent être explicites, rédigés à l'impératif, et se limiter à la modification technique apportée.
+
+## Vérifications avant revue
+
+```bash
+python3 -m compileall -q src main.py
+QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -q
+QT_QPA_PLATFORM=offscreen python3 tools/qml_smoke.py
+```
+
+Les tests de contrat contrôlent notamment la surface publique du bridge, le
+catalogue CAN et l’absence des anciennes propriétés plates dans les styles.

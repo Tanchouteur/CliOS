@@ -1,162 +1,112 @@
 # CliOS
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)
-![Qt](https://img.shields.io/badge/UI-QML%20%2F%20PySide6-green.svg)
-![License](https://img.shields.io/badge/License-GPLv3-purple.svg)
-![Status](https://img.shields.io/badge/Status-Active%20Development-orange.svg)
+CliOS est un tableau de bord automobile modulaire en Python, PySide6 et QML,
+destiné à un écran tactile ultra-large 1920×720 installé dans l’habitacle.
+Il centralise la télémétrie CAN/OBD, les statistiques de trajet, le diagnostic,
+le stockage résilient et plusieurs interfaces visuelles.
 
+## Fonctionnalités
 
-ClOS est un tableau de bord automobile modulaire en Python/PySide6, conçu pour fonctionner sur Raspberry Pi ou sur poste de développement.
+- décodage CAN via SocketCAN et définitions JSON par profil véhicule ;
+- calculs moteur adaptés au profil actif, notamment puissance, couple disponible
+  et charge moteur ;
+- statistiques de trajet : distance, consommation, coût, autonomie,
+  agressivité, décélération sans accélérateur et accélération longitudinale ;
+- diagnostic OBD, monitoring système, stockage USB et export de trajets ;
+- quatre styles QML : Apex, Atelier Luxe, GT Modern et Legacy Dashboard ;
+- mode simulation avec `--mock`, sans véhicule connecté.
 
-## Aperçu de l'interface QML
-![Aperçu de l'interface QML](assets/readme/stats.png)
+## Architecture en une phrase
 
-## Objectif
+Les producteurs publient des `StatePatch` dans [VehicleRuntime](src/runtime.py),
+le store conserve des domaines stricts et leurs métadonnées, le bridge Qt expose
+uniquement des dictionnaires structurés, puis `UiState.qml` fournit aux styles
+des propriétés sémantiques prêtes à afficher.
 
-Le projet centralise la télémétrie véhicule (CAN/OBD), les services embarqués (session, diagnostics, monitoring) et une interface QML temps réel.
+La description détaillée se trouve dans
+[docs/backend_architecture.md](docs/backend_architecture.md), et les règles de
+migration dans [docs/migration_runtime.md](docs/migration_runtime.md).
 
-## Fonctionnalités principales
+## Organisation du dépôt
 
-- Lecture CAN via `python-can` (SocketCAN) avec décodage de signaux.
-- Diagnostic OBD (scan de défauts) intégré au bus CAN.
-- Interface QML (PySide6) avec pages de conduite, services et réglages.
-- Gestion de session trajet (pause/reprise/fin) et export de synthèse.
-- Calculs de statistiques trajet (distance, consommation, coût, maintenance).
-- Services optionnels: son moteur, LED BLE, monitoring système.
-- Mode simulation (`--mock`) pour développer sans véhicule.
+```text
+main.py                         démarrage et composition des services
+src/runtime.py                  passerelle de publication du runtime
+src/state_store.py              snapshots, domaines, TTL et qualité
+src/signal_catalog.py           catalogue strict des signaux CAN
+src/qt_bridge.py                contrat Python/QML structuré
+src/services/                  services métier et calculs dérivés
+frontend/state/UiState.qml      façade sémantique consommée par les dashboards
+frontend/styles/                paquets visuels indépendants
+data/can/                       définitions des trames CAN
+data/config/                    profils et courbes moteur
+tests/                          tests backend, QML et contrats d’architecture
+tools/qml_smoke.py              rendu hors écran à 1920×720
+```
 
-## Architecture
-
-- `main.py`: point d'entrée, initialisation des services et lancement UI/CLI.
-- `src/api.py`: état partagé thread-safe entre services et interface.
-- `src/orchestrator.py`: cycle de vie des services (start/stop, health).
-- `src/services/`: services métiers (CAN, diag, stats, puissance, etc.).
-- `src/qt_bridge.py`: pont Qt entre backend Python et frontend QML.
-- `frontend/`: interface QML (vues, pages, composants).
-- `data/`: profils véhicule, configuration, sauvegardes et trajets.
-
-## Logging et diagnostic
-
-Le projet inclut un système de logs asynchrone à faible overhead:
-
-- fichier JSONL rotatif: `<clé USB>/clios/logs/clios.log.jsonl`
-- trace fatale: `<clé USB>/clios/logs/fatal_tracebacks.log`
-- buffer mémoire des derniers événements (consultable depuis l'UI)
-- hooks globaux (`sys.excepthook`, `threading.excepthook`, `faulthandler`)
-- export d'un bundle de diagnostic depuis la page Journal système
+Le bridge ne fournit volontairement plus les anciennes propriétés plates
+`data`, `stats`, `systemHealth` ou `storageStatus`. Toute nouvelle vue doit
+passer par `UiState.qml`.
 
 ## Installation
 
 ```bash
-cd /path/to/CliOS
+python3 -m venv .venv
+source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
+Pour l’installation audio Raspberry Pi et la compilation de `pyo`, consulter
+[installation/guide_installation_pyo.md](installation/guide_installation_pyo.md).
+
 ## Lancement
 
-### Interface graphique (véhicule réel)
-
 ```bash
+# Interface graphique sur véhicule réel
 python3 -u main.py --ui gui
-```
 
-### Interface graphique (simulation)
-
-```bash
+# Interface graphique avec simulation
 python3 -u main.py --ui gui --mock
-```
 
-### Interface CLI
-
-```bash
+# Interface CLI avec simulation
 python3 -u main.py --ui cli --mock
 ```
 
-### Options utiles
+Options utiles :
 
 ```bash
-# Niveau de logs
 python3 -u main.py --ui gui --mock --log-level DEBUG
-
-# Autoriser une version PySide6 non recommandée
 python3 -u main.py --ui gui --mock --allow-unsupported-pyside
 ```
 
-## Données et profils
+## Validation locale
 
-- profils modifiables: `<clé USB>/clios/config/profiles.json`
-- configurations véhicule modifiables: `<clé USB>/clios/config/*.json`
-- définitions CAN: `data/can/*.json`
-- sauvegardes dashboard: `<clé USB>/clios/dash_save/*.json`
-- exports trajets: `<clé USB>/clios/trips*/trip_*.json`
-
-Les fichiers dynamiques sont écrits sur une clé montée sous `/media/clios/<volume>/`
-et contenant un dossier `clios/`. Sans cette clé, CliOS continue en mode dégradé
-dans `/dev/shm/clios_volatile/` sur Linux : les données restent en RAM et ne
-survivent pas au redémarrage. Le branchement et le retrait à chaud sont pris en charge.
-
-## Export USB (mode autonome)
-
-Le service `Export` scanne périodiquement les périphériques montés et déclenche un export quand il trouve un fichier `clos_export.json` à la racine de la clé USB.
-
-### 1) Préparer la clé USB
-
-1. Brancher la clé USB.
-2. Créer un fichier `clos_export.json` à la racine de la clé.
-3. Mettre un contenu JSON valide, par exemple:
-
-```json
-{
-  "target_folder": "ClOS_Exports"
-}
+```bash
+python3 -m compileall -q src main.py
+QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -q
+QT_QPA_PLATFORM=offscreen python3 tools/qml_smoke.py
 ```
 
-`target_folder` est optionnel (défaut: `ClOS_Exports`).
+Le smoke test couvre les quatre styles, leurs routes principales et les états
+d’avertissement, pause, données absentes et confirmation à 1920×720.
 
-### 2) Ce qui est exporté
+## Données persistantes et stockage
 
-- Le service parcourt le `data_dir` configuré côté backend.
-- Seuls les fichiers `.json` sont copiés.
-- La copie est atomique (`.tmp` puis renommage) pour éviter les fichiers partiels.
-- Si l'option `delete_after` est activée dans l'UI, la source locale est supprimée après copie.
+Les profils et sauvegardes sont stockés sous `<clé USB>/clios/`. En l’absence de
+clé, CliOS utilise le mode volatile configuré par `StorageManager` ; les
+données sont alors perdues au redémarrage. Les trajets sont exportés sous
+`trips*/trip_*.json`.
 
-### 3) Politique de ré-export
-
-- Par défaut: export uniquement si le fichier a changé (signature `nom|taille|mtime_ns`).
-- Action manuelle possible dans la page Services: bouton `Ré-exporter tout` (paramètre `reexport_all`).
-
-### 4) Historique d'export (important)
-
-Deux historiques sont conservés:
-
-- Historique local (persisté dans le save profil):
-  - clé: `services.Export.history_v2`
-  - emplacement physique: `<clé USB>/clios/dash_save/*.json` (profil actif)
-- Historique sur clé USB:
-  - fichier: `.clios_export_history.json`
-  - emplacement: `<target_folder>/.clios_export_history.json`
-
-Ces historiques évitent les doublons et permettent de reprendre proprement les exports.
-
-### 5) Dépannage rapide
-
-- Vérifier que `clos_export.json` est bien à la racine de la clé (pas dans un sous-dossier).
-- Vérifier que le JSON est valide.
-- Vérifier que le service `Export` est activé dans la page Services.
-- Vérifier les logs dans `<clé USB>/clios/logs/clios.log.jsonl`.
-
-## Notes de déploiement Raspberry Pi
-
-- utiliser des versions PySide6 homogènes (`PySide6`, `PySide6-Addons`, `PySide6-Essentials`, `shiboken6`)
-- valider la disponibilité de la sortie audio avant d'activer le service son
-- privilégier le mode `--mock` pour isoler l'interface pendant les tests
+Le service `Export` détecte un fichier `clos_export.json` à la racine d’un
+support USB et copie les JSON de trajets avec une signature anti-doublon.
 
 ## Contribution
 
-1. Créer une branche de travail.
-2. Appliquer les changements avec validation locale.
-3. Ouvrir une Pull Request avec une description technique claire.
+Les règles de contribution et le contrat UI sont décrits dans
+[CONTRIBUTING.md](CONTRIBUTING.md). Toute modification du runtime doit ajouter
+ou actualiser un test de contrat si elle change un domaine, un signal, une
+propriété du bridge ou une façade `UiState`.
 
 ## Licence
 
-Projet distribué sous licence GPLv3 (voir [`LICENSE`](./LICENCE)).
+Projet distribué sous licence GPLv3 (voir [LICENSE](LICENSE)).

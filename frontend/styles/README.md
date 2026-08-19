@@ -12,6 +12,22 @@ frontend/styles/
     └── Dashboard.qml
 ```
 
+## Contrat de données
+
+Les styles sont des paquets de rendu. Ils ne possèdent pas de logique métier et
+ne lisent jamais les anciennes cartes plates du bridge. Toute donnée affichée
+passe par `frontend/state/UiState.qml` :
+
+```qml
+import "../../../state" as S
+
+Text { text: S.UiState.fixed(S.UiState.engineTemp, 0, "—") + " °C" }
+```
+
+Pour une donnée absente de la façade, ajouter d’abord une propriété sémantique
+dans `UiState.qml`; ne pas contourner le contrat avec `bridge.vehicleState` dans
+un composant visuel.
+
 ## Ajouter rapidement un style
 
 Le plus rapide est d’utiliser le générateur :
@@ -38,4 +54,15 @@ Le fichier `Dashboard.qml` du gabarit réutilise le cockpit GT. Pour créer une 
 
 Les dossiers dont le nom commence par `_` sont ignorés par le catalogue. Un manifeste invalide ou un tableau de bord manquant est également ignoré sans empêcher le démarrage de CliOS.
 
-Le dossier voisin `frontend/style` contient uniquement le moteur interne (`StyleManager` et les alias de compatibilité). Les styles à installer ou modifier vont exclusivement dans `frontend/styles`.
+Le dossier voisin `frontend/style` contient uniquement le moteur interne
+(`StyleManager`, thème et paramètres visuels). Les styles à installer ou modifier
+vont exclusivement dans `frontend/styles`.
+
+## Tests
+
+Chaque style doit compiler avec la suite QML et rester visible à 1920×720 :
+
+```bash
+QT_QPA_PLATFORM=offscreen python3 -m unittest tests.test_ui_structure -v
+QT_QPA_PLATFORM=offscreen python3 tools/qml_smoke.py
+```
