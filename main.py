@@ -291,7 +291,9 @@ def main():
     # --- 7. Redémarrage Kiosk ---
     if needs_restart:
         logger.warning("Redemarrage demande", extra={"error_code": "APP_RESTART"})
-        os.execv(sys.executable, ['python'] + sys.argv)
+        executable = sys.executable
+        args = [executable] + sys.argv
+        os.execv(executable, args)
 
 
 if __name__ == "__main__":

@@ -436,8 +436,9 @@ class DashboardBridge(QObject):
     @Slot()
     def restartApplication(self):
         self.logger.warning("Ordre de redemarrage recu", extra={"error_code": "APP_RESTART_REQUEST"})
+        self.send_notification("INFO", "Redémarrage de CliOS en cours...", 2000)
         self.needs_restart = True
-        QCoreApplication.instance().quit()
+        QTimer.singleShot(400, QCoreApplication.instance().quit)
 
     @Slot(int, result=str)
     def getRecentLogs(self, limit: int = 100) -> str:
