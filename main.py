@@ -27,6 +27,7 @@ from src.services.notification_service import NotificationService
 from src.orchestrator import SystemOrchestrator
 from src.services.system_monitor_service import SystemMonitorService
 from src.services.trip_stats_service import TripStatsService
+from src.services.powertrain_metrics_service import PowertrainMetricsService
 from src.storage import PersistentStorage
 from src.api import VehicleAPI
 from src.qt_bridge import DashboardBridge
@@ -102,6 +103,7 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
         (can_service, "services.CAN_Moteur.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
+        (PowertrainMetricsService(api, vehicle_config, storage), "services.PowertrainMetrics.enabled", True),
         (dynamics_service, "services.Dynamics.enabled", True),
         (gear_calib_service, "services.GearCalibration.enabled", True),
         (SystemMonitorService(api, storage), "services.Monitor.enabled", True),
@@ -171,7 +173,7 @@ def main():
     # Charge la version applicative et l'expose à l'interface.
     app_version = load_system_version(BASE_DIR)
     set_global_context(app_version=app_version)
-    api.update({"system_version": app_version})
+    api.update_domain("system", {"system_version": app_version}, source="application")
     logger.info("Demarrage de ClOS", extra={"error_code": "APP_START"})
 
     api.run_startup_sequence(duration_sec=1.5)
@@ -279,6 +281,9 @@ def main():
         logger.info("Extinction de l'orchestrateur", extra={"error_code": "APP_SHUTDOWN"})
         storage_mgr.stop_monitoring()
         orchestrator.stop_all()
+        bridge = runtime_targets.get("bridge")
+        if bridge is not None:
+            bridge.close()
         if hasattr(storage, "close"):
             storage.close()
         shutdown_logging()

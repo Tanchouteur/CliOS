@@ -28,7 +28,8 @@ class SystemMonitorService(BaseService):
 
     def start(self, stop_event):
         """Lance la boucle de surveillance dans un thread dédié."""
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name)
+        self._thread.start()
         super().start(stop_event, implemented=True)
 
     def stop(self):
@@ -88,7 +89,7 @@ class SystemMonitorService(BaseService):
                 self.last_thread_times = current_thread_times
 
                 # Ecriture securisee via le Lock de l'API
-                self.api.update(updates)
+                self.api.update_domain("system", updates, source="system-monitor")
 
                 cpu_limit = self._params["cpu_alert"]["value"]
                 ram_limit = self._params["ram_alert"]["value"]

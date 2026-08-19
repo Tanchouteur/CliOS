@@ -28,7 +28,7 @@ class DynamicsService(BaseService):
             "wheel_lock_rl": False,
             "wheel_lock_rr": False,
             "dynamic_warning": "OK"
-        })
+        }, source="dynamics")
 
         self.register_param("min_speed", "Vitesse Min (km/h)", ServiceParamType.SLIDER, 5.0,
                             min_val=1.0, max_val=30.0)
@@ -104,8 +104,10 @@ class DynamicsService(BaseService):
                     updates["gear"] = best_gear
                     self._last_gear_rpm = rpm
                     self._last_gear_speed = v_ref
+                else:
+                    updates["gear"] = safe_data.get("gear", "N")
 
             if updates:
-                self.api.update(updates)
+                self.api.update(updates, source="dynamics", ttl_s=0.25)
 
             stop_event.wait(0.05)

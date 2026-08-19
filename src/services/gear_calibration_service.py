@@ -30,13 +30,13 @@ class GearCalibrationService(BaseService):
         self._load_progress_from_storage()
 
         # Initialise l'état de calibration visible par l'interface.
-        self.api.update({
+        self.api.update_domain("calibration", {
             "calibration_active": False,
             "calibration_ratio": 0.0,
             "calibration_count": 0,
             "calibration_gears_found": len(self._extract_reliable_peaks()),
             "calibration_target_gears": self._target_gear_count(),
-        })
+        }, source="gear-calibration")
 
         self.register_param("calib_toggle", "Mode Étalonnage", ServiceParamType.TOGGLE, False, persistent=False)
 
@@ -52,12 +52,12 @@ class GearCalibrationService(BaseService):
         self.collected_ratios.clear()
 
         # Active l'état de calibration dans l'API.
-        self.api.update({
+        self.api.update_domain("calibration", {
             "calibration_active": True,
             "calibration_count": 0,
             "calibration_gears_found": len(self._extract_reliable_peaks()),
             "calibration_target_gears": self._target_gear_count(),
-        })
+        }, source="gear-calibration")
 
         self.set_ok("Étalonnage en cours...")
         self.print_message("Étalonnage incrémental actif. Les rapports trouvés sont conservés entre trajets.")
@@ -66,10 +66,10 @@ class GearCalibrationService(BaseService):
         self.is_calibrating = False
 
         # Désactive l'état de calibration dans l'API.
-        self.api.update({
+        self.api.update_domain("calibration", {
             "calibration_active": False,
             "calibration_ratio": 0.0
-        })
+        }, source="gear-calibration")
 
         if not self.collected_ratios and not self._ratio_hist:
             self.set_warning("Annulé : Aucune donnée.")
@@ -115,7 +115,10 @@ class GearCalibrationService(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(
+            target=self._run, args=(stop_event,), daemon=True, name=self.service_name
+        )
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
@@ -134,12 +137,12 @@ class GearCalibrationService(BaseService):
                         self.collected_ratios.append(current_ratio)
                         self._ratio_hist[round(current_ratio)] += 1
 
-                        self.api.update({
+                        self.api.update_domain("calibration", {
                             "calibration_ratio": round(current_ratio, 1),
                             "calibration_count": len(self.collected_ratios),
                             "calibration_gears_found": len(self._extract_reliable_peaks()),
                             "calibration_target_gears": self._target_gear_count(),
-                        })
+                        }, source="gear-calibration")
 
                         now = time.time()
                         self._save_progress_to_storage(now=now)
@@ -151,7 +154,9 @@ class GearCalibrationService(BaseService):
                                 self.dynamics_service.reload_config({"transmission": {"ratios": live_ratios}})
                             self._last_live_push = now
                 else:
-                    self.api.update({"calibration_ratio": 0.0})
+                    self.api.update_domain(
+                        "calibration", {"calibration_ratio": 0.0}, source="gear-calibration"
+                    )
 
             stop_event.wait(0.05)
 

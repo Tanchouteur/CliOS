@@ -13,6 +13,7 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 class FakeBridge(QObject):
     dataChanged = Signal()
+    vehicleStateChanged = Signal()
     statsChanged = Signal()
     configChanged = Signal()
     systemHealthChanged = Signal()
@@ -73,8 +74,16 @@ class FakeBridge(QObject):
     def data(self):
         return self._data
 
+    @Property("QVariant", notify=vehicleStateChanged)
+    def vehicleState(self):
+        return {}
+
     @Property("QVariant", notify=statsChanged)
     def stats(self):
+        return self._stats
+
+    @Property("QVariant", notify=statsChanged)
+    def tripState(self):
         return self._stats
 
     @Property("QVariant", notify=configChanged)

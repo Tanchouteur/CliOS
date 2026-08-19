@@ -43,7 +43,7 @@ class PhysicsMockProvider:
         self.api.update({
             "ignition_on": True,
             "key_run": True
-        })
+        }, source="physics-mock")
 
         ratios = {0: 0, 1: 14.5, 2: 8.2, 3: 5.4, 4: 3.9, 5: 3.1}
 
@@ -53,8 +53,10 @@ class PhysicsMockProvider:
             last_time = now
 
             # Calcul du Torque Request (Charge ECU)
-            if self.gear == 0:
+            if self.gear == 0 or self.speed_kmh < 1.0:
                 target_torque = self.throttle * 0.15
+            elif self.throttle == 0.0:
+                target_torque = -15.0  # Décélération / frein moteur (couple demandé négatif)
             else:
                 target_torque = self.throttle
 
@@ -131,6 +133,6 @@ class PhysicsMockProvider:
                 "driver_torque_request": round(self.torque_request, 1)
             }
 
-            self.api.update(updates)
+            self.api.update(updates, source="physics-mock")
 
             time.sleep(0.02)

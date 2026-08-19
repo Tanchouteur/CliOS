@@ -31,6 +31,8 @@ class BaseService:
         self._params = {}
         self.storage = storage
         self.logger = get_logger(f"Service.{self.service_name}")
+        self._state_lock = threading.RLock()
+        self._stop_event = None
         #print(f"{Color.GREEN}[INIT]{Color.RESET} Service '{self.service_name}' initialisé avec succès.")
 
     def start(self, stop_event: threading.Event, implemented=False):
@@ -39,9 +41,19 @@ class BaseService:
 
         if not implemented:
             raise NotImplementedError("La méthode start() doit être redéfinie !")
+        self._stop_event = stop_event
 
     def stop(self):
-        """Méthode optionnelle pour un arrêt propre."""
+        """Arrêt commun : signale puis rejoint les workers connus."""
+        if self._stop_event is not None:
+            self._stop_event.set()
+        current = threading.current_thread()
+        seen = set()
+        for attr in ("_thread", "thread"):
+            worker = getattr(self, attr, None)
+            if worker and worker not in seen and worker is not current and worker.is_alive():
+                seen.add(worker)
+                worker.join(timeout=2.0)
         self.logger.info("Arret du service", extra={"error_code": "SERVICE_STOP"})
 
     def register_param(self, key: str, label: str, param_type: str | ServiceParamType, default_val, persistent=True, **kwargs):
@@ -74,7 +86,9 @@ class BaseService:
 
     def update_param(self, key: str, value):
         """Met à jour la valeur et gère la sauvegarde de manière autonome."""
-        if key in self._params:
+        with self._state_lock:
+            if key not in self._params:
+                return
             param = self._params[key]
             param_type = normalize_param_type(param.get("type"))
             default_val = param.get("default", param.get("value"))
@@ -83,19 +97,21 @@ class BaseService:
             schema["default"] = default_val
             coerced = coerce_param_value(param_type, value, default_val, schema)
             param["value"] = coerced
+            persistent = bool(param["persistent"])
 
-            if param["persistent"] and self.storage:
-                self.storage.set(f"services.{self.service_name}.params.{key}", coerced)
-                self.logger.info(
-                    "Parametre persiste",
-                    extra={"error_code": "SERVICE_PARAM_SAVED"}
-                )
+        if persistent and self.storage:
+            self.storage.set(f"services.{self.service_name}.params.{key}", coerced)
+            self.logger.info(
+                "Parametre persiste",
+                extra={"error_code": "SERVICE_PARAM_SAVED"}
+            )
 
-            self.on_param_changed(key, coerced)
+        self.on_param_changed(key, coerced)
 
     def get_params_schema(self) -> list:
         """Retourne la liste des paramètres pour le QML."""
-        return list(self._params.values())
+        with self._state_lock:
+            return [dict(param) for param in self._params.values()]
 
     @staticmethod
     def get_supported_param_types() -> list[str]:
@@ -108,31 +124,41 @@ class BaseService:
 
     def set_ok(self, message: str = ""):
         """Remet le service en état nominal (Vert)."""
-        if self.status != ServiceStatus.OK or self.status_msg != message:
+        with self._state_lock:
+            changed = self.status != ServiceStatus.OK or self.status_msg != message
+            if changed:
+                self.status = ServiceStatus.OK
+                self.status_msg = message
+        if changed:
             self.logger.info(f"Retablissement du service. {message}", extra={"error_code": "SERVICE_OK"})
-            self.status = ServiceStatus.OK
-            self.status_msg = message
 
     def set_warning(self, message: str = ""):
         """Passe le service en avertissement (Jaune)."""
-        if self.status != ServiceStatus.WARNING or self.status_msg != message:
+        with self._state_lock:
+            changed = self.status != ServiceStatus.WARNING or self.status_msg != message
+            if changed:
+                self.status = ServiceStatus.WARNING
+                self.status_msg = message
+        if changed:
             self.logger.warning(message, extra={"error_code": "SERVICE_WARNING"})
-            self.status = ServiceStatus.WARNING
-            self.status_msg = message
 
     def set_error(self, message: str):
         """Passe le service en erreur et enregistre le pourquoi (Rouge)."""
-        if self.status != ServiceStatus.ERROR or self.status_msg != message:
+        with self._state_lock:
+            changed = self.status != ServiceStatus.ERROR or self.status_msg != message
+            if changed:
+                self.status = ServiceStatus.ERROR
+                self.status_msg = message
+        if changed:
             self.logger.error(message, extra={"error_code": "SERVICE_ERROR"})
-            self.status = ServiceStatus.ERROR
-            self.status_msg = message
 
     def get_health(self) -> dict:
         """Retourne l'état de santé du service pour le QML."""
-        return {
-            "status": self.status.value,
-            "message": self.status_msg
-        }
+        with self._state_lock:
+            return {
+                "status": self.status.value,
+                "message": self.status_msg
+            }
 
     def print_message(self, message: str):
         self.logger.info(message)

@@ -13,12 +13,13 @@ class UsbStorageService(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(
+        self._thread = threading.Thread(
             target=self._run,
             args=(stop_event,),
             daemon=True,
             name=self.service_name,
-        ).start()
+        )
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
@@ -32,11 +33,10 @@ class UsbStorageService(BaseService):
             else:
                 self.set_warning("Mode dégradé — données temporaires en RAM")
 
-            self.api.update({
+            self.api.update_domain("system", {
                 "storage_mode": status.get("mode", "VOLATILE"),
                 "storage_usb_connected": bool(status.get("usb_connected", False)),
                 "storage_free_mb": free_mb,
                 "storage_mount": status.get("mount_point", ""),
-            })
+            }, source="usb-storage")
             stop_event.wait(2.0)
-

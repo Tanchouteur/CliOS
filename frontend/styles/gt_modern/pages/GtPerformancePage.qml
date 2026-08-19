@@ -45,7 +45,7 @@ Item {
                         width: 30; height: 30; radius: 15
                         x: 5
                         y: Math.max(5, Math.min(parent.height - height - 5,
-                           parent.height / 2 - height / 2 - S.UiState.number(S.UiState.trip.g_force, 0) * parent.height * 0.34))
+                           parent.height / 2 - height / 2 - S.UiState.longitudinalG * parent.height * 0.34))
                         color: T.StyleManager.accent
                         Behavior on y { NumberAnimation { duration: T.StyleManager.durationFast } }
                     }
@@ -53,7 +53,7 @@ Item {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
-                    text: S.UiState.fixed(S.UiState.trip.g_force, 2, "0,00") + " G"
+                    text: S.UiState.fixed(S.UiState.longitudinalG, 2, "0,00") + " G LONG."
                     color: T.StyleManager.text
                     font.pixelSize: 34
                     font.weight: Font.DemiBold

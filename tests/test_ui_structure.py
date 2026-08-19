@@ -8,6 +8,7 @@ from PySide6.QtQml import QQmlEngine, QQmlComponent
 
 class MockBridge(QObject):
     storageStatusChanged = Signal()
+    vehicleStateChanged = Signal()
     notificationEvent = Signal(str, str, int)
 
     def __init__(self):
@@ -25,8 +26,12 @@ class MockBridge(QObject):
 
     @Property("QVariantMap")
     def data(self): return self._data
+    @Property("QVariantMap", notify=vehicleStateChanged)
+    def vehicleState(self): return {}
     @Property("QVariantMap")
     def stats(self): return self._stats
+    @Property("QVariantMap")
+    def tripState(self): return self._stats
     @Property("QVariantMap")
     def config(self): return self._config
     @Property("QVariantMap")

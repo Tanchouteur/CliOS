@@ -51,12 +51,16 @@ class ExportService(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(
+            target=self._run, args=(stop_event,), daemon=True, name=self.service_name
+        )
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         """Boucle principale orchestrant la detection."""
         # Attente initiale pour ne pas surcharger le demarrage du systeme
-        time.sleep(5.0)
+        if stop_event.wait(5.0):
+            return
 
         while not stop_event.is_set():
             if not self.is_exporting:

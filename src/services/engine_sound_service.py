@@ -199,7 +199,10 @@ class EngineSoundService(BaseService):
             self.server = None
             return
 
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(
+            target=self._run, args=(stop_event,), daemon=True, name=self.service_name
+        )
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():

@@ -7,8 +7,9 @@ QtObject {
     // =========================================================================
     // 1. SOURCES BRUTES SÉCURISÉES DEPUIS LE BRIDGE PYTHON
     // =========================================================================
-    readonly property var vehicle: bridge && bridge.data ? bridge.data : ({})
-    readonly property var trip: bridge && bridge.stats ? bridge.stats : ({})
+    readonly property var vehicleState: bridge && bridge.vehicleState ? bridge.vehicleState : ({})
+    readonly property var vehicle: mergeVehicleState(bridge && bridge.data ? bridge.data : ({}), vehicleState)
+    readonly property var trip: bridge && bridge.tripState ? bridge.tripState : (bridge && bridge.stats ? bridge.stats : ({}))
     readonly property var health: bridge && bridge.systemHealth ? bridge.systemHealth : ({})
     readonly property var storage: bridge && bridge.storageStatus ? bridge.storageStatus : ({})
     readonly property var config: bridge && bridge.config ? bridge.config : ({})
@@ -56,12 +57,13 @@ QtObject {
     readonly property real driverTorqueRequest: number(vehicle.driver_torque_request, 0)
     readonly property real torqueAvailable: number(vehicle.torque_available, 0)
     readonly property real engineLoad: Math.max(0, Math.min(100,
-        vehicle.engine_load !== undefined ? number(vehicle.engine_load, 0)
-        : (vehicle.driver_torque_request !== undefined ? number(vehicle.driver_torque_request, 0) : throttle)))
-    readonly property real estimatedTorque: torqueAtRpm(rpm) * engineLoad / 100.0
+        vehicle.engine_load_pct !== undefined ? number(vehicle.engine_load_pct, 0)
+        : (vehicle.engine_load !== undefined ? number(vehicle.engine_load, 0)
+        : (vehicle.driver_torque_request !== undefined ? number(vehicle.driver_torque_request, 0) : throttle))))
+    readonly property real estimatedTorque: number(vehicle.estimated_torque_nm, torqueAtRpm(rpm) * engineLoad / 100.0)
     readonly property real torque: number(vehicle.torque !== undefined ? vehicle.torque : (vehicle.torque_nm !== undefined ? vehicle.torque_nm : estimatedTorque), 0)
-    readonly property real power: number(vehicle.power !== undefined ? vehicle.power : (vehicle.power_kw !== undefined ? vehicle.power_kw : (rpm > 0 ? rpm * torque / 9549.0 : 0)), 0)
-    readonly property real powerHp: power * 1.359621617
+    readonly property real power: number(vehicle.estimated_power_kw !== undefined ? vehicle.estimated_power_kw : (vehicle.power !== undefined ? vehicle.power : (vehicle.power_kw !== undefined ? vehicle.power_kw : (rpm > 0 ? rpm * torque / 9549.0 : 0))), 0)
+    readonly property real powerHp: number(vehicle.estimated_power_hp, power * 1.359621617)
 
     // État mécanique
     readonly property bool brakePressed: boolValue(vehicle.brake) || boolValue(vehicle.brake_pressed)
@@ -92,7 +94,8 @@ QtObject {
     readonly property real tripCost: number(trip.session_cost, 0)
     readonly property real fuelPrice: number(trip.fuel_price, 1.70)
     readonly property real avgRpm: number(trip.avg_rpm, 0)
-    readonly property real coastingKm: number(trip.coasting_km, 0)
+    readonly property real decelerationWithoutThrottleKm: number(trip.deceleration_without_throttle_km !== undefined ? trip.deceleration_without_throttle_km : trip.coasting_km, 0)
+    readonly property real coastingKm: decelerationWithoutThrottleKm // alias UI transitoire
     readonly property real aggressivityPct: number(trip.aggressivity_pct, 0)
     readonly property real shiftTimeSec: number(trip.shift_time_sec, 0)
     readonly property real tripA: number(trip.trip_a, 0)
@@ -104,7 +107,8 @@ QtObject {
     readonly property real autonomy: number(trip.autonomy, 0)
     readonly property real kmBeforeService: number(trip.km_before_service, 0)
     readonly property bool serviceWarning: boolValue(trip.service_warning)
-    readonly property real gForce: number(trip.g_force !== undefined ? trip.g_force : 0, 0)
+    readonly property real longitudinalG: number(trip.longitudinal_g !== undefined ? trip.longitudinal_g : trip.g_force, 0)
+    readonly property real gForce: longitudinalG
 
     // =========================================================================
     // 6. CHÂSSIS, ROUES & DYNAMIQUE (DynamicsService)
@@ -249,6 +253,19 @@ QtObject {
             }
         }
         return number(points[points.length - 1].torque_nm, 0)
+    }
+
+    function mergeVehicleState(flatState, structuredState) {
+        const merged = {}
+        const flat = flatState || {}
+        Object.keys(flat).forEach(function(key) { merged[key] = flat[key] })
+        const domains = ["powertrain", "motion", "wheels", "body", "assistance", "dynamics", "environment"]
+        const structured = structuredState || {}
+        domains.forEach(function(domainName) {
+            const domain = structured[domainName] || {}
+            Object.keys(domain).forEach(function(key) { merged[key] = domain[key] })
+        })
+        return merged
     }
 
     function serviceKeys(status) {

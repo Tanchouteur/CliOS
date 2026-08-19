@@ -23,7 +23,10 @@ class PowerManagementService(BaseService):
 
     def start(self, stop_event: threading.Event):
         super().start(stop_event, implemented=True)
-        threading.Thread(target=self._run, args=(stop_event,), daemon=True, name=self.service_name).start()
+        self._thread = threading.Thread(
+            target=self._run, args=(stop_event,), daemon=True, name=self.service_name
+        )
+        self._thread.start()
 
     def _run(self, stop_event: threading.Event):
         self.set_ok("Surveillance alim : En attente du contact")
@@ -87,4 +90,4 @@ class PowerManagementService(BaseService):
             stop_event.wait(1.0)
 
     def stop(self):
-        pass
+        super().stop()

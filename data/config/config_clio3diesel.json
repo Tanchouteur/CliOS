@@ -40,7 +40,9 @@
     },
     "fuel": {
         "max_liters": 55,
-        "reserve_percentage": 0.15
+        "reserve_percentage": 0.15,
+        "counter_modulus_l": 0.02048,
+        "max_plausible_rate_lph": 80.0
     },
     "engine_temp": {
         "min_display": 40,

@@ -21,12 +21,12 @@ class DiagnosticService(BaseService):
         # File d'attente thread-safe pour les trames recues
         self._rx_buffer = collections.deque(maxlen=100)
 
-        self.api.update({
+        self.api.update_domain("diagnostics", {
             "diag_codes": [],
             "diag_scanning": False,
             "diag_has_scanned": False,
             "diag_ignition_on": False
-        })
+        }, source="diagnostics")
 
     def start(self, stop_event: threading.Event):
         self.thread = threading.Thread(
@@ -55,7 +55,7 @@ class DiagnosticService(BaseService):
             is_connected = self.provider.is_connected
             ignition_on = safe_data.get("key_run", False)
 
-            self.api.update({"diag_ignition_on": ignition_on})
+            self.api.update_domain("diagnostics", {"diag_ignition_on": ignition_on}, source="diagnostics")
 
             if not is_connected:
                 self.set_error("Adaptateur CAN non detecte")
@@ -75,7 +75,7 @@ class DiagnosticService(BaseService):
         """
         Orchestre la requete OBD2 et la machine a etats de reception ISO-TP.
         """
-        self.api.update({"diag_scanning": True, "diag_codes": []})
+        self.api.update_domain("diagnostics", {"diag_scanning": True, "diag_codes": []}, source="diagnostics")
         self.set_ok("Initialisation de la communication...")
         self._rx_buffer.clear()
 
@@ -155,7 +155,7 @@ class DiagnosticService(BaseService):
             self.print_message(f"[OBD2] Interruption anormale : {str(e)}")
             self.set_error("Echec d'analyse : " + str(e))
         finally:
-            self.api.update({"diag_scanning": False})
+            self.api.update_domain("diagnostics", {"diag_scanning": False}, source="diagnostics")
 
     def _decode_dtc_payload(self, payload):
         """
@@ -196,8 +196,8 @@ class DiagnosticService(BaseService):
             codes.append(dtc_str)
             self.print_message(f"[OBD2] DTC decode : {dtc_str}")
 
-        self.api.update({
+        self.api.update_domain("diagnostics", {
             "diag_codes": codes,
             "diag_has_scanned": True
-        })
+        }, source="diagnostics")
         self.set_ok(f"Termine. {len(codes)} defaut(s) lus.")

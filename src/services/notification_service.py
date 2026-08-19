@@ -40,7 +40,8 @@ class NotificationService(BaseService):
         self._check_clutch_pressed(data.get('clutch', False), current_time, data)
 
     def _run(self, stop_event):
-        time.sleep(1.0)
+        if stop_event.wait(1.0):
+            return
 
         while not stop_event.is_set():
             try:

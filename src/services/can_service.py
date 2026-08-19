@@ -22,6 +22,7 @@ class CanService(BaseService):
         self.processor = SignalProcessor()
         self.provider = provider
         self._last_frame_ts = None
+        self._last_decoded_frame_ts = None
         self._stale_timeout_s = 1.5
         self._decode_errors = 0
         self._last_decode_log_ts = 0.0
@@ -94,7 +95,7 @@ class CanService(BaseService):
                 self._last_frame_ts = now
                 msg_id = frame.arbitration_id
 
-                if msg_id in valid_ids and not getattr(self.api, 'is_starting_up', False):
+                if msg_id in valid_ids:
                     try:
                         if 0x7E8 <= msg_id <= 0x7EF:
                             if obd_call:
@@ -103,6 +104,7 @@ class CanService(BaseService):
                             decoded = processor_decode(frame, db[msg_id])
                             if decoded:
                                 batch_data.update(decoded)
+                                self._last_decoded_frame_ts = now
                     except Exception as e:
                         self._decode_errors += 1
                         if now - self._last_decode_log_ts >= 2.0:
@@ -117,21 +119,26 @@ class CanService(BaseService):
                 self.set_warning("Connecté mais aucune trame CAN reçue.")
             else:
                 frame_age = now - self._last_frame_ts
+                decoded_age = None if self._last_decoded_frame_ts is None else now - self._last_decoded_frame_ts
                 if frame_age > self._stale_timeout_s:
                     self.set_warning(f"Aucune trame CAN depuis {frame_age:.1f}s.")
+                elif decoded_age is None or decoded_age > self._stale_timeout_s:
+                    self.set_warning("Trames reçues, mais aucun signal véhicule récent n'est décodé.")
                 else:
                     self.set_ok(f"Trames CAN reçues sur {self.provider.channel}.")
 
             # Publie les données agrégées à cadence fixe.
             if now - last_ui_update >= ui_refresh_rate:
                 if batch_data:
-                    batch_data["can_decode_errors"] = self._decode_errors
-                    api_update(batch_data)
+                    api_update(batch_data, source="can", ttl_s=self._stale_timeout_s)
+                    self.api.update_domain(
+                        "system", {"can_decode_errors": self._decode_errors}, source="can-service"
+                    )
                     batch_data.clear()
                 last_ui_update = now
 
     def stop(self):
+        if self._stop_event is not None:
+            self._stop_event.set()
         self.provider.close()
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=2)
         super().stop()

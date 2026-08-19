@@ -71,7 +71,7 @@ class MockControlPanel(QWidget):
         self.mock.api.update({
             "key_run": self.ignition_state,
             "ignition_on": self.ignition_state
-        })
+        }, source="mock-controls")
 
         # Met à jour le libellé du bouton.
         if self.ignition_state:
@@ -112,7 +112,7 @@ class MockControlPanel(QWidget):
 
         def sequence():
             print("\n[MOCK PILOT] 1. Mise du contact...")
-            self.mock.api.update({"key_run": True, "ignition_on": True})
+            self.mock.api.update({"key_run": True, "ignition_on": True}, source="mock-controls")
             time.sleep(1.0)
 
             print("[MOCK PILOT] 2. Premiere vitesse et acceleration...")
@@ -142,7 +142,7 @@ class MockControlPanel(QWidget):
             self.mock.gear = 0
             time.sleep(1.0)
 
-            self.mock.api.update({"key_run": False, "ignition_on": False})
+            self.mock.api.update({"key_run": False, "ignition_on": False}, source="mock-controls")
             self.mock.brake = 0.0
 
             print("[MOCK PILOT] Fin du trajet simule.")

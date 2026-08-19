@@ -2,6 +2,7 @@ import threading
 import time
 
 from src.logging_runtime import get_logger
+from src.state_store import VEHICLE_DOMAINS, VehicleStateStore
 
 
 class VehicleAPI:
@@ -24,49 +25,77 @@ class VehicleAPI:
                     storage.get("vehicle.last_revision_odo", 0.0),
                 )
 
-        # Verrou partagé pour les accès concurrents aux données API.
-        self.data_lock = threading.Lock()
-
-        # État temps réel consolidé.
-        self._data = {
+        initial_state = {
             "fuel_level": 100.0,
             "engine_light": "OFF",
             "odometer": last_odo
         }
+        self.state = VehicleStateStore(initial_state)
 
-        # État temporaire utilisé pendant la séquence de démarrage.
-        self._ui_data = self._data.copy()
+        # L'animation de démarrage est une surcouche de présentation. Elle ne
+        # doit jamais devenir une entrée pour les services de calcul.
+        self.data_lock = threading.RLock()
+        self._startup_overlay = {}
 
         # Indicateurs d'état système
         self.is_starting_up = False
         self.critical_engine_error = False
 
     def get_display_data(self):
-        """Fournit une copie 100% sécurisée au Bridge sans bloquer le CAN."""
+        """Vue plate de compatibilité contenant uniquement les vraies données."""
+        return self.state.flat_snapshot()
+
+    def get_presentation_data(self):
+        """Vue historique destinée à l'UI, avec éventuel sweep de démarrage."""
+        data = self.state.flat_snapshot()
         with self.data_lock:
             if self.is_starting_up:
-                return self._ui_data.copy()
-            return self._data.copy()
+                data.update(self._startup_overlay)
+        return data
 
-    def update(self, new_data: dict):
-        """Intègre les nouvelles données sous haute protection."""
+    def get_vehicle_state(self):
+        """Contrat structuré stable pour les nouveaux consommateurs UI."""
+        return self.state.domain_snapshot(VEHICLE_DOMAINS)
+
+    def get_runtime_state(self):
+        """Snapshot atomique de tous les domaines (debug et bridge)."""
+        return self.state.domain_snapshot()
+
+    def get_domain_state(self, *domains: str):
+        return self.state.domain_snapshot(domains)
+
+    def get_data_quality(self):
+        return self.state.metadata_snapshot()
+
+    def is_signal_fresh(self, key: str, max_age_s: float) -> bool:
+        return self.state.is_fresh(key, max_age_s)
+
+    def update(self, new_data: dict, *, domain=None, source="legacy", ttl_s=None):
+        """Publie atomiquement des données, classées par domaine métier."""
         if not isinstance(new_data, dict):
             self.logger.warning("Payload API invalide ignore", extra={"error_code": "API_INVALID_PAYLOAD"})
             return
 
-        # Section critique minimale pour limiter la contention.
-        with self.data_lock:
-            self._data.update(new_data)
+        self.state.update(new_data, source=source, domain=domain, ttl_s=ttl_s)
 
-            rpm = self._data.get("rpm", 0)
-            ignition = self._data.get("ignition_on", False) or self._data.get("key_run", False)
+        # Compatibilité temporaire : l'état du voyant sera ensuite un calcul
+        # dédié, mais sa publication reste ici atomique avec l'état moteur.
+        current = self.state.flat_snapshot()
+        rpm = current.get("rpm", 0)
+        ignition = current.get("ignition_on", False) or current.get("key_run", False)
+        if self.critical_engine_error:
+            engine_light = "RED"
+        elif ignition and rpm < 300:
+            engine_light = "ORANGE"
+        else:
+            engine_light = "OFF"
+        if current.get("engine_light") != engine_light:
+            self.state.update(
+                {"engine_light": engine_light}, domain="powertrain", source="engine-status"
+            )
 
-            if self.critical_engine_error:
-                self._data["engine_light"] = "RED"
-            elif ignition and rpm < 300:
-                self._data["engine_light"] = "ORANGE"
-            else:
-                self._data["engine_light"] = "OFF"
+    def update_domain(self, domain: str, new_data: dict, *, source: str, ttl_s=None):
+        self.update(new_data, domain=domain, source=source, ttl_s=ttl_s)
 
     # Séquence d'initialisation visuelle.
 
@@ -75,7 +104,7 @@ class VehicleAPI:
         self.is_starting_up = True
 
         with self.data_lock:
-            self._ui_data = self._data.copy()
+            self._startup_overlay = {}
 
         def sequence():
             time.sleep(1.0)
@@ -92,8 +121,8 @@ class VehicleAPI:
 
             # Met à jour l'état UI de démarrage.
             with self.data_lock:
-                self._ui_data.update(dict.fromkeys(voyants_booleens, True))
-                self._ui_data.update({"brightness": 100.0, "gear": "8", "engine_light": "RED"})
+                self._startup_overlay.update(dict.fromkeys(voyants_booleens, True))
+                self._startup_overlay.update({"brightness": 100.0, "gear": "8", "engine_light": "RED"})
 
             steps = 50
             sleep_time = (duration_sec / 2.0) / steps
@@ -101,7 +130,7 @@ class VehicleAPI:
             for i in range(steps + 1):
                 fraction = i / steps
                 with self.data_lock:
-                    self._ui_data.update({
+                    self._startup_overlay.update({
                         "rpm": fraction * 7000.0,
                         "speed": fraction * 200.0,
                         "accel_pos": fraction * 100.0,
@@ -115,7 +144,7 @@ class VehicleAPI:
             for i in range(steps, -1, -1):
                 fraction = i / steps
                 with self.data_lock:
-                    self._ui_data.update({
+                    self._startup_overlay.update({
                         "rpm": fraction * 7000.0,
                         "speed": fraction * 200.0,
                         "accel_pos": fraction * 100.0,
@@ -124,6 +153,8 @@ class VehicleAPI:
                     })
                 time.sleep(sleep_time)
 
-            self.is_starting_up = False
+            with self.data_lock:
+                self.is_starting_up = False
+                self._startup_overlay = {}
 
         threading.Thread(target=sequence, daemon=True).start()

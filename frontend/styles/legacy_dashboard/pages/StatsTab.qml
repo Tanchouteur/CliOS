@@ -1,13 +1,14 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import "../../../style" as T
+import "../../../state" as S
 
 Item {
     id: root
     property var trip: bridge.stats !== undefined ? bridge.stats : {}
 
-    // Sécurité anti-division par zéro pour la jauge de roue libre
-    property real coastingPercent: (trip.distance_km > 0) ? (trip.coasting_km / trip.distance_km) : 0.0
+    // Sécurité anti-division par zéro pour la jauge de décélération moteur
+    property real coastingPercent: (trip.distance_km > 0) ? (S.UiState.decelerationWithoutThrottleKm / trip.distance_km) : 0.0
 
     ColumnLayout {
         anchors.fill: parent
@@ -142,14 +143,14 @@ Item {
                         Text { text: (trip.aggressivity_pct !== undefined ? trip.aggressivity_pct.toFixed(0) : "0") + " %"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
                     }
 
-                    // Roue libre
+                    // Décélération sans accélérateur
                     Column {
                         Layout.fillWidth: true
                         spacing: 8
                         RowLayout {
                             width: parent.width
-                            Text { text: "Roue libre (sans accélérer) :"; color: T.Theme.textMain; font.pixelSize: 16; Layout.fillWidth: true }
-                            Text { text: (trip.coasting_km !== undefined ? trip.coasting_km.toFixed(1) : "0.0") + " km"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
+                            Text { text: "Décélération sans accélérateur :"; color: T.Theme.textMain; font.pixelSize: 16; Layout.fillWidth: true }
+                            Text { text: S.UiState.decelerationWithoutThrottleKm.toFixed(1) + " km"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
                         }
 
                         // Petite jauge visuelle (Progress Bar custom)

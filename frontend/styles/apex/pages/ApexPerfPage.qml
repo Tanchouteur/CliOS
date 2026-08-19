@@ -216,7 +216,7 @@ Item {
                         model: [
                             { label: "DISTANCE", value: S.UiState.fixed(S.UiState.tripDistance, 1, "0"), unit: "km" },
                             { label: "RÉGIME MOY.", value: Math.round(S.UiState.avgRpm), unit: "rpm" },
-                            { label: "ROUE LIBRE", value: S.UiState.fixed(S.UiState.coastingKm, 1, "0"), unit: "km" },
+                            { label: "DÉCÉL. SANS GAZ", value: S.UiState.fixed(S.UiState.decelerationWithoutThrottleKm, 1, "0"), unit: "km" },
                             { label: "AGRESSIVITÉ", value: S.UiState.fixed(S.UiState.aggressivityPct, 0, "0"), unit: "%" }
                         ]
                         delegate: Rectangle {

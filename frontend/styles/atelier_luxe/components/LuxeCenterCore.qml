@@ -206,14 +206,14 @@ Item {
 
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#1E2C40" }
 
-                        // Éco-conduite : Roue libre
+                        // Éco-conduite : décélération sans accélérateur
                         RowLayout {
                             Layout.fillWidth: true
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 2
-                                Text { text: "DISTANCE EN ROUE LIBRE"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
-                                Text { text: S.UiState.fixed(S.UiState.trip.coasting_km, 1, "0,0") + " km"; color: T.StyleManager.success; font.pixelSize: 20; font.weight: Font.Bold }
+                                Text { text: "DÉCÉLÉRATION SANS GAZ"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
+                                Text { text: S.UiState.fixed(S.UiState.decelerationWithoutThrottleKm, 1, "0,0") + " km"; color: T.StyleManager.success; font.pixelSize: 20; font.weight: Font.Bold }
                             }
                             ColumnLayout {
                                 spacing: 2

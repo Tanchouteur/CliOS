@@ -78,10 +78,10 @@ Item {
                 ColumnLayout {
                     anchors.fill: parent; spacing: 18
                     GtMetric { Layout.fillWidth: true; label: "Agressivité moyenne"; value: S.UiState.fixed(S.UiState.trip.aggressivity_pct, 0, "0"); unit: "%" }
-                    GtMetric { Layout.fillWidth: true; label: "Roue libre"; value: S.UiState.fixed(S.UiState.trip.coasting_km, 1, "0,0"); unit: "km" }
+                    GtMetric { Layout.fillWidth: true; label: "Décél. sans accélérateur"; value: S.UiState.fixed(S.UiState.decelerationWithoutThrottleKm, 1, "0,0"); unit: "km" }
                     GtProgress {
                         Layout.fillWidth: true; height: 12
-                        value: S.UiState.number(S.UiState.trip.coasting_km, 0)
+                        value: S.UiState.decelerationWithoutThrottleKm
                         to: Math.max(1, S.UiState.number(S.UiState.trip.distance_km, 1))
                         fillColor: T.StyleManager.success
                     }
