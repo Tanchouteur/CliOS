@@ -579,12 +579,40 @@ class DashboardBridge(QObject):
         except Exception:
             pass
 
-        system = self.runtime.snapshot().domain("system")
-        version = system.get("system_version", "unknown")
+        # Wi-Fi SSID
+        wifi_ssid = ""
+        try:
+            # 1. iwgetid (Standard Raspberry Pi OS / Linux)
+            wifi_ssid = subprocess.check_output(["iwgetid", "-r"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
+        except Exception:
+            pass
+
+        if not wifi_ssid:
+            try:
+                # 2. nmcli (NetworkManager)
+                out = subprocess.check_output(["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"], stderr=subprocess.DEVNULL, text=True, timeout=1)
+                for line in out.splitlines():
+                    if line.startswith("yes:"):
+                        wifi_ssid = line.split("yes:", 1)[1].strip()
+                        break
+            except Exception:
+                pass
+
+        if not wifi_ssid:
+            try:
+                # 3. macOS fallback pour l'environnement de développement
+                out = subprocess.check_output(["ipconfig", "getsummary", "en0"], stderr=subprocess.DEVNULL, text=True, timeout=1)
+                for line in out.splitlines():
+                    if "SSID :" in line:
+                        wifi_ssid = line.split("SSID :", 1)[1].strip()
+                        break
+            except Exception:
+                pass
 
         return json.dumps({
             "version": version,
             "ip_address": ip_addr,
+            "wifi_ssid": wifi_ssid,
             "overlay_status": overlay_status,
             "git_info": git_info,
             "cpu_temp": cpu_temp,

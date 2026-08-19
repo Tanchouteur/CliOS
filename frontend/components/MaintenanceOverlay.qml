@@ -18,6 +18,7 @@ Item {
     property var maintenanceData: ({
         version: S.UiState.systemVersion,
         ip_address: "127.0.0.1",
+        wifi_ssid: "",
         overlay_status: "READ_WRITE",
         git_info: "main",
         cpu_temp: ""
@@ -138,7 +139,7 @@ Item {
             Layout.preferredHeight: 74
             spacing: 16
 
-            // Carte IP / Réseau
+            // Carte IP / Réseau Wi-Fi
             Rectangle {
                 Layout.fillWidth: true; Layout.fillHeight: true; radius: 14
                 color: "#111827"; border.width: 1; border.color: "#1F2937"
@@ -147,7 +148,10 @@ Item {
                     Text { text: "\uD83C\uDF10"; font.pixelSize: 22 }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { text: "RÉSEAU IP"; color: "#9CA3AF"; font.pixelSize: 11; font.bold: true }
+                        Text {
+                            text: root.maintenanceData.wifi_ssid ? "WI-FI · " + root.maintenanceData.wifi_ssid.toUpperCase() : "RÉSEAU IP"
+                            color: "#9CA3AF"; font.pixelSize: 11; font.bold: true; elide: Text.ElideRight
+                        }
                         Text {
                             text: root.maintenanceData.ip_address || "Hors-ligne"
                             color: root.maintenanceData.ip_address && root.maintenanceData.ip_address !== "Hors-ligne" && root.maintenanceData.ip_address !== "127.0.0.1" ? T.StyleManager.success : "#EF4444"
