@@ -489,22 +489,163 @@ class DashboardBridge(QObject):
             self.session_manager.end_trip()
 
 
+    @Slot()
+    def triggerGitUpdate(self):
+        """Déclenche la mise à jour Git de CliOS en arrière-plan."""
+        self.logger.info("Déclenchement mise à jour Git", extra={"error_code": "MAINT_GIT_UPDATE"})
+        self.send_notification("INFO", "Mise à jour Git en cours...", 4000)
+
+        def _update_task():
+            import subprocess
+            try:
+                script_candidates = [
+                    os.path.expanduser("~/update_clios.sh"),
+                    os.path.expanduser("~/Desktop/update.sh"),
+                    os.path.expanduser("~/Desktop/git_pull.sh"),
+                    os.path.expanduser("~/git_pull.sh"),
+                ]
+                custom_script = next((s for s in script_candidates if os.path.isfile(s)), None)
+
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if custom_script:
+                    res = subprocess.run(["bash", custom_script], capture_output=True, text=True, timeout=120)
+                else:
+                    res = subprocess.run(["git", "pull", "--rebase"], cwd=project_root, capture_output=True, text=True, timeout=60)
+
+                if res.returncode == 0:
+                    self.logger.info(f"Mise à jour Git réussie: {res.stdout.strip()}", extra={"error_code": "GIT_PULL_SUCCESS"})
+                    self.send_notification("SUCCESS", "Mise à jour terminée ! Veuillez redémarrer CliOS.", 5000)
+                else:
+                    err_msg = res.stderr.strip() or res.stdout.strip() or "Code erreur non nul"
+                    self.logger.error(f"Échec mise à jour Git: {err_msg}", extra={"error_code": "GIT_PULL_ERROR"})
+                    self.send_notification("ERROR", f"Échec mise à jour : {err_msg[:60]}", 6000)
+            except subprocess.TimeoutExpired:
+                self.logger.error("Timeout lors de la mise à jour Git", extra={"error_code": "GIT_PULL_TIMEOUT"})
+                self.send_notification("ERROR", "Délai dépassé lors du git pull (pas d'accès Internet ?)", 5000)
+            except Exception as e:
+                self.logger.error(f"Erreur inattendue git pull: {e}", extra={"error_code": "GIT_PULL_EXCEPTION"})
+                self.send_notification("ERROR", f"Erreur màj: {str(e)[:50]}", 5000)
+
+        threading.Thread(target=_update_task, daemon=True, name="GitUpdateThread").start()
+
+    @Slot(result=str)
+    def getSystemMaintenanceStatus(self) -> str:
+        """Retourne les infos système pour le menu de maintenance (JSON)."""
+        import socket
+        import subprocess
+
+        ip_addr = "Hors-ligne"
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip_addr = s.getsockname()[0]
+            s.close()
+        except Exception:
+            try:
+                ip_addr = socket.gethostbyname(socket.gethostname())
+            except Exception:
+                ip_addr = "127.0.0.1"
+
+        overlay_status = "READ_WRITE"
+        try:
+            with open("/proc/mounts", "r") as f:
+                mounts = f.read()
+                if "overlay on / " in mounts or ("/dev/root" not in mounts and "overlay" in mounts):
+                    overlay_status = "READ_ONLY"
+        except Exception:
+            overlay_status = "READ_WRITE"
+
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        git_info = "main"
+        try:
+            branch = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=project_root, stderr=subprocess.DEVNULL, text=True, timeout=2
+            ).strip()
+            commit = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=project_root, stderr=subprocess.DEVNULL, text=True, timeout=2
+            ).strip()
+            git_info = f"{branch} ({commit})"
+        except Exception:
+            pass
+
+        cpu_temp = ""
+        try:
+            with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                t = float(f.read().strip()) / 1000.0
+                cpu_temp = f"{t:.1f}°C"
+        except Exception:
+            pass
+
+        system = self.runtime.snapshot().domain("system")
+        version = system.get("system_version", "unknown")
+
+        return json.dumps({
+            "version": version,
+            "ip_address": ip_addr,
+            "overlay_status": overlay_status,
+            "git_info": git_info,
+            "cpu_temp": cpu_temp,
+        })
+
+    @Slot()
+    def toggleOverlayFs(self):
+        """Bascule la protection SD (OverlayFS)."""
+        self.logger.info("Bascule protection SD demandée", extra={"error_code": "MAINT_SD_TOGGLE"})
+
+        def _toggle_task():
+            import subprocess
+            script_candidates = [
+                os.path.expanduser("~/Desktop/protected.sh"),
+                os.path.expanduser("~/Desktop/toggle_readonly.sh"),
+                os.path.expanduser("~/toggle_overlay.sh"),
+                os.path.expanduser("~/protect_sd.sh"),
+            ]
+            custom_script = next((s for s in script_candidates if os.path.isfile(s)), None)
+
+            try:
+                if custom_script:
+                    res = subprocess.run(["bash", custom_script], capture_output=True, text=True, timeout=30)
+                    self.send_notification("WARNING", "Protection SD basculée ! Redémarrez le système.", 5000)
+                else:
+                    check = subprocess.run(["sudo", "raspi-config", "nonint", "get_overlay_now"], capture_output=True, text=True)
+                    is_enabled = check.stdout.strip() == "0"
+                    if is_enabled:
+                        subprocess.run(["sudo", "raspi-config", "nonint", "disable_overlayfs"], timeout=30)
+                        self.send_notification("WARNING", "Protection SD désactivée (Mode RW). Redémarrez pour valider.", 5000)
+                    else:
+                        subprocess.run(["sudo", "raspi-config", "nonint", "enable_overlayfs"], timeout=30)
+                        self.send_notification("SUCCESS", "Protection SD activée (Lecture Seule). Redémarrez pour valider.", 5000)
+            except Exception as e:
+                self.logger.error(f"Erreur bascule SD: {e}", extra={"error_code": "SD_TOGGLE_ERROR"})
+                self.send_notification("ERROR", f"Erreur SD: {str(e)[:50]}", 4000)
+
+        threading.Thread(target=_toggle_task, daemon=True, name="SdToggleThread").start()
+
+    @Slot()
+    def rebootSystem(self):
+        """Arrête proprement les services et redémarre le Raspberry Pi."""
+        self.logger.warning("Redémarrage matériel demandé", extra={"error_code": "SYS_REBOOT"})
+        self.send_notification("WARNING", "Redémarrage du système...", 3000)
+        threading.Thread(target=self._handle_exit, args=(False, True), daemon=True).start()
+
     # Pas super propre. A re faire
     @Slot()
     def quitApplication(self):
         """Arrête proprement les services et ferme l'application."""
         self.logger.info("Fermeture manuelle de l'application", extra={"error_code": "APP_QUIT"})
         self.send_notification("INFO", "Fermeture de l'application...", 2000)
-        threading.Thread(target=self._handle_exit, args=(False,), daemon=True).start()
+        threading.Thread(target=self._handle_exit, args=(False, False), daemon=True).start()
 
     @Slot()
     def shutdownSystem(self):
         """Arrête proprement les services et éteint le Raspberry Pi."""
         self.logger.warning("Extinction système demandée", extra={"error_code": "SYS_SHUTDOWN"})
         self.send_notification("WARNING", "Extinction du système...", 3000)
-        threading.Thread(target=self._handle_exit, args=(True,), daemon=True).start()
+        threading.Thread(target=self._handle_exit, args=(True, False), daemon=True).start()
 
-    def _handle_exit(self, poweroff=False):
+    def _handle_exit(self, poweroff=False, reboot=False):
         import time
         import os
         import platform
@@ -517,7 +658,9 @@ class DashboardBridge(QObject):
         self.orchestrator.stop_all()
         time.sleep(0.8)
 
-        if poweroff and platform.system() not in ["Darwin", "Windows"]:
+        if reboot and platform.system() not in ["Darwin", "Windows"]:
+            os.system("sudo reboot")
+        elif poweroff and platform.system() not in ["Darwin", "Windows"]:
             os.system("sudo poweroff")
         else:
             # os._exit(0) est plus radical que quit() pour s'assurer que le thread principal s'arrête
