@@ -535,17 +535,47 @@ class DashboardBridge(QObject):
         import socket
         import subprocess
 
-        ip_addr = "Hors-ligne"
+        # 1. IP locale réelle (sans dépendre d'une connexion internet externe)
+        ip_addr = ""
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip_addr = s.getsockname()[0]
-            s.close()
+            # Sur Linux / Raspberry Pi OS : hostname -I
+            out = subprocess.check_output(["hostname", "-I"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
+            ips = [ip for ip in out.split() if not ip.startswith("127.") and not ip.startswith("169.254.")]
+            if ips:
+                ip_addr = ips[0]
         except Exception:
+            pass
+
+        if not ip_addr:
             try:
-                ip_addr = socket.gethostbyname(socket.gethostname())
+                # Fallback ifconfig (Linux / macOS)
+                out = subprocess.check_output(["ifconfig"], stderr=subprocess.DEVNULL, text=True, timeout=1)
+                for line in out.splitlines():
+                    line = line.strip()
+                    if line.startswith("inet ") and not line.startswith("inet 127."):
+                        parts = line.split()
+                        if len(parts) >= 2 and not parts[1].startswith("169.254."):
+                            ip_addr = parts[1]
+                            break
             except Exception:
-                ip_addr = "127.0.0.1"
+                pass
+
+        if not ip_addr:
+            # Fallback socket UDP
+            for target in ["1.1.1.1", "8.8.8.8", "192.168.1.1", "10.0.0.1"]:
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect((target, 80))
+                    ip = s.getsockname()[0]
+                    s.close()
+                    if ip and not ip.startswith("127."):
+                        ip_addr = ip
+                        break
+                except Exception:
+                    pass
+
+        if not ip_addr:
+            ip_addr = "Hors-ligne"
 
         overlay_status = "READ_WRITE"
         try:
@@ -579,18 +609,30 @@ class DashboardBridge(QObject):
         except Exception:
             pass
 
-        # Wi-Fi SSID
+        # 2. SSID Wi-Fi connecté
         wifi_ssid = ""
+        # Méthode A: nmcli connection active (Raspberry Pi OS Bookworm)
         try:
-            # 1. iwgetid (Standard Raspberry Pi OS / Linux)
-            wifi_ssid = subprocess.check_output(["iwgetid", "-r"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
+            out = subprocess.check_output(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
+                stderr=subprocess.DEVNULL, text=True, timeout=1
+            )
+            for line in out.splitlines():
+                if ":" in line:
+                    name, ctype = line.rsplit(":", 1)
+                    if "wireless" in ctype.lower() or "wifi" in ctype.lower() or "802-11" in ctype.lower():
+                        wifi_ssid = name.strip()
+                        break
         except Exception:
             pass
 
+        # Méthode B: nmcli dev wifi
         if not wifi_ssid:
             try:
-                # 2. nmcli (NetworkManager)
-                out = subprocess.check_output(["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"], stderr=subprocess.DEVNULL, text=True, timeout=1)
+                out = subprocess.check_output(
+                    ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
+                    stderr=subprocess.DEVNULL, text=True, timeout=1
+                )
                 for line in out.splitlines():
                     if line.startswith("yes:"):
                         wifi_ssid = line.split("yes:", 1)[1].strip()
@@ -598,9 +640,45 @@ class DashboardBridge(QObject):
             except Exception:
                 pass
 
+        # Méthode C: iwgetid (wireless-tools)
+        if not wifi_ssid:
+            for cmd in ["iwgetid", "/usr/sbin/iwgetid", "/sbin/iwgetid"]:
+                try:
+                    res = subprocess.check_output([cmd, "-r"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
+                    if res:
+                        wifi_ssid = res
+                        break
+                except Exception:
+                    pass
+
+        # Méthode D: iw dev link
+        if not wifi_ssid:
+            for dev in ["wlan0", "wlan1"]:
+                try:
+                    out = subprocess.check_output(["iw", "dev", dev, "link"], stderr=subprocess.DEVNULL, text=True, timeout=1)
+                    for line in out.splitlines():
+                        if "SSID:" in line:
+                            wifi_ssid = line.split("SSID:", 1)[1].strip()
+                            break
+                    if wifi_ssid:
+                        break
+                except Exception:
+                    pass
+
+        # Méthode E: wpa_cli
         if not wifi_ssid:
             try:
-                # 3. macOS fallback pour l'environnement de développement
+                out = subprocess.check_output(["wpa_cli", "status"], stderr=subprocess.DEVNULL, text=True, timeout=1)
+                for line in out.splitlines():
+                    if line.startswith("ssid="):
+                        wifi_ssid = line.split("ssid=", 1)[1].strip()
+                        break
+            except Exception:
+                pass
+
+        # Méthode F: macOS fallback dev
+        if not wifi_ssid and platform.system() == "Darwin":
+            try:
                 out = subprocess.check_output(["ipconfig", "getsummary", "en0"], stderr=subprocess.DEVNULL, text=True, timeout=1)
                 for line in out.splitlines():
                     if "SSID :" in line:

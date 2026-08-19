@@ -153,8 +153,9 @@ Item {
                             color: "#9CA3AF"; font.pixelSize: 11; font.bold: true; elide: Text.ElideRight
                         }
                         Text {
-                            text: root.maintenanceData.ip_address || "Hors-ligne"
-                            color: root.maintenanceData.ip_address && root.maintenanceData.ip_address !== "Hors-ligne" && root.maintenanceData.ip_address !== "127.0.0.1" ? T.StyleManager.success : "#EF4444"
+                            readonly property bool isOnline: root.maintenanceData.ip_address && root.maintenanceData.ip_address !== "Hors-ligne" && !root.maintenanceData.ip_address.startsWith("127.")
+                            text: isOnline ? root.maintenanceData.ip_address : "Hors-ligne"
+                            color: isOnline ? T.StyleManager.success : "#EF4444"
                             font.pixelSize: 16; font.bold: true; font.family: "Monospace"
                         }
                     }
