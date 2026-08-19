@@ -6,8 +6,6 @@ class Slcan:
     """
 
     def __init__(self, channel: str = "can0", baudrate: int = 500000):
-        # On conserve la signature baudrate pour la compatibilité avec le reste de l'app,
-        # mais la vitesse est maintenant directement gérée par le noyau Linux.
         self.channel = channel
         self.bus = None
         self.is_connected = False
