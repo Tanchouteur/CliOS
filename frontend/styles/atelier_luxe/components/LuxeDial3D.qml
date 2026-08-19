@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import "../../../style" as T
 import "../../../state" as S
 
@@ -18,28 +19,28 @@ Item {
     property string unitText: ""
     property bool isRightDial: false
 
-    // Valeur amortie pour une aiguille d'une fluidité parfaite
+    // Fluidité matérielle instantanée sans latence ni saut (40ms pour synchronisation CAN)
     property real smoothValue: currentValue
     Behavior on smoothValue {
+        enabled: true
         NumberAnimation {
-            duration: 140
-            easing.type: Easing.OutCubic
+            duration: 40
+            easing.type: Easing.OutQuad
         }
     }
 
-    onSmoothValueChanged: dynamicCanvas.requestPaint()
-    onCurrentValueChanged: dynamicCanvas.requestPaint()
+    readonly property real valueRatio: Math.max(0.0, Math.min(1.0, (smoothValue - minValue) / Math.max(1, maxValue - minValue)))
+    readonly property real needleAngle: (startAngle - 360) + spanAngle * valueRatio
 
     Connections {
         target: T.StyleManager
         function onAccentChanged() {
             staticCanvas.requestPaint()
-            dynamicCanvas.requestPaint()
         }
     }
 
     // =========================================================================
-    // COUCHE 1 : FOND STATIQUE MISE EN CACHE GPU (Exécutée 1 seule fois)
+    // COUCHE 1 : FOND STATIQUE DU CADRAN (Rendu GPU 1 seule fois en cache)
     // =========================================================================
     Canvas {
         id: staticCanvas
@@ -210,81 +211,62 @@ Item {
     }
 
     // =========================================================================
-    // COUCHE 2 : COUCHE DYNAMIQUE ULTRA-LÉGÈRE (Arc actif & Aiguille)
+    // COUCHE 2 : ARC ACTIF RENDU PAR GPU VECTORIEL (Shape Shader direct)
     // =========================================================================
-    Canvas {
-        id: dynamicCanvas
+    Shape {
         anchors.fill: parent
+        visible: root.valueRatio > 0.002
+        ShapePath {
+            strokeColor: T.StyleManager.accent
+            strokeWidth: 4.5
+            fillColor: "transparent"
+            capStyle: ShapePath.RoundCap
+            PathAngleArc {
+                centerX: 220
+                centerY: 220
+                radiusX: 168
+                radiusY: 168
+                startAngle: 135
+                sweepAngle: root.spanAngle * root.valueRatio
+            }
+        }
+    }
 
-        onPaint: {
-            const ctx = getContext("2d")
-            ctx.reset()
+    // =========================================================================
+    // COUCHE 3 : AIGUILLE 3D TITANE ROTATION MATÉRIELLE GPU PURE (60 FPS Constant)
+    // =========================================================================
+    Item {
+        x: 220
+        y: 220
+        transform: Rotation {
+            origin.x: 0
+            origin.y: 0
+            angle: root.needleAngle
+        }
 
-            const cx = width / 2
-            const cy = height / 2
-            const radius = Math.min(cx, cy) - 6
-            const knurlInner = radius - 14
-            const rBevelInner = knurlInner - 12
-            const dialFaceRadius = rBevelInner - 1
-            const trackRadius = dialFaceRadius - 24
+        // Aiguille vectorielle en titane avec rainure lumineuse
+        Shape {
+            anchors.centerIn: parent
 
-            const arcStartRad = (root.startAngle - 90) * Math.PI / 180
-            const valRatio = Math.max(0, Math.min(1, (root.smoothValue - root.minValue) / (root.maxValue - root.minValue)))
-            const valAngleRad = (root.startAngle + root.spanAngle * valRatio - 90) * Math.PI / 180
-
-            // Arc actif coloré
-            if (valRatio > 0.005) {
-                const activeGrad = ctx.createLinearGradient(
-                    cx + Math.cos(arcStartRad) * trackRadius,
-                    cy + Math.sin(arcStartRad) * trackRadius,
-                    cx + Math.cos(valAngleRad) * trackRadius,
-                    cy + Math.sin(valAngleRad) * trackRadius
-                )
-                activeGrad.addColorStop(0, Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.45))
-                activeGrad.addColorStop(1, T.StyleManager.accent)
-
-                ctx.strokeStyle = activeGrad
-                ctx.lineWidth = 4.5
-                ctx.beginPath()
-                ctx.arc(cx, cy, trackRadius, arcStartRad, valAngleRad)
-                ctx.stroke()
+            // Corps principal de l'aiguille
+            ShapePath {
+                fillColor: T.StyleManager.accent
+                strokeColor: "transparent"
+                startX: -6.5; startY: 36
+                PathLine { x: 6.5; y: 36 }
+                PathLine { x: 1.8; y: -160 }
+                PathLine { x: 0; y: -167 }
+                PathLine { x: -1.8; y: -160 }
+                PathLine { x: -6.5; y: 36 }
             }
 
-            // Aiguille 3D avec ombre
-            const needleAngleRad = valAngleRad
-            const nLen = trackRadius - 3
-            const nBaseWidth = 6.5
-            const nTipWidth = 1.8
-
-            ctx.save()
-            ctx.shadowColor = "rgba(0, 0, 0, 0.75)"
-            ctx.shadowBlur = 10
-            ctx.shadowOffsetX = 4
-            ctx.shadowOffsetY = 6
-
-            const nCos = Math.cos(needleAngleRad)
-            const nSin = Math.sin(needleAngleRad)
-            const nNormX = -nSin
-            const nNormY = nCos
-
-            ctx.fillStyle = T.StyleManager.accent
-            ctx.beginPath()
-            ctx.moveTo(cx - nCos * 36 + nNormX * nBaseWidth, cy - nSin * 36 + nNormY * nBaseWidth)
-            ctx.lineTo(cx + nCos * nLen + nNormX * nTipWidth, cy + nSin * nLen + nNormY * nTipWidth)
-            ctx.lineTo(cx + nCos * (nLen + 7), cy + nSin * (nLen + 7))
-            ctx.lineTo(cx + nCos * nLen - nNormX * nTipWidth, cy + nSin * nLen - nNormY * nTipWidth)
-            ctx.lineTo(cx - nCos * 36 - nNormX * nBaseWidth, cy - nSin * 36 - nNormY * nBaseWidth)
-            ctx.closePath()
-            ctx.fill()
-            ctx.restore()
-
-            // Rainure lumineuse centrale
-            ctx.strokeStyle = "#FFFFFF"
-            ctx.lineWidth = 1.2
-            ctx.beginPath()
-            ctx.moveTo(cx + nCos * 20, cy + nSin * 20)
-            ctx.lineTo(cx + nCos * (nLen - 4), cy + nSin * (nLen - 4))
-            ctx.stroke()
+            // Rainure lumineuse blanche centrale
+            ShapePath {
+                strokeColor: "#FFFFFF"
+                strokeWidth: 1.5
+                startX: 0; startY: -20
+                PathLine { x: 0; y: -158 }
+            }
         }
     }
 }

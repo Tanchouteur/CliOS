@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Shapes
 import "../../../style" as T
 import "../../../state" as S
 
@@ -36,8 +37,40 @@ Item {
         unitText: "KM / H"
     }
 
+    // Indicateur Régulateur / Limiteur intégré DIRECTEMENT au cadran
+    Rectangle {
+        anchors.horizontalCenter: dial.horizontalCenter
+        anchors.bottom: centerHub.top
+        anchors.bottomMargin: 14
+        width: 130
+        height: 28
+        radius: 14
+        visible: S.UiState.cruiseStatus === "ACTIF" || S.UiState.vehicle.regulateur_statut > 0
+        color: S.UiState.cruiseStatus === "ACTIF" ? Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.22) : "#080D15"
+        border.width: 1.2
+        border.color: S.UiState.cruiseStatus === "ACTIF" ? T.StyleManager.accent : "#2A3C52"
+
+        RowLayout {
+            anchors.centerIn: parent
+            spacing: 6
+            Rectangle {
+                width: 7; height: 7; radius: 3.5
+                color: S.UiState.cruiseStatus === "ACTIF" ? T.StyleManager.accent : "#8A9BAF"
+            }
+            Text {
+                text: S.UiState.cruiseMode + " " + S.UiState.fixed(S.UiState.cruiseTarget, 0, "—") + " km/h"
+                color: S.UiState.cruiseStatus === "ACTIF" ? "#FFFFFF" : "#BAC8D9"
+                font.family: T.StyleManager.fontFamily
+                font.pixelSize: 11
+                font.weight: Font.Bold
+                font.letterSpacing: 0.8
+            }
+        }
+    }
+
     // Affichage Vitesse Numérique dans un Cocon Central Sculpté
     Rectangle {
+        id: centerHub
         anchors.centerIn: dial
         width: 90
         height: 90
@@ -80,39 +113,7 @@ Item {
         }
     }
 
-    // Capsule de Régulateur / Limiteur de Vitesse (En haut à gauche)
-    Rectangle {
-        anchors.top: parent.top
-        anchors.topMargin: 2
-        anchors.left: parent.left
-        anchors.leftMargin: 12
-        height: 38
-        width: 180
-        radius: 19
-        visible: S.UiState.cruiseStatus === "ACTIF" || S.UiState.vehicle.regulateur_statut > 0
-        color: S.UiState.cruiseStatus === "ACTIF" ? Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.24) : "#142032"
-        border.width: 1.2
-        border.color: S.UiState.cruiseStatus === "ACTIF" ? T.StyleManager.accent : "#2A3C52"
-
-        RowLayout {
-            anchors.centerIn: parent
-            spacing: 8
-            Rectangle {
-                width: 8; height: 8; radius: 4
-                color: S.UiState.cruiseStatus === "ACTIF" ? T.StyleManager.accent : "#8A9BAF"
-            }
-            Text {
-                text: S.UiState.cruiseMode + " " + S.UiState.fixed(S.UiState.cruiseTarget, 0, "—") + " km/h"
-                color: S.UiState.cruiseStatus === "ACTIF" ? "#FFFFFF" : "#BAC8D9"
-                font.family: T.StyleManager.fontFamily
-                font.pixelSize: 13
-                font.weight: Font.Bold
-                font.letterSpacing: 0.8
-            }
-        }
-    }
-
-    // Bloc Inférieur Flottant : Jauge Carburant & Odomètre (Position surélevée sécurisée)
+    // Bloc Inférieur Flottant : Pédale d'Accélérateur & Odomètre
     RowLayout {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 24
@@ -122,14 +123,14 @@ Item {
         anchors.rightMargin: 16
         spacing: 12
 
-        // Jauge Carburant & Autonomie
+        // Jauge Position Pédale Accélérateur
         Rectangle {
             Layout.fillWidth: true
             height: 64
             radius: 14
             color: "#0E1624"
             border.width: 1
-            border.color: S.UiState.fuelLevel <= 7 ? T.StyleManager.warning : "#1C2A3C"
+            border.color: "#1C2A3C"
 
             ColumnLayout {
                 anchors.fill: parent
@@ -139,8 +140,8 @@ Item {
                 RowLayout {
                     Layout.fillWidth: true
                     Text {
-                        text: "RÉSERVOIR"
-                        color: S.UiState.fuelLevel <= 7 ? T.StyleManager.warning : "#BAC8D9"
+                        text: "ACCÉLÉRATEUR"
+                        color: "#BAC8D9"
                         font.family: T.StyleManager.fontFamily
                         font.pixelSize: 11
                         font.weight: Font.Bold
@@ -148,7 +149,7 @@ Item {
                     }
                     Item { Layout.fillWidth: true }
                     Text {
-                        text: S.UiState.fixed(S.UiState.fuelLevel, 1, "0,0") + " L"
+                        text: Math.round(S.UiState.throttle) + " %"
                         color: "#FFFFFF"
                         font.family: T.StyleManager.fontFamily
                         font.pixelSize: 15
@@ -163,11 +164,11 @@ Item {
                     color: "#182436"
 
                     Rectangle {
-                        width: parent.width * Math.min(1.0, Math.max(0.0, S.UiState.fuelLevel / Math.max(1, S.UiState.maxFuel)))
+                        width: parent.width * Math.min(1.0, Math.max(0.0, S.UiState.throttle / 100.0))
                         height: parent.height
                         radius: 2.5
-                        color: S.UiState.fuelLevel <= 7 ? T.StyleManager.warning : T.StyleManager.accent
-                        Behavior on width { NumberAnimation { duration: 200 } }
+                        color: S.UiState.throttle > 85 ? T.StyleManager.warning : T.StyleManager.accent
+                        Behavior on width { NumberAnimation { duration: 100 } }
                     }
                 }
             }

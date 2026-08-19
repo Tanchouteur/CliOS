@@ -225,7 +225,7 @@ Item {
                 }
 
                 // -------------------------------------------------------------
-                // MODULE DROIT : TRIP B, AUTONOMIE & MAINTENANCE
+                // MODULE DROIT : TRIP B, ACCÉLÉRATION G-FORCE & MAINTENANCE
                 // -------------------------------------------------------------
                 Rectangle {
                     Layout.fillWidth: true
@@ -311,17 +311,17 @@ Item {
 
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#1E2C40" }
 
-                        // Autonomie restante
+                        // G-Force Latérale & Accélération Dynamique
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 4
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: "AUTONOMIE ESTIMÉE"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
+                                Text { text: "FORCE G LATÉRALE"; color: "#8A9BAF"; font.pixelSize: 11; font.weight: Font.Bold; font.letterSpacing: 1 }
                                 Item { Layout.fillWidth: true }
                                 Text {
-                                    text: S.UiState.fixed(S.UiState.trip.autonomy, 0, "—") + " km"
+                                    text: S.UiState.fixed(S.UiState.gForce, 2, "0.00") + " G"
                                     color: "#FFFFFF"
                                     font.family: T.StyleManager.fontFamily
                                     font.pixelSize: 18
@@ -336,11 +336,11 @@ Item {
                                 color: "#182436"
 
                                 Rectangle {
-                                    width: parent.width * Math.min(1.0, Math.max(0.0, S.UiState.fuelLevel / Math.max(1, S.UiState.maxFuel)))
+                                    width: parent.width * Math.min(1.0, Math.max(0.0, Math.abs(S.UiState.gForce) / 1.5))
                                     height: parent.height
                                     radius: 3
-                                    color: S.UiState.fuelLevel <= 7 ? T.StyleManager.warning : T.StyleManager.accent
-                                    Behavior on width { NumberAnimation { duration: 200 } }
+                                    color: T.StyleManager.accent
+                                    Behavior on width { NumberAnimation { duration: 100 } }
                                 }
                             }
                         }
