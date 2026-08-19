@@ -76,7 +76,7 @@ class VehicleRuntime:
             self._startup_overrides = {}
 
         def sequence():
-            time.sleep(1.0)
+            time.sleep(0.15)
             lamps = [
                 "brake", "clutch", "comodo_down", "comodo_up", "door_fl_open",
                 "door_fr_open", "door_rl_open", "door_rr_open", "doors_locked",
