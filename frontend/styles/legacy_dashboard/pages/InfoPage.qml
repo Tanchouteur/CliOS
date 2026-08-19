@@ -3,21 +3,22 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../../../style" as T
 import "../components" as C
+import "../../../state" as S
 
 Item {
     id: root
     anchors.fill: parent
 
     // Données système exposées par le bridge.
-    property real cpuUsage: bridge.data !== undefined && bridge.data.app_cpu_total_pct !== undefined ? bridge.data.app_cpu_total_pct : 0.0
-    property real ramUsage: bridge.data !== undefined && bridge.data.app_ram_mb !== undefined ? bridge.data.app_ram_mb : 0.0
+    property real cpuUsage: S.UiState.appCpuTotalPct
+    property real ramUsage: S.UiState.appRamMb
 
     // Seuils visuels d'alerte.
     property color cpuColor: cpuUsage > 80.0 ? T.Theme.danger : T.Theme.main
     property color ramColor: ramUsage > 800.0 ? T.Theme.danger : T.Theme.main
 
-    property var health: bridge && bridge.systemHealth !== undefined ? bridge.systemHealth : {}
-    property var storageStatus: bridge && bridge.storageStatus !== undefined ? bridge.storageStatus : ({})
+    property var health: S.UiState.serviceHealth
+    property var storageStatus: S.UiState.storageState
 
 
     // En-tête.
@@ -172,7 +173,7 @@ Item {
                         font.pixelSize: 20
                     }
                     Text {
-                        text: bridge.data !== undefined && bridge.data.system_version !== undefined ? "ClOS v" + bridge.data.system_version : "ClOS v?.?.?"
+                        text: "CliOS v" + S.UiState.systemVersion
                         color: T.Theme.textMain
                         font.pixelSize: 20
                         font.bold: true

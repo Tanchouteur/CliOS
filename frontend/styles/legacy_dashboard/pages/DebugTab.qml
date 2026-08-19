@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 import "../../../style" as T
+import "../../../state" as S
 
 Item {
     id: root
@@ -18,29 +19,26 @@ Item {
         running: root.visible
         repeat: true
         onTriggered: {
-            if (!bridge || bridge.data === undefined) return;
-
-            let currentKeys = Object.keys(bridge.data).sort();
-            let signature = currentKeys.join("|");
+            let rows = S.UiState.debugSignals;
+            let signature = rows.map(function(row) { return row.domain + "." + row.key }).join("|");
 
             if (signature !== root.lastKeySignature) {
                 root.lastKeySignature = signature;
                 debugModel.clear();
-                for (let i = 0; i < currentKeys.length; i++) {
-                    let k = currentKeys[i];
-                    let val = bridge.data[k];
+                for (let i = 0; i < rows.length; i++) {
+                    let row = rows[i];
+                    let val = row.value;
                     let displayVal = typeof val === "number" ? Number(val).toFixed(3) : String(val);
-                    debugModel.append({ "keyName": k, "keyValue": displayVal });
+                    debugModel.append({ "keyName": row.domain + "." + row.key, "keyValue": displayVal + (row.unit ? " " + row.unit : "") });
                 }
             }
 
             else {
-                for (let i = 0; i < currentKeys.length; i++) {
-                    let k = currentKeys[i];
-                    let val = bridge.data[k];
+                for (let i = 0; i < rows.length; i++) {
+                    let row = rows[i];
+                    let val = row.value;
                     let displayVal = typeof val === "number" ? Number(val).toFixed(3) : String(val);
-
-                    debugModel.setProperty(i, "keyValue", displayVal);
+                    debugModel.setProperty(i, "keyValue", displayVal + (row.unit ? " " + row.unit : ""));
                 }
             }
         }

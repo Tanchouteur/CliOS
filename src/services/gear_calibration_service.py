@@ -8,9 +8,9 @@ from src.services.param_types import ServiceParamType
 
 
 class GearCalibrationService(BaseService):
-    def __init__(self, api, storage, profile_manager, dynamics_service):
+    def __init__(self, runtime, storage, profile_manager, dynamics_service):
         super().__init__("GearCalibration", storage)
-        self.api = api
+        self.runtime = runtime
         self.profile_manager = profile_manager
         self.dynamics_service = dynamics_service
 
@@ -30,12 +30,12 @@ class GearCalibrationService(BaseService):
         self._load_progress_from_storage()
 
         # Initialise l'état de calibration visible par l'interface.
-        self.api.update_domain("calibration", {
-            "calibration_active": False,
-            "calibration_ratio": 0.0,
-            "calibration_count": 0,
-            "calibration_gears_found": len(self._extract_reliable_peaks()),
-            "calibration_target_gears": self._target_gear_count(),
+        self.runtime.publish("calibration", {
+            "active": False,
+            "ratio": 0.0,
+            "count": 0,
+            "gears_found": len(self._extract_reliable_peaks()),
+            "target_gears": self._target_gear_count(),
         }, source="gear-calibration")
 
         self.register_param("calib_toggle", "Mode Étalonnage", ServiceParamType.TOGGLE, False, persistent=False)
@@ -51,12 +51,12 @@ class GearCalibrationService(BaseService):
         self.is_calibrating = True
         self.collected_ratios.clear()
 
-        # Active l'état de calibration dans l'API.
-        self.api.update_domain("calibration", {
-            "calibration_active": True,
-            "calibration_count": 0,
-            "calibration_gears_found": len(self._extract_reliable_peaks()),
-            "calibration_target_gears": self._target_gear_count(),
+        # Active l'état de calibration dans le runtime.
+        self.runtime.publish("calibration", {
+            "active": True,
+            "count": 0,
+            "gears_found": len(self._extract_reliable_peaks()),
+            "target_gears": self._target_gear_count(),
         }, source="gear-calibration")
 
         self.set_ok("Étalonnage en cours...")
@@ -65,10 +65,10 @@ class GearCalibrationService(BaseService):
     def stop_and_save_calibration(self):
         self.is_calibrating = False
 
-        # Désactive l'état de calibration dans l'API.
-        self.api.update_domain("calibration", {
-            "calibration_active": False,
-            "calibration_ratio": 0.0
+        # Désactive l'état de calibration dans le runtime.
+        self.runtime.publish("calibration", {
+            "active": False,
+            "ratio": 0.0
         }, source="gear-calibration")
 
         if not self.collected_ratios and not self._ratio_hist:
@@ -123,13 +123,15 @@ class GearCalibrationService(BaseService):
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
             if self.is_calibrating:
-                safe_data = self.api.get_display_data()
-                speed = safe_data.get("speed", 0.0)
-                rpm = safe_data.get("rpm", 0.0)
-                throttle = safe_data.get("accel_pos", 0.0)
-                clutch = safe_data.get("clutch", False)
-                brake = safe_data.get("brake", False)
-                reverse = safe_data.get("reverse_engaged", False)
+                snapshot = self.runtime.snapshot()
+                powertrain = snapshot.domain("powertrain")
+                motion = snapshot.domain("motion")
+                speed = motion.get("speed", 0.0)
+                rpm = powertrain.get("rpm", 0.0)
+                throttle = powertrain.get("accel_pos", 0.0)
+                clutch = motion.get("clutch", False)
+                brake = motion.get("brake", False)
+                reverse = motion.get("reverse", False) or motion.get("reverse_engaged", False)
 
                 if throttle > 8.0 and speed > 4.0 and rpm > 900 and not clutch and not brake and not reverse:
                     current_ratio = rpm / speed
@@ -137,11 +139,11 @@ class GearCalibrationService(BaseService):
                         self.collected_ratios.append(current_ratio)
                         self._ratio_hist[round(current_ratio)] += 1
 
-                        self.api.update_domain("calibration", {
-                            "calibration_ratio": round(current_ratio, 1),
-                            "calibration_count": len(self.collected_ratios),
-                            "calibration_gears_found": len(self._extract_reliable_peaks()),
-                            "calibration_target_gears": self._target_gear_count(),
+                        self.runtime.publish("calibration", {
+                            "ratio": round(current_ratio, 1),
+                            "count": len(self.collected_ratios),
+                            "gears_found": len(self._extract_reliable_peaks()),
+                            "target_gears": self._target_gear_count(),
                         }, source="gear-calibration")
 
                         now = time.time()
@@ -154,8 +156,8 @@ class GearCalibrationService(BaseService):
                                 self.dynamics_service.reload_config({"transmission": {"ratios": live_ratios}})
                             self._last_live_push = now
                 else:
-                    self.api.update_domain(
-                        "calibration", {"calibration_ratio": 0.0}, source="gear-calibration"
+                    self.runtime.publish(
+                        "calibration", {"ratio": 0.0}, source="gear-calibration"
                     )
 
             stop_event.wait(0.05)

@@ -4,11 +4,11 @@ from src.services.base_service import BaseService
 
 
 class UsbStorageService(BaseService):
-    """Expose le stockage résilient dans la santé système et l'API."""
+    """Publie l'état du stockage résilient dans le domaine système."""
 
-    def __init__(self, api, storage, storage_manager):
+    def __init__(self, runtime, storage, storage_manager):
         super().__init__("USB_Storage", storage)
-        self.api = api
+        self.runtime = runtime
         self._storage_manager = storage_manager
 
     def start(self, stop_event: threading.Event):
@@ -33,7 +33,7 @@ class UsbStorageService(BaseService):
             else:
                 self.set_warning("Mode dégradé — données temporaires en RAM")
 
-            self.api.update_domain("system", {
+            self.runtime.publish("system", {
                 "storage_mode": status.get("mode", "VOLATILE"),
                 "storage_usb_connected": bool(status.get("usb_connected", False)),
                 "storage_free_mb": free_mb,

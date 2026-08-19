@@ -100,7 +100,7 @@ Item {
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: S.UiState.fixed(S.UiState.trip.inst_cons, 1, "0,0") + " L/100"
+                    text: S.UiState.fixed(S.UiState.instantCons, 1, "0,0") + " L/100"
                     color: "#FFFFFF"
                     font.family: T.StyleManager.fontFamily
                     font.pixelSize: 17

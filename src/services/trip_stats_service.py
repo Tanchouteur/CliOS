@@ -9,9 +9,19 @@ from src.services.param_types import ServiceParamType
 class TripStatsService(BaseService):
     """Ordinateur de bord : Calcule les statistiques instantanées et persistantes (Consommation, Distance, Entretien)."""
 
-    def __init__(self, api, config, storage=None):
+    TRIP_UNITS = {
+        "distance_km": "km", "session_fuel_l": "L", "session_cost": "EUR",
+        "fuel_price": "EUR/L", "avg_rpm": "rpm",
+        "deceleration_without_throttle_km": "km", "aggressivity_pct": "%",
+        "shift_time_sec": "s", "trip_b_fuel": "L", "trip_a": "km",
+        "trip_b": "km", "inst_cons": "L/100km", "avg_cons_b": "L/100km",
+        "avg_cons_session": "L/100km", "autonomy": "km",
+        "km_before_service": "km", "longitudinal_g": "G",
+    }
+
+    def __init__(self, runtime, config, storage=None):
         super().__init__("TripStats", storage)
-        self.api = api
+        self.runtime = runtime
         self._thread = None
         self.storage = storage
 
@@ -27,7 +37,7 @@ class TripStatsService(BaseService):
         self._max_fuel_rate_lph = float(fuel_config.get("max_plausible_rate_lph", 80.0))
 
         # Verrou d'accès aux statistiques partagées.
-        self._stats_lock = threading.Lock()
+        self._stats_lock = threading.RLock()
 
         # Paramètres de maintenance issus du profil véhicule.
         revision_config = config.get("maintenance", {}).get("revision", {})
@@ -64,33 +74,30 @@ class TripStatsService(BaseService):
 
         self._last_raw_fuel = None
         self._absolute_fuel_session = 0.0
+        self._accept_running = False
 
-        # Conteneur des statistiques exposées au bridge.
+        # Conteneur des statistiques publiées dans le domaine trip.
         self._stats = {
             "is_active": False, "distance_km": 0.0,
             "session_fuel_l": 0.0,
             "session_cost": 0.0,
             "fuel_price": self.fuel_price,
             "avg_rpm": 0, "deceleration_without_throttle_km": 0.0,
-            "coasting_km": 0.0,  # alias de compatibilité, à supprimer après migration UI
             "aggressivity_pct": 0.0, "shift_time_sec": 0.0,
             "trip_b_fuel": round(self.fuel_b_accumulated, 2),
             "trip_a": init_trip_a, "trip_b": init_trip_b,
             "inst_cons": 0.0, "avg_cons_b": init_avg_cons,
             "avg_cons_session": 0.0, "autonomy": 0.0,
             "km_before_service": init_km_service, "service_warning": False,
-            "longitudinal_g": 0.0,
-            "g_force": 0.0  # alias de compatibilité
+            "longitudinal_g": 0.0
         }
 
         self._prev_speed = 0.0
         self._last_g_time = time.monotonic()
 
-        safe_data = self.api.get_display_data()
-        self.reset_session(safe_data.get("odometer"))
+        self.reset_session(self.runtime.snapshot().domain("motion").get("odometer"))
 
-    @property
-    def stats(self):
+    def _stats_snapshot(self):
         with self._stats_lock:
             return self._stats.copy()
 
@@ -118,6 +125,7 @@ class TripStatsService(BaseService):
             self._prev_speed = 0.0
             self._last_g_time = time.monotonic()
             self._stats.update({
+                "is_active": False,
                 "distance_km": 0.0,
                 "session_fuel_l": 0.0,
                 "session_cost": 0.0,
@@ -125,31 +133,42 @@ class TripStatsService(BaseService):
                 "inst_cons": 0.0,
                 "avg_rpm": 0,
                 "deceleration_without_throttle_km": 0.0,
-                "coasting_km": 0.0,
                 "aggressivity_pct": 0.0,
                 "shift_time_sec": 0.0,
                 "longitudinal_g": 0.0,
-                "g_force": 0.0,
             })
+        self._publish_stats()
 
-    # Alias interne conservé pour les extensions/tests historiques.
-    @property
-    def _coasting_dist(self):
-        return self._deceleration_without_throttle_dist
+    def begin_session(self, last_odo):
+        """Starts a fresh accumulator before SessionManager publishes RUNNING."""
+        self.reset_session(last_odo)
+        with self._stats_lock:
+            self._accept_running = True
 
-    @_coasting_dist.setter
-    def _coasting_dist(self, value):
-        self._deceleration_without_throttle_dist = value
+    def _publish_stats(self):
+        self.runtime.publish(
+            "trip", self._stats_snapshot(), source="trip-stats", ttl_s=0.25,
+            units=self.TRIP_UNITS,
+        )
+
+    def finish_session(self, last_odo):
+        """Atomically captures the final trip values and resets the accumulator."""
+        with self._stats_lock:
+            self._accept_running = False
+            final_stats = self._stats.copy()
+            self.reset_session(last_odo)
+            return final_stats
 
     def reset_trip_a(self):
-        current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
+        current_odo = self.runtime.snapshot().domain("motion").get("odometer", self.last_saved_odo)
         self.trip_a_marker = current_odo
         if self.storage: self.storage.set("trips.a.marker", current_odo)
         with self._stats_lock:
             self._stats["trip_a"] = 0.0
+        self._publish_stats()
 
     def reset_trip_b(self):
-        current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
+        current_odo = self.runtime.snapshot().domain("motion").get("odometer", self.last_saved_odo)
         self.trip_b_marker = current_odo
         self.fuel_b_accumulated = 0.0
         if self.storage:
@@ -160,6 +179,7 @@ class TripStatsService(BaseService):
         with self._stats_lock:
             self._stats["trip_b"] = 0.0
             self._stats["avg_cons_b"] = 0.0
+        self._publish_stats()
 
     def set_trip_b_fuel(self, new_fuel: float):
         self.fuel_b_accumulated = max(0.0, new_fuel)
@@ -170,9 +190,10 @@ class TripStatsService(BaseService):
             trip_b_dist = self._stats.get("trip_b", 0.0)
             self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                               1) if trip_b_dist > 0.05 else 0.0
+        self._publish_stats()
 
     def set_trip_b_distance(self, new_distance: float):
-        current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
+        current_odo = self.runtime.snapshot().domain("motion").get("odometer", self.last_saved_odo)
         new_distance = max(0.0, new_distance)
         self.trip_b_marker = current_odo - new_distance
         if self.storage:
@@ -182,20 +203,23 @@ class TripStatsService(BaseService):
             trip_b_dist = new_distance
             self._stats["avg_cons_b"] = round((self.fuel_b_accumulated / trip_b_dist) * 100.0,
                                               1) if trip_b_dist > 0.05 else 0.0
+        self._publish_stats()
 
     def reset_maintenance(self):
-        current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
+        current_odo = self.runtime.snapshot().domain("motion").get("odometer", self.last_saved_odo)
         self.last_revision_odo = current_odo
         if self.storage: self.storage.set("vehicle.last_revision_odo", current_odo)
         with self._stats_lock:
             self._stats["km_before_service"] = self._params["revision_interval"]["value"]
             self._stats["service_warning"] = False
+        self._publish_stats()
 
     def set_fuel_price(self, new_price: float):
         self.fuel_price = new_price
         if self.storage: self.storage.set("settings.last_fuel_price", new_price)
         with self._stats_lock:
             self._stats["fuel_price"] = new_price
+        self._publish_stats()
 
     def get_fuel_price(self):
         return self.fuel_price
@@ -208,7 +232,7 @@ class TripStatsService(BaseService):
     def stop(self):
         super().stop()
         try:
-            current_odo = self.api.get_display_data().get("odometer", self.last_saved_odo)
+            current_odo = self.runtime.snapshot().domain("motion").get("odometer", self.last_saved_odo)
             if self.storage:
                 self.storage.set_many({
                     "vehicle.last_odometer": current_odo,
@@ -229,18 +253,24 @@ class TripStatsService(BaseService):
                 dt = min(0.25, max(0.0, current_time - last_tick_time))
                 last_tick_time = current_time
 
-                safe_data = self.api.get_display_data()
-                current_odo = safe_data.get('odometer')
-                raw_fuel = safe_data.get('fuel_used')
-                current_speed = safe_data.get('speed', 0.0)
-                session_state = safe_data.get("session_state", "IDLE")
+                snapshot = self.runtime.snapshot()
+                powertrain = snapshot.domain("powertrain")
+                motion = snapshot.domain("motion")
+                session = snapshot.domain("session")
+                current_odo = motion.get('odometer')
+                raw_fuel = powertrain.get('fuel_used')
+                current_speed = motion.get('speed', 0.0)
+                session_state = session.get("state", "IDLE")
 
                 if current_odo is None:
                     stop_event.wait(0.1)
                     continue
 
                 with self._stats_lock:
-                    is_active = session_state == "RUNNING"
+                    # _accept_running closes the race where a loop that captured
+                    # RUNNING just before finish_session would otherwise write
+                    # into the freshly reset accumulator.
+                    is_active = session_state == "RUNNING" and self._accept_running
                     self._stats["is_active"] = is_active
                     if is_active != self._was_active:
                         self.inst_window.clear()
@@ -280,10 +310,23 @@ class TripStatsService(BaseService):
 
                     perfect_fuel_stream = self._absolute_fuel_session if is_active else None
 
-                self._calc_fast_telemetry(safe_data, dt, current_time, current_speed, perfect_fuel_stream)
+                telemetry_inputs = {
+                    "rpm": powertrain.get("rpm", 0),
+                    "accel_computed": powertrain.get("accel_computed", 0.0),
+                    "accel_pos": powertrain.get("accel_pos"),
+                    "driver_torque_request": powertrain.get("driver_torque_request"),
+                    "clutch": motion.get("clutch", False),
+                }
+                self._calc_fast_telemetry(
+                    telemetry_inputs, dt, current_time, current_speed, perfect_fuel_stream
+                )
 
                 if current_time - last_calc_time >= self.RATE_SLOW_TELEMETRY:
-                    self._calc_slow_telemetry(current_odo, perfect_fuel_stream, current_time)
+                    self._calc_slow_telemetry(
+                        current_odo, perfect_fuel_stream, current_time,
+                        powertrain.get("fuel_level", 0.0),
+                    )
+                    self._publish_stats()
                     last_calc_time = current_time
 
                 stop_event.wait(self.RATE_FAST_LOOP)
@@ -337,16 +380,16 @@ class TripStatsService(BaseService):
                 # Décélération sans accélérateur (souvent frein moteur). Ce n'est
                 # pas une vraie roue libre sans signal de rapport neutre/embrayage ouvert.
                 if torque_request is not None:
-                    is_coasting = float(torque_request) < 0.0
+                    is_decelerating = float(torque_request) < 0.0
                 else:
                     # Mode de repli (ex: si le signal CAN de couple n'est pas encore disponible)
                     accel_pos = data.get('accel_pos')
                     if accel_pos is not None:
-                        is_coasting = float(accel_pos) <= 0.0
+                        is_decelerating = float(accel_pos) <= 0.0
                     else:
-                        is_coasting = accel < 0.0
+                        is_decelerating = accel < 0.0
 
-                if is_coasting and current_speed > 5.0:
+                if is_decelerating and current_speed > 5.0:
                     self._deceleration_without_throttle_dist += current_speed * (dt / 3600.0)
 
                 if clutch and not self._is_shifting:
@@ -364,11 +407,10 @@ class TripStatsService(BaseService):
                     raw_g = dv / (dt_g * 9.81)
                     longitudinal_g = round((self._stats["longitudinal_g"] * 0.8) + (raw_g * 0.2), 2)
                     self._stats["longitudinal_g"] = longitudinal_g
-                    self._stats["g_force"] = longitudinal_g
                     self._prev_speed = current_speed
                     self._last_g_time = current_time
 
-    def _calc_slow_telemetry(self, current_odo, perfect_fuel, current_time):
+    def _calc_slow_telemetry(self, current_odo, perfect_fuel, current_time, fuel_level=None):
         if self.last_saved_odo == 0.0 and current_odo > 0:
             self.last_saved_odo = current_odo
             if self.trip_a_marker == 0.0:
@@ -400,7 +442,8 @@ class TripStatsService(BaseService):
                                                      1) if session_dist > 0.05 else 0.0
 
             reference_consumption = self._stats["avg_cons_session"] or self._stats["avg_cons_b"]
-            fuel_level = self.api.get_display_data().get("fuel_level", 0.0)
+            if fuel_level is None:
+                fuel_level = self.runtime.snapshot().domain("powertrain").get("fuel_level", 0.0)
             self._stats["autonomy"] = round(
                 max(0.0, float(fuel_level)) / reference_consumption * 100.0, 0
             ) if reference_consumption > 0.1 else 0.0
@@ -421,7 +464,6 @@ class TripStatsService(BaseService):
                 ) if self._engine_time > 0 else 0
                 decel_km = round(self._deceleration_without_throttle_dist, 1)
                 self._stats["deceleration_without_throttle_km"] = decel_km
-                self._stats["coasting_km"] = decel_km
                 self._stats["aggressivity_pct"] = round(
                     self._aggressive_time / self._motion_time * 100.0, 1
                 ) if self._motion_time > 0 else 0.0

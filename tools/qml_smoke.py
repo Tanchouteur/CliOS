@@ -1,6 +1,7 @@
 """Charge l'interface CliOS hors écran et produit des captures de référence."""
 
 import argparse
+import copy
 import os
 import sys
 
@@ -12,38 +13,63 @@ from PySide6.QtQuickControls2 import QQuickStyle
 
 
 class FakeBridge(QObject):
-    dataChanged = Signal()
     vehicleStateChanged = Signal()
-    statsChanged = Signal()
+    tripStateChanged = Signal()
+    diagnosticsStateChanged = Signal()
+    systemStateChanged = Signal()
+    sessionStateChanged = Signal()
+    calibrationStateChanged = Signal()
+    presentationStateChanged = Signal()
+    dataQualityChanged = Signal()
     configChanged = Signal()
-    systemHealthChanged = Signal()
-    storageStatusChanged = Signal()
-    diagDataChanged = Signal()
     notificationEvent = Signal(str, str, int)
 
     def __init__(self):
         super().__init__()
-        self._data = {
-            "system_version": "GT-smoke", "speed": 82.0, "rpm": 3850, "gear": "4",
-            "engine_temp": 92.0, "outside_temp": 23.5, "fuel_level": 31.5,
-            "odometer": 128430.0, "session_state": "RUNNING", "accel_pos": 42.0,
-            "accel_computed": 38.0, "driver_torque_request": 118.0, "clutch": False,
-            "brake": False, "regulateur_mode": 2, "regulateur_statut": 4,
-            "vitesse_regulateur": 90.0, "app_cpu_total_pct": 18.5, "app_ram_mb": 286.0,
-            "cabin_noise_db": 68.0, "driver_unbelted": False, "door_fl_open": False,
-            "door_fr_open": False, "door_rl_open": False, "door_rr_open": False,
-            "trunk_open": False, "wheel_slip_fl": False, "wheel_slip_fr": False,
-            "wheel_slip_rl": False, "wheel_slip_rr": False, "wheel_lock_fl": False,
-            "wheel_lock_fr": False, "wheel_lock_rl": False, "wheel_lock_rr": False,
+        self._vehicle_state = {
+            "powertrain": {
+                "rpm": 3850, "engine_temp": 92.0, "fuel_level": 31.5,
+                "accel_pos": 42.0, "accel_computed": 38.0,
+                "driver_torque_request": 58.0, "torque_available": 200.0,
+                "engine_load_pct": 58.0, "estimated_torque_nm": 112.0,
+                "estimated_power_kw": 45.1, "estimated_power_hp": 61.3,
+                "key_run": True,
+            },
+            "motion": {
+                "speed": 82.0, "gear": "4", "odometer": 128430.0,
+                "clutch": False, "brake": False,
+            },
+            "wheels": {
+                "wheel_slip_fl": False, "wheel_slip_fr": False,
+                "wheel_slip_rl": False, "wheel_slip_rr": False,
+                "wheel_lock_fl": False, "wheel_lock_fr": False,
+                "wheel_lock_rl": False, "wheel_lock_rr": False,
+            },
+            "body": {
+                "driver_unbelted": False, "door_fl_open": False,
+                "door_fr_open": False, "door_rl_open": False,
+                "door_rr_open": False, "trunk_open": False,
+            },
+            "assistance": {"regulateur_mode": 2, "regulateur_statut": 4, "vitesse_regulateur": 90.0},
+            "dynamics": {},
+            "environment": {"outside_temp": 23.5, "cabin_db_spl": 68.0, "cabin_freq_hz": 110},
+            "controls": {},
+            "alerts": {"engine_light": "OFF"},
         }
-        self._stats = {
+        self._trip_state = {
             "is_active": True, "distance_km": 48.6, "session_fuel_l": 4.18,
-            "session_cost": 7.52, "avg_rpm": 2740, "coasting_km": 8.4,
+            "session_cost": 7.52, "avg_rpm": 2740, "deceleration_without_throttle_km": 8.4,
             "aggressivity_pct": 31.0, "shift_time_sec": 0.43, "trip_a": 382.4,
-            "trip_b": 126.8, "inst_cons": 7.8, "avg_cons_b": 8.6,
+            "trip_b": 126.8, "trip_b_fuel": 10.9, "fuel_price": 1.80,
+            "inst_cons": 7.8, "avg_cons_b": 8.6,
             "avg_cons_session": 8.5, "autonomy": 412.0, "km_before_service": 7850.0,
-            "service_warning": False, "g_force": 0.18,
+            "service_warning": False, "longitudinal_g": 0.18,
         }
+        self._diagnostics_state = {"codes": [], "scanning": False, "has_scanned": True, "ignition_on": True}
+        self._session_state = {"state": "RUNNING"}
+        self._calibration_state = {"active": False, "ratio": 0.0, "count": 0, "gears_found": []}
+        self._presentation_state = {"startup_active": False, "domains": {}}
+        self._data_quality = {}
         self._config = {
             "theme": {"main": "#48B8FF"}, "ui": {"visual_style": "gt_modern"},
             "tachometer": {"max_rpm": 6000, "redline_rpm": 5100},
@@ -62,53 +88,49 @@ class FakeBridge(QObject):
                 ],
             },
         }
-        self._health = {
+        health = {
             "CAN_Moteur": {"status": "OK", "message": "Bus CAN connecté"},
             "Diag": {"status": "OK", "message": "Diagnostic prêt"},
             "TripStats": {"status": "OK", "message": "Calcul actif"},
             "EngineSound": {"status": "DISABLED", "message": "Désactivé"},
         }
-        self._storage = {"mode": "USB", "usb_connected": True, "free_space_mb": 24680.0}
-
-    @Property("QVariant", notify=dataChanged)
-    def data(self):
-        return self._data
+        storage = {"mode": "USB", "usb_connected": True, "free_space_mb": 24680.0}
+        self._system_state = {
+            "version": "GT-smoke",
+            "telemetry": {"app_cpu_total_pct": 18.5, "app_ram_mb": 286.0},
+            "health": health,
+            "storage": storage,
+        }
 
     @Property("QVariant", notify=vehicleStateChanged)
     def vehicleState(self):
-        return {}
+        return self._vehicle_state
 
-    @Property("QVariant", notify=statsChanged)
-    def stats(self):
-        return self._stats
-
-    @Property("QVariant", notify=statsChanged)
+    @Property("QVariant", notify=tripStateChanged)
     def tripState(self):
-        return self._stats
+        return self._trip_state
+
+    @Property("QVariant", notify=diagnosticsStateChanged)
+    def diagnosticsState(self): return self._diagnostics_state
+
+    @Property("QVariant", notify=systemStateChanged)
+    def systemState(self): return self._system_state
+
+    @Property("QVariant", notify=sessionStateChanged)
+    def sessionState(self): return self._session_state
+
+    @Property("QVariant", notify=calibrationStateChanged)
+    def calibrationState(self): return self._calibration_state
+
+    @Property("QVariant", notify=presentationStateChanged)
+    def presentationState(self): return self._presentation_state
+
+    @Property("QVariant", notify=dataQualityChanged)
+    def dataQuality(self): return self._data_quality
 
     @Property("QVariant", notify=configChanged)
     def config(self):
         return self._config
-
-    @Property("QVariant", notify=systemHealthChanged)
-    def systemHealth(self):
-        return self._health
-
-    @Property("QVariant", notify=storageStatusChanged)
-    def storageStatus(self):
-        return self._storage
-
-    @Property(bool, notify=diagDataChanged)
-    def isScanning(self):
-        return False
-
-    @Property(bool, notify=diagDataChanged)
-    def hasScanned(self):
-        return True
-
-    @Property("QVariantList", notify=diagDataChanged)
-    def diagnosticCodes(self):
-        return []
 
     @Slot(str, str)
     def save_setting(self, key, value):
@@ -161,6 +183,18 @@ class FakeBridge(QObject):
                     "outline": "#23354A", "gaugeTrack": "#142131",
                 },
                 "metrics": {"radiusSmall": 10, "radiusMedium": 18, "radiusLarge": 28, "borderWidth": 1},
+            },
+            {
+                "id": "atelier_luxe", "label": "Atelier Luxe",
+                "description": "Horlogerie et télémétrie de prestige",
+                "order": 5, "dashboard": "styles/atelier_luxe/Dashboard.qml",
+                "palette": {
+                    "background": "#070A0F", "surface": "#0F1622",
+                    "surfaceRaised": "#162030", "surfaceSoft": "#1E2C40",
+                    "text": "#F5F8FC", "textSecondary": "#BAC8D9",
+                    "outline": "#293A4E", "gaugeTrack": "#1B2533",
+                },
+                "metrics": {"radiusSmall": 10, "radiusMedium": 18, "radiusLarge": 26, "borderWidth": 1},
             },
         ]
 
@@ -238,16 +272,26 @@ def main():
     routes_by_style = {
         "gt_modern": ["drive", "trip", "performance", "diagnostic", "menu", "appearance", "vehicle", "services", "system", "developer"],
         "apex": ["drive", "perf", "menu"],
+        "atelier_luxe": ["main"],
+        "legacy_dashboard": ["main"],
     }
-    styles = ["gt_modern", "apex"]
+    styles = ["apex", "atelier_luxe", "gt_modern", "legacy_dashboard"]
     failures = []
 
     if args.output:
         os.makedirs(args.output, exist_ok=True)
 
     state = {"style": 0, "route": 0}
-    base_data = bridge._data.copy()
-    base_stats = bridge._stats.copy()
+    base_vehicle = copy.deepcopy(bridge._vehicle_state)
+    base_trip = copy.deepcopy(bridge._trip_state)
+    base_session = copy.deepcopy(bridge._session_state)
+    base_system = copy.deepcopy(bridge._system_state)
+
+    def emit_runtime():
+        bridge.vehicleStateChanged.emit()
+        bridge.tripStateChanged.emit()
+        bridge.sessionStateChanged.emit()
+        bridge.systemStateChanged.emit()
 
     def save_frame(name):
         if window.width() != 1920 or window.height() != 720:
@@ -267,13 +311,12 @@ def main():
             app.quit()
             return
         name = specials[idx]
-        bridge._data = base_data.copy()
-        bridge._stats = base_stats.copy()
-        bridge._storage = {"mode": "USB", "usb_connected": True, "free_space_mb": 24680.0}
-        bridge._health["CAN_Moteur"] = {"status": "OK", "message": "Bus CAN connecté"}
+        bridge._vehicle_state = copy.deepcopy(base_vehicle)
+        bridge._trip_state = copy.deepcopy(base_trip)
+        bridge._session_state = copy.deepcopy(base_session)
+        bridge._system_state = copy.deepcopy(base_system)
         bridge.save_setting("ui.visual_style", "gt_modern")
-        bridge.dataChanged.emit(); bridge.statsChanged.emit()
-        bridge.storageStatusChanged.emit(); bridge.systemHealthChanged.emit()
+        emit_runtime()
 
         if name == "legacy-dashboard":
             bridge.save_setting("ui.visual_style", "legacy_dashboard")
@@ -297,23 +340,25 @@ def main():
             banner.setProperty("shown", False)
 
         if name == "warnings":
-            bridge._data.update({
+            bridge._vehicle_state["powertrain"].update({
                 "rpm": 6800, "engine_temp": 111, "fuel_level": 4.0,
-                "driver_unbelted": True, "door_fl_open": True,
+            })
+            bridge._vehicle_state["body"].update({"driver_unbelted": True, "door_fl_open": True})
+            bridge._vehicle_state["alerts"].update({
                 "oil_warning": True, "battery_warning": True,
                 "abs_warning": True, "esp_warning": True, "engine_warning": True,
             })
-            bridge._storage = {"mode": "RAM", "usb_connected": False, "free_space_mb": 0.0}
-            bridge._health["CAN_Moteur"] = {"status": "ERROR", "message": "Bus indisponible"}
-            bridge.dataChanged.emit(); bridge.storageStatusChanged.emit(); bridge.systemHealthChanged.emit()
+            bridge._system_state["storage"] = {"mode": "RAM", "usb_connected": False, "free_space_mb": 0.0}
+            bridge._system_state["health"]["CAN_Moteur"] = {"status": "ERROR", "message": "Bus indisponible"}
+            emit_runtime()
         elif name == "paused":
-            bridge._data["session_state"] = "PAUSED"
-            bridge._stats["is_active"] = False
-            bridge.dataChanged.emit(); bridge.statsChanged.emit()
+            bridge._session_state["state"] = "PAUSED"
+            bridge._trip_state["is_active"] = False
+            emit_runtime()
         elif name == "missing-data":
-            bridge._data = {"system_version": "GT-smoke"}
-            bridge._stats = {}
-            bridge.dataChanged.emit(); bridge.statsChanged.emit()
+            bridge._vehicle_state = {}
+            bridge._trip_state = {}
+            emit_runtime()
         elif name == "confirmation":
             if dashboard is not None:
                 dashboard.askConfirmation("shutdown")
@@ -335,11 +380,16 @@ def main():
         bridge.save_setting("ui.visual_style", style)
 
         def navigate_and_capture():
-            object_name = "apexDashboardRoot" if style == "apex" else "dashboardRoot"
+            object_name = {
+                "apex": "apexDashboardRoot",
+                "atelier_luxe": "atelierLuxeDashboardRoot",
+                "gt_modern": "dashboardRoot",
+                "legacy_dashboard": "legacyDashboardRoot",
+            }[style]
             active_dashboard = window.findChild(QObject, object_name)
             if active_dashboard is None:
                 failures.append(f"dashboard introuvable: {style}")
-            else:
+            elif route != "main":
                 active_dashboard.navigate(route)
 
             QTimer.singleShot(400, capture)

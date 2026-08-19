@@ -1,5 +1,6 @@
 import QtQuick
 import "../../../style"
+import "../../../state" as S
 
 Item {
     id: root
@@ -7,13 +8,13 @@ Item {
     height: 400
 
     // --- Propriétés Publiques (Données Véhicule) ---
-    property real rpm: bridge.data.rpm !== undefined ? bridge.data.rpm : 0
-    property int max_rpm: bridge.config.tachometer.max_rpm !== undefined ? bridge.config.tachometer.max_rpm : 7000
+    property real rpm: S.UiState.rpm
+    property int max_rpm: S.UiState.maxRpm
 
-    property int idle_rpm: bridge.config.tachometer.idle_rpm !== undefined ? bridge.config.tachometer.idle_rpm : 800
-    property int redline_rpm: bridge.config.tachometer.redline_rpm !== undefined ? bridge.config.tachometer.redline_rpm : 6000
+    property int idle_rpm: S.UiState.idleRpm
+    property int redline_rpm: S.UiState.redlineRpm
 
-    property string currentGear: bridge.data.gear !== undefined ? bridge.data.gear : "Error"
+    property string currentGear: S.UiState.gear
 
     // --- Variables d'Animation ---
     property real smoothRpm: root.rpm

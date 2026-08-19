@@ -19,14 +19,14 @@ Item {
             Layout.preferredWidth: 300; Layout.minimumWidth: 300; Layout.maximumWidth: 300; Layout.fillHeight: true; title: "Commandes"
             ColumnLayout {
                 anchors.fill: parent; spacing: 14
-                GtMetric { Layout.fillWidth: true; label: "Accélérateur demandé"; value: S.UiState.fixed(S.UiState.vehicle.accel_pos, 0, "0"); unit: "%" }
-                GtProgress { Layout.fillWidth: true; height: 12; value: S.UiState.number(S.UiState.vehicle.accel_pos, 0) }
-                GtMetric { Layout.fillWidth: true; label: "Accélérateur réel"; value: S.UiState.fixed(S.UiState.vehicle.accel_computed, 0, "0"); unit: "%" }
-                GtProgress { Layout.fillWidth: true; height: 12; value: S.UiState.number(S.UiState.vehicle.accel_computed, 0); to: 237; fillColor: T.StyleManager.info }
+                GtMetric { Layout.fillWidth: true; label: "Accélérateur demandé"; value: S.UiState.fixed(S.UiState.throttle, 0, "0"); unit: "%" }
+                GtProgress { Layout.fillWidth: true; height: 12; value: S.UiState.throttle }
+                GtMetric { Layout.fillWidth: true; label: "Accélérateur réel"; value: S.UiState.fixed(S.UiState.accelComputed, 0, "0"); unit: "%" }
+                GtProgress { Layout.fillWidth: true; height: 12; value: S.UiState.accelComputed; to: 237; fillColor: T.StyleManager.info }
                 RowLayout {
                     Layout.fillWidth: true
-                    GtMetric { Layout.fillWidth: true; label: "Embray."; value: S.UiState.vehicle.clutch ? "ACTIF" : "LIBRE"; valueSize: 23 }
-                    GtMetric { Layout.fillWidth: true; label: "Frein"; value: S.UiState.vehicle.brake ? "ACTIF" : "LIBRE"; valueSize: 23; valueColor: S.UiState.vehicle.brake ? T.StyleManager.danger : T.StyleManager.text }
+                    GtMetric { Layout.fillWidth: true; label: "Embray."; value: S.UiState.clutchPressed ? "ACTIF" : "LIBRE"; valueSize: 23 }
+                    GtMetric { Layout.fillWidth: true; label: "Frein"; value: S.UiState.brakePressed ? "ACTIF" : "LIBRE"; valueSize: 23; valueColor: S.UiState.brakePressed ? T.StyleManager.danger : T.StyleManager.text }
                 }
             }
         }
@@ -67,7 +67,7 @@ Item {
             Layout.preferredWidth: 370; Layout.minimumWidth: 370; Layout.maximumWidth: 370; Layout.fillHeight: true; spacing: 14
             GtCard {
                 Layout.fillWidth: true; Layout.fillHeight: true; title: "Couple"
-                GtMetric { anchors.centerIn: parent; width: parent.width; label: "Demande conducteur"; value: S.UiState.fixed(S.UiState.vehicle.driver_torque_request, 0, "0"); unit: "Nm"; alignment: Text.AlignHCenter }
+                GtMetric { anchors.centerIn: parent; width: parent.width; label: "Demande conducteur"; value: S.UiState.fixed(S.UiState.driverTorqueRequest, 0, "0"); unit: "%"; alignment: Text.AlignHCenter }
             }
             GtCard {
                 Layout.fillWidth: true; Layout.fillHeight: true; title: "Dynamique des roues"
@@ -75,10 +75,10 @@ Item {
                     anchors.centerIn: parent; columns: 2; columnSpacing: 54; rowSpacing: 16
                     Repeater {
                         model: [
-                            {name:"AVG", slip:S.UiState.vehicle.wheel_slip_fl, lock:S.UiState.vehicle.wheel_lock_fl},
-                            {name:"AVD", slip:S.UiState.vehicle.wheel_slip_fr, lock:S.UiState.vehicle.wheel_lock_fr},
-                            {name:"ARG", slip:S.UiState.vehicle.wheel_slip_rl, lock:S.UiState.vehicle.wheel_lock_rl},
-                            {name:"ARD", slip:S.UiState.vehicle.wheel_slip_rr, lock:S.UiState.vehicle.wheel_lock_rr}
+                            {name:"AVG", slip:S.UiState.wheelSlipFl, lock:S.UiState.wheelLockFl},
+                            {name:"AVD", slip:S.UiState.wheelSlipFr, lock:S.UiState.wheelLockFr},
+                            {name:"ARG", slip:S.UiState.wheelSlipRl, lock:S.UiState.wheelLockRl},
+                            {name:"ARD", slip:S.UiState.wheelSlipRr, lock:S.UiState.wheelLockRr}
                         ]
                         Rectangle {
                             width: 90; height: 50; radius: T.StyleManager.radiusSmall
@@ -91,7 +91,7 @@ Item {
             }
             GtCard {
                 Layout.fillWidth: true; Layout.preferredHeight: 112; title: "Bruit cabine"
-                GtMetric { anchors.centerIn: parent; width: parent.width; label: "Niveau mesuré"; value: S.UiState.fixed(S.UiState.vehicle.cabin_noise_db, 0, "—"); unit: "dB"; alignment: Text.AlignHCenter; valueSize: 27 }
+                GtMetric { anchors.centerIn: parent; width: parent.width; label: "Niveau mesuré"; value: S.UiState.fixed(S.UiState.cabinDbSpl, 0, "—"); unit: "dB"; alignment: Text.AlignHCenter; valueSize: 27 }
             }
         }
     }

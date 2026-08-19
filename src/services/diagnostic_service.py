@@ -11,9 +11,9 @@ class DiagnosticService(BaseService):
     Gere le protocole de transport ISO-TP (Multi-trame) et le decodage DTC.
     """
 
-    def __init__(self, api, can_provider):
+    def __init__(self, runtime, can_provider):
         super().__init__("Diag")
-        self.api = api
+        self.runtime = runtime
         self.provider = can_provider
         self.thread = None
         self._scan_requested = threading.Event()
@@ -21,11 +21,11 @@ class DiagnosticService(BaseService):
         # File d'attente thread-safe pour les trames recues
         self._rx_buffer = collections.deque(maxlen=100)
 
-        self.api.update_domain("diagnostics", {
-            "diag_codes": [],
-            "diag_scanning": False,
-            "diag_has_scanned": False,
-            "diag_ignition_on": False
+        self.runtime.publish("diagnostics", {
+            "codes": [],
+            "scanning": False,
+            "has_scanned": False,
+            "ignition_on": False
         }, source="diagnostics")
 
     def start(self, stop_event: threading.Event):
@@ -51,15 +51,17 @@ class DiagnosticService(BaseService):
 
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
-            safe_data = self.api.get_display_data()
+            snapshot = self.runtime.snapshot()
+            powertrain = snapshot.domain("powertrain")
+            diagnostics = snapshot.domain("diagnostics")
             is_connected = self.provider.is_connected
-            ignition_on = safe_data.get("key_run", False)
+            ignition_on = powertrain.get("key_run", False)
 
-            self.api.update_domain("diagnostics", {"diag_ignition_on": ignition_on}, source="diagnostics")
+            self.runtime.publish("diagnostics", {"ignition_on": ignition_on}, source="diagnostics")
 
             if not is_connected:
                 self.set_error("Adaptateur CAN non detecte")
-            elif not safe_data.get("diag_scanning", False):
+            elif not diagnostics.get("scanning", False):
                 self.set_ok("Pret pour scan")
 
             if self._scan_requested.wait(timeout=0.5):
@@ -75,7 +77,7 @@ class DiagnosticService(BaseService):
         """
         Orchestre la requete OBD2 et la machine a etats de reception ISO-TP.
         """
-        self.api.update_domain("diagnostics", {"diag_scanning": True, "diag_codes": []}, source="diagnostics")
+        self.runtime.publish("diagnostics", {"scanning": True, "codes": []}, source="diagnostics")
         self.set_ok("Initialisation de la communication...")
         self._rx_buffer.clear()
 
@@ -155,7 +157,7 @@ class DiagnosticService(BaseService):
             self.print_message(f"[OBD2] Interruption anormale : {str(e)}")
             self.set_error("Echec d'analyse : " + str(e))
         finally:
-            self.api.update_domain("diagnostics", {"diag_scanning": False}, source="diagnostics")
+            self.runtime.publish("diagnostics", {"scanning": False}, source="diagnostics")
 
     def _decode_dtc_payload(self, payload):
         """
@@ -196,8 +198,8 @@ class DiagnosticService(BaseService):
             codes.append(dtc_str)
             self.print_message(f"[OBD2] DTC decode : {dtc_str}")
 
-        self.api.update_domain("diagnostics", {
-            "diag_codes": codes,
-            "diag_has_scanned": True
+        self.runtime.publish("diagnostics", {
+            "codes": codes,
+            "has_scanned": True
         }, source="diagnostics")
         self.set_ok(f"Termine. {len(codes)} defaut(s) lus.")

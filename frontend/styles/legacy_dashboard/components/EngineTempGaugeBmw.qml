@@ -1,5 +1,6 @@
 import QtQuick
 import "../../../style"
+import "../../../state" as S
 Item {
     id: gaugeRoot
 
@@ -9,11 +10,11 @@ Item {
     property real vanishingPointX: 0
     property real vanishingPointY: 0
 
-    property real engineTemp: bridge.data.engine_temp !== undefined ? bridge.data.engine_temp : 90.0
+    property real engineTemp: S.UiState.engineTemp
     property real smoothTemp: engineTemp
 
-    property real minTemp: bridge.config.engine_temp.min_display !== undefined ? bridge.config.engine_temp.min_display : 50.0
-    property real maxTemp: bridge.config.engine_temp.max_display !== undefined ? bridge.config.engine_temp.max_display : 130.0
+    property real minTemp: S.UiState.tempMin
+    property real maxTemp: S.UiState.tempMax
     property int intervalG: 40
 
     // --- Géométrie Interne ---

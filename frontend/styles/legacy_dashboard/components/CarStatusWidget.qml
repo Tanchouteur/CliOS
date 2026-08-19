@@ -1,5 +1,6 @@
 import QtQuick
 import "../../../style"
+import "../../../state" as S
 
 Item {
     id: widgetRoot
@@ -8,12 +9,12 @@ Item {
     width: 140
     height: 280
 
-    property bool doorFLOpen: bridge.data.door_fl_open ?? false
-    property bool doorFROpen: bridge.data.door_fr_open ?? false
-    property bool doorRLOpen: bridge.data.door_rl_open ?? false
-    property bool doorRROpen: bridge.data.door_rr_open ?? false
-    property bool trunkOpen: bridge.data.trunk_open ?? false
-    property bool seatbelt: bridge.data.driver_unbelted ?? false
+    property bool doorFLOpen: S.UiState.doorFlOpen
+    property bool doorFROpen: S.UiState.doorFrOpen
+    property bool doorRLOpen: S.UiState.doorRlOpen
+    property bool doorRROpen: S.UiState.doorRrOpen
+    property bool trunkOpen: S.UiState.trunkOpen
+    property bool seatbelt: S.UiState.driverUnbelted
 
     property bool isAnyDoorOpen: doorFLOpen || doorFROpen || doorRLOpen || doorRROpen || trunkOpen || seatbelt
 

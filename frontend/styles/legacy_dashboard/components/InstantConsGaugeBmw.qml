@@ -1,5 +1,6 @@
 import QtQuick
 import "../../../style"
+import "../../../state" as S
 
 Item {
     id: gaugeRoot
@@ -12,13 +13,13 @@ Item {
     property real vanishingPointY: 0
 
     property real maxInstCons: 20.0
-    property real avgConsTripB: bridge.stats.avg_cons_b ?? 0.0
-    property real avgConsSession: bridge.stats.avg_cons_session ?? 0.0
+    property real avgConsTripB: S.UiState.avgConsB
+    property real avgConsSession: S.UiState.avgConsSession
     property string referenceMode: "trip_b"
     property real avgCons: referenceMode === "session" ? avgConsSession : avgConsTripB
     property int intervalG: 5
 
-    property real instCons: bridge.stats.inst_cons ?? 0.0
+    property real instCons: S.UiState.instantCons
 
     property real smoothInstCons: instCons
 

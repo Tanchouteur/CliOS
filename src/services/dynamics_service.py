@@ -1,12 +1,13 @@
 import threading
 from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
+from src.state_store import StatePatch
 
 
 class DynamicsService(BaseService):
-    def __init__(self, api, config, storage=None):
+    def __init__(self, runtime, config, storage=None):
         super().__init__("Dynamics", storage)
-        self.api = api
+        self.runtime = runtime
         self.thread = None
 
         # Paramètres de détection de rapport.
@@ -17,8 +18,9 @@ class DynamicsService(BaseService):
         self._last_gear_speed = -100
 
         # Initialise l'état dynamique exposé à l'interface.
-        self.api.update({
-            "gear": "N",
+        self.runtime.publish_many((
+            StatePatch("motion", {"gear": "N"}, "dynamics"),
+            StatePatch("wheels", {
             "wheel_slip_fl": False,
             "wheel_slip_fr": False,
             "wheel_slip_rl": False,
@@ -27,8 +29,9 @@ class DynamicsService(BaseService):
             "wheel_lock_fr": False,
             "wheel_lock_rl": False,
             "wheel_lock_rr": False,
-            "dynamic_warning": "OK"
-        }, source="dynamics")
+            }, "dynamics"),
+            StatePatch("dynamics", {"dynamic_warning": "OK"}, "dynamics"),
+        ))
 
         self.register_param("min_speed", "Vitesse Min (km/h)", ServiceParamType.SLIDER, 5.0,
                             min_val=1.0, max_val=30.0)
@@ -52,15 +55,17 @@ class DynamicsService(BaseService):
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
             # Lit un snapshot cohérent des données véhicule.
-            safe_data = self.api.get_display_data()
+            snapshot = self.runtime.snapshot()
+            powertrain = snapshot.domain("powertrain")
+            motion = snapshot.domain("motion")
+            wheels = snapshot.domain("wheels")
 
-            # Compatibilité: supporte wheel_speed_fl et wheel_fl_speed selon la source.
-            w_fl = safe_data.get("wheel_speed_fl", safe_data.get("wheel_fl_speed", 0.0))
-            w_fr = safe_data.get("wheel_speed_fr", safe_data.get("wheel_fr_speed", 0.0))
-            w_rl = safe_data.get("wheel_speed_rl", safe_data.get("wheel_rl_speed", 0.0))
-            w_rr = safe_data.get("wheel_speed_rr", safe_data.get("wheel_rr_speed", 0.0))
+            w_fl = wheels.get("wheel_fl_speed", 0.0)
+            w_fr = wheels.get("wheel_fr_speed", 0.0)
+            w_rl = wheels.get("wheel_rl_speed", 0.0)
+            w_rr = wheels.get("wheel_rr_speed", 0.0)
 
-            v_ref = safe_data.get("speed", (w_fl + w_fr + w_rl + w_rr) / 4.0)
+            v_ref = motion.get("speed", (w_fl + w_fr + w_rl + w_rr) / 4.0)
 
             min_v = self._params["min_speed"]["value"]
             slip_mult = 1.0 + (self._params["slip_margin"]["value"] / 100.0)
@@ -84,9 +89,9 @@ class DynamicsService(BaseService):
                     updates[f"wheel_lock_{w}"] = False
 
             # Estime le rapport engagé à partir du ratio RPM/vitesse.
-            rpm = safe_data.get("rpm", 0)
-            clutch = safe_data.get("clutch", False)
-            reverse = safe_data.get("reverse_engaged", False)
+            rpm = powertrain.get("rpm", 0)
+            clutch = motion.get("clutch", False)
+            reverse = motion.get("reverse", False) or motion.get("reverse_engaged", False)
 
             if reverse:
                 updates["gear"] = "R"
@@ -105,9 +110,13 @@ class DynamicsService(BaseService):
                     self._last_gear_rpm = rpm
                     self._last_gear_speed = v_ref
                 else:
-                    updates["gear"] = safe_data.get("gear", "N")
+                    updates["gear"] = motion.get("gear", "N")
 
             if updates:
-                self.api.update(updates, source="dynamics", ttl_s=0.25)
+                gear = updates.pop("gear", None)
+                patches = [StatePatch("wheels", updates, "dynamics", ttl_s=0.25)]
+                if gear is not None:
+                    patches.append(StatePatch("motion", {"gear": gear}, "dynamics", ttl_s=0.25))
+                self.runtime.publish_many(patches)
 
             stop_event.wait(0.05)

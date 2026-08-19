@@ -2,20 +2,20 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../../../style" as T
+import "../../../state" as S
 
 Item {
     id: root
 
     // --- Variables d'état ---
-    property var codes: bridge.diagnosticCodes !== undefined ? bridge.diagnosticCodes : []
-    property bool isScanning: bridge.isScanning !== undefined ? bridge.isScanning : false
-    property bool hasScanned: bridge.hasScanned !== undefined ? bridge.hasScanned : false
+    property var codes: S.UiState.diagnosticCodes
+    property bool isScanning: S.UiState.isScanning
+    property bool hasScanned: S.UiState.hasScanned
     property bool hasErrors: codes.length > 0
 
-    property bool isIgnitionOn: bridge.data !== undefined && bridge.data["key_run"] === true
-    property bool isServiceReady: bridge.systemHealth !== undefined &&
-                                  bridge.systemHealth["Diag"] !== undefined &&
-                                  bridge.systemHealth["Diag"].status !== "ERROR"
+    property bool isIgnitionOn: S.UiState.ignitionOn
+    property bool isServiceReady: S.UiState.serviceHealth["Diag"] === undefined ||
+                                  S.UiState.serviceHealth["Diag"].status !== "ERROR"
 
     // --- Fonctions de style dynamiques ---
     function getStatusColor() {

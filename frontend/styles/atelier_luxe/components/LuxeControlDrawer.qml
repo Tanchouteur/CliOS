@@ -27,10 +27,10 @@ Item {
         { name: "Nacre Pure", code: "#F4F7FA" }
     ]
 
-    readonly property var serviceKeys: Object.keys(S.UiState.health)
+    readonly property var serviceKeys: Object.keys(S.UiState.serviceHealth)
 
     function adjustFuelPrice(delta) {
-        const current = S.UiState.number(S.UiState.trip.fuel_price, 1.70)
+        const current = S.UiState.number(S.UiState.fuelPrice, 1.70)
         const next = Math.max(0.50, Math.min(3.50, Math.round((current + delta) * 100) / 100))
         bridge.updateFuelPrice(next)
     }
@@ -410,7 +410,7 @@ Item {
                                     anchors.centerIn: parent
                                     spacing: 8
                                     Text {
-                                        text: S.UiState.fixed(S.UiState.trip.fuel_price, 2, "1,70")
+                                        text: S.UiState.fixed(S.UiState.fuelPrice, 2, "1,70")
                                         color: "#FFFFFF"
                                         font.family: T.StyleManager.fontFamily
                                         font.pixelSize: 48
@@ -463,11 +463,11 @@ Item {
                                         Layout.fillWidth: true
                                         height: 38
                                         radius: 6
-                                        color: Math.abs(S.UiState.number(S.UiState.trip.fuel_price, 1.70) - modelData) < 0.005 ? T.StyleManager.accent : "#121A28"
+                                        color: Math.abs(S.UiState.number(S.UiState.fuelPrice, 1.70) - modelData) < 0.005 ? T.StyleManager.accent : "#121A28"
                                         Text {
                                             anchors.centerIn: parent
                                             text: modelData.toFixed(2) + " €"
-                                            color: Math.abs(S.UiState.number(S.UiState.trip.fuel_price, 1.70) - modelData) < 0.005 ? "#000000" : "#BAC8D9"
+                                            color: Math.abs(S.UiState.number(S.UiState.fuelPrice, 1.70) - modelData) < 0.005 ? "#000000" : "#BAC8D9"
                                             font.pixelSize: 12
                                             font.bold: true
                                         }
@@ -532,7 +532,7 @@ Item {
                                     border.color: "#182436"
 
                                     property string serviceId: String(modelData)
-                                    property var details: S.UiState.health[serviceId] || ({})
+                                    property var details: S.UiState.serviceHealth[serviceId] || ({})
                                     property bool isRunning: details.status !== "DISABLED"
 
                                     RowLayout {

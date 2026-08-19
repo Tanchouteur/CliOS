@@ -5,10 +5,8 @@ import "../../../state" as S
 
 Item {
     id: root
-    property var trip: bridge.stats !== undefined ? bridge.stats : {}
-
     // Sécurité anti-division par zéro pour la jauge de décélération moteur
-    property real coastingPercent: (trip.distance_km > 0) ? (S.UiState.decelerationWithoutThrottleKm / trip.distance_km) : 0.0
+    property real coastingPercent: S.UiState.tripDistance > 0 ? S.UiState.decelerationWithoutThrottleKm / S.UiState.tripDistance : 0.0
 
     ColumnLayout {
         anchors.fill: parent
@@ -33,7 +31,7 @@ Item {
             // Indicateur d'enregistrement actif
             Row {
                 spacing: 8
-                visible: trip.is_active === true
+                visible: S.UiState.tripActive
                 Layout.alignment: Qt.AlignRight
 
                 Rectangle {
@@ -74,7 +72,7 @@ Item {
                     Layout.fillWidth: true
                     Text { text: "DISTANCE"; color: T.Theme.unselected; font.pixelSize: 14 }
                     Row {
-                        Text { text: trip.distance_km !== undefined ? trip.distance_km.toFixed(1) : "0.0"; color: T.Theme.textMain; font.pixelSize: 36; font.bold: true }
+                        Text { text: S.UiState.tripDistance.toFixed(1); color: T.Theme.textMain; font.pixelSize: 36; font.bold: true }
                         Text { text: " km"; color: T.Theme.main; font.pixelSize: 20; anchors.bottom: parent.bottom; anchors.bottomMargin: 4 }
                     }
                 }
@@ -88,7 +86,7 @@ Item {
                     Layout.leftMargin: 20
                     Text { text: "CARBURANT CONSOMMÉ"; color: T.Theme.unselected; font.pixelSize: 14 }
                     Row {
-                        Text { text: trip.session_fuel_l !== undefined ? trip.session_fuel_l.toFixed(2) : "0.00"; color: T.Theme.textMain; font.pixelSize: 36; font.bold: true }
+                        Text { text: S.UiState.tripFuelLiters.toFixed(2); color: T.Theme.textMain; font.pixelSize: 36; font.bold: true }
                         Text { text: " L"; color: T.Theme.mainLight; font.pixelSize: 20; anchors.bottom: parent.bottom; anchors.bottomMargin: 4 }
                     }
                 }
@@ -99,7 +97,7 @@ Item {
                     Text { text: "PRIX DU TRAJET"; color: T.Theme.unselected; font.pixelSize: 14 }
                     Row {
                         Text {
-                            text: trip.session_cost !== undefined ? trip.session_cost.toFixed(2) : "0.00"
+                            text: S.UiState.tripCost.toFixed(2)
                             color: T.Theme.textMain
                             font.pixelSize: 36
                             font.bold: true
@@ -140,7 +138,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Text { text: "Pression pédale moyenne :"; color: T.Theme.textMain; font.pixelSize: 16; Layout.fillWidth: true }
-                        Text { text: (trip.aggressivity_pct !== undefined ? trip.aggressivity_pct.toFixed(0) : "0") + " %"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
+                        Text { text: S.UiState.aggressivityPct.toFixed(0) + " %"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
                     }
 
                     // Décélération sans accélérateur
@@ -194,14 +192,14 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Text { text: "Régime moteur moyen :"; color: T.Theme.textMain; font.pixelSize: 16; Layout.fillWidth: true }
-                        Text { text: (trip.avg_rpm !== undefined ? trip.avg_rpm : "0") + " RPM"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
+                        Text { text: S.UiState.avgRpm.toFixed(0) + " RPM"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
                     }
 
                     // Shift Time
                     RowLayout {
                         Layout.fillWidth: true
                         Text { text: "Temps de passage rapport :"; color: T.Theme.textMain; font.pixelSize: 16; Layout.fillWidth: true }
-                        Text { text: (trip.shift_time_sec !== undefined ? trip.shift_time_sec.toFixed(2) : "0.00") + " s"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
+                        Text { text: S.UiState.shiftTimeSec.toFixed(2) + " s"; color: T.Theme.mainLight; font.pixelSize: 18; font.bold: true }
                     }
 
                     Item { Layout.fillHeight: true } // Pousse le contenu vers le haut

@@ -1,12 +1,13 @@
 import time
 import threading
+from src.state_store import StatePatch
 
 
 class PhysicsMockProvider:
     """Moteur physique temps reel avec simulation dynamique et boite manuelle."""
 
-    def __init__(self, api):
-        self.api = api
+    def __init__(self, runtime):
+        self.runtime = runtime
         self.is_connected = False
         self._running = False
 
@@ -40,7 +41,7 @@ class PhysicsMockProvider:
         last_time = time.time()
 
         # Ecriture initiale securisee
-        self.api.update({
+        self.runtime.publish("powertrain", {
             "ignition_on": True,
             "key_run": True
         }, source="physics-mock")
@@ -111,28 +112,32 @@ class PhysicsMockProvider:
                 gear_raw = 100
 
             # 5. Lecture securisee pour incrementation
-            safe_data = self.api.get_display_data()
-            current_odo = safe_data.get("odometer", 10000.0)
-            current_fuel = safe_data.get("fuel_used", 0.0)
+            snapshot = self.runtime.snapshot()
+            current_odo = snapshot.domain("motion").get("odometer", 10000.0)
+            current_fuel = snapshot.domain("powertrain").get("fuel_used", 0.0)
 
             fuel_rate = 0.001 + (self.throttle * 0.0005)
 
             # 6. Injection globale et securisee
-            updates = {
-                "speed": round(self.speed_kmh, 1),
+            self.runtime.publish_many((
+                StatePatch("powertrain", {
                 "rpm": int(self.rpm),
-                "wheel_speed_fl": round(front_speed, 1),
-                "wheel_speed_fr": round(front_speed, 1),
-                "wheel_speed_rl": round(rear_speed, 1),
-                "wheel_speed_rr": round(rear_speed, 1),
-                "gear_raw": gear_raw,
-                "odometer": current_odo + (self.speed_kmh * (dt / 3600.0)),
                 "fuel_used": current_fuel + (fuel_rate * dt),
                 "accel_pos": self.throttle,
+                "driver_torque_request": round(self.torque_request, 1),
+                }, "physics-mock", ttl_s=0.25),
+                StatePatch("motion", {
+                "speed": round(self.speed_kmh, 1),
+                "gear_raw": gear_raw,
+                "odometer": current_odo + (self.speed_kmh * (dt / 3600.0)),
                 "brake": self.brake > 0,
-                "driver_torque_request": round(self.torque_request, 1)
-            }
-
-            self.api.update(updates, source="physics-mock")
+                }, "physics-mock", ttl_s=0.25),
+                StatePatch("wheels", {
+                "wheel_fl_speed": round(front_speed, 1),
+                "wheel_fr_speed": round(front_speed, 1),
+                "wheel_rl_speed": round(rear_speed, 1),
+                "wheel_rr_speed": round(rear_speed, 1),
+                }, "physics-mock", ttl_s=0.25),
+            ))
 
             time.sleep(0.02)

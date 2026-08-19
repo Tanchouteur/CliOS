@@ -1,11 +1,27 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import "../../../style" as T
+import "../../../state" as S
 Item {
     id: root
 
-    property var vData: bridge.data !== undefined ? bridge.data : {}
-    property var vStats: bridge.stats !== undefined ? bridge.stats : {}
+    readonly property var vData: ({
+        clutch: S.UiState.clutchPressed,
+        brake: S.UiState.brakePressed,
+        accel_pos: S.UiState.throttle,
+        accel_computed: S.UiState.accelComputed,
+        wheel_slip_fl: S.UiState.wheelSlipFl,
+        wheel_slip_fr: S.UiState.wheelSlipFr,
+        wheel_slip_rl: S.UiState.wheelSlipRl,
+        wheel_slip_rr: S.UiState.wheelSlipRr,
+        wheel_lock_fl: S.UiState.wheelLockFl,
+        wheel_lock_fr: S.UiState.wheelLockFr,
+        wheel_lock_rl: S.UiState.wheelLockRl,
+        wheel_lock_rr: S.UiState.wheelLockRr,
+        driver_torque_request: S.UiState.estimatedTorque,
+        torque_available: S.UiState.availableTorque,
+        engine_load: S.UiState.engineLoad
+    })
 
     function getTireColor(isSlipping, isLocked) {
         if (isLocked) return "#ff0000"    // Rouge = Blocage
@@ -181,14 +197,14 @@ Item {
                     id: gBall
                     width: 24; height: 24; radius: 12; color: T.Theme.main
                     x: (parent.width / 2) - 12
-                    y: (parent.height / 2) - 12 - ((vStats.g_force !== undefined ? -(vStats.g_force) : 0.0) * 100)
+                    y: (parent.height / 2) - 12 + (S.UiState.longitudinalG * 100)
                     Behavior on y { NumberAnimation { duration: 100 } }
                 }
 
                 Text {
                     anchors.bottom: parent.top; anchors.bottomMargin: 10
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: (vStats.g_force !== undefined ? vStats.g_force : 0.0).toFixed(2) + " G"
+                    text: S.UiState.longitudinalG.toFixed(2) + " G"
                     color: "white"; font.pixelSize: 24; font.bold: true
                 }
             }
@@ -204,7 +220,7 @@ Item {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 radius: 12; color: T.Theme.bgDimmed
                 clip: true
-                property real maxTorque: 155
+                property real maxTorque: S.UiState.maxTorqueNm
 
                 Rectangle {
                     id: torqueAvailableBar

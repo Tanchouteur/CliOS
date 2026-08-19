@@ -1,7 +1,7 @@
 import unittest
 
-from src.state_store import VehicleStateStore
-from src.api import VehicleAPI
+from src.runtime import VehicleRuntime
+from src.state_store import StatePatch, VehicleStateStore
 
 
 class MemoryStorage:
@@ -10,37 +10,69 @@ class MemoryStorage:
 
 
 class VehicleStateStoreTest(unittest.TestCase):
-    def test_classifies_domains_and_keeps_flat_compatibility(self):
+    def test_requires_explicit_domains_and_returns_structured_snapshots(self):
         store = VehicleStateStore()
-        store.update({"rpm": 1800, "speed": 72.0, "door_fl_open": True}, source="can")
+        revision = store.publish_many((
+            StatePatch("powertrain", {"rpm": 1800}, "can", units={"rpm": "rpm"}),
+            StatePatch("motion", {"speed": 72.0}, "can", units={"speed": "km/h"}),
+            StatePatch("body", {"door_fl_open": True}, "can"),
+        ))
 
-        structured = store.domain_snapshot()
-        self.assertEqual(structured["powertrain"]["rpm"], 1800)
-        self.assertEqual(structured["motion"]["speed"], 72.0)
-        self.assertTrue(structured["body"]["door_fl_open"])
-        self.assertEqual(store.flat_snapshot()["rpm"], 1800)
+        snapshot = store.snapshot()
+        self.assertEqual(snapshot.domain("powertrain")["rpm"], 1800)
+        self.assertEqual(snapshot.domain("motion")["speed"], 72.0)
+        self.assertTrue(snapshot.domain("body")["door_fl_open"])
+        self.assertEqual(snapshot.domain_revisions["powertrain"], revision)
+        self.assertEqual(snapshot.domain_revisions["motion"], revision)
+        self.assertEqual(snapshot.domain_revisions["body"], revision)
+        self.assertFalse(hasattr(store, "flat_snapshot"))
 
-    def test_tracks_source_unit_and_freshness(self):
+    def test_rejects_unknown_domain(self):
         store = VehicleStateStore()
-        store.update({"speed": 42.0}, source="can:0x5D7")
+        with self.assertRaises(ValueError):
+            store.publish(StatePatch("misc", {"speed": 42}, "test"))
 
-        metadata = store.metadata_snapshot()["speed"]
+    def test_tracks_metadata_per_domain(self):
+        store = VehicleStateStore()
+        store.publish(StatePatch(
+            "motion", {"speed": 42.0}, "can:0x5D7", ttl_s=1.0,
+            units={"speed": "km/h"},
+        ))
+
+        metadata = store.metadata_snapshot()["motion"]["speed"]
         self.assertEqual(metadata["source"], "can:0x5D7")
         self.assertEqual(metadata["unit"], "km/h")
-        self.assertTrue(store.is_fresh("speed", 1.0))
-        self.assertFalse(store.is_fresh("unknown", 1.0))
+        self.assertEqual(metadata["quality"], "VALID")
 
     def test_quality_becomes_stale_after_signal_ttl(self):
         store = VehicleStateStore()
-        store.update({"rpm": 1200}, source="can", timestamp=0.0, ttl_s=0.1)
-        self.assertEqual(store.metadata_snapshot()["rpm"]["quality"], "STALE")
+        store.publish(StatePatch("powertrain", {"rpm": 1200}, "can", timestamp=0.0, ttl_s=0.1))
+        self.assertEqual(store.metadata_snapshot()["powertrain"]["rpm"]["quality"], "STALE")
 
-    def test_startup_overlay_never_feeds_backend_services(self):
-        api = VehicleAPI(MemoryStorage())
-        api.update({"rpm": 850.0, "speed": 0.0}, source="can")
-        with api.data_lock:
-            api.is_starting_up = True
-            api._startup_overlay = {"rpm": 7000.0, "speed": 200.0}
+    def test_startup_overlay_never_mutates_runtime_domains(self):
+        runtime = VehicleRuntime(MemoryStorage())
+        runtime.publish("powertrain", {"rpm": 850.0}, source="can")
+        runtime.publish("motion", {"speed": 0.0}, source="can")
+        with runtime._presentation_lock:
+            runtime._startup_active = True
+        runtime._set_startup_values({"rpm": 7000.0, "speed": 200.0})
 
-        self.assertEqual(api.get_display_data()["rpm"], 850.0)
-        self.assertEqual(api.get_presentation_data()["rpm"], 7000.0)
+        snapshot = runtime.snapshot()
+        presentation = runtime.presentation_snapshot()
+        self.assertEqual(snapshot.domain("powertrain")["rpm"], 850.0)
+        self.assertEqual(snapshot.domain("motion")["speed"], 0.0)
+        self.assertEqual(presentation["domains"]["powertrain"]["rpm"], 7000.0)
+        self.assertEqual(presentation["domains"]["motion"]["speed"], 200.0)
+
+    def test_mutable_values_are_isolated_from_publishers_and_readers(self):
+        store = VehicleStateStore()
+        codes = ["P0100"]
+        store.publish(StatePatch("diagnostics", {"codes": codes}, "test"))
+        codes.append("P0200")
+        snapshot = store.snapshot()
+        snapshot.domain("diagnostics")["codes"].append("P0300")
+        self.assertEqual(store.snapshot().domain("diagnostics")["codes"], ["P0100"])
+
+
+if __name__ == "__main__":
+    unittest.main()

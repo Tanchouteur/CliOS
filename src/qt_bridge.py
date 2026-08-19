@@ -5,31 +5,30 @@ import threading
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
 from src.logging_runtime import get_logger, get_recent_events
 from src.diagnostic_bundle import create_diagnostic_bundle
+from src.state_store import VEHICLE_DOMAINS
 
 
 class DashboardBridge(QObject):
     """Pont de communication sécurisé (Thread-Safe)."""
 
-    dataChanged = Signal()
     vehicleStateChanged = Signal()
+    tripStateChanged = Signal()
     diagnosticsStateChanged = Signal()
     systemStateChanged = Signal()
     sessionStateChanged = Signal()
+    calibrationStateChanged = Signal()
+    presentationStateChanged = Signal()
     dataQualityChanged = Signal()
-    diagDataChanged = Signal()
     configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
-    statsChanged = Signal()
-    systemHealthChanged = Signal()
-    storageStatusChanged = Signal()
 
-    def __init__(self, api, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
+    def __init__(self, runtime, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
         super().__init__()
         self.logger = get_logger("DashboardBridge")
         self.session_manager = session_manager
-        self.api = api
-        self.storage = getattr(api, "storage", None)
+        self.runtime = runtime
+        self.storage = getattr(runtime, "storage", None)
         self.led_service = led_service
         self.stats_service = stats_service
         self.diag_service = diag_service
@@ -45,16 +44,14 @@ class DashboardBridge(QObject):
         self._ui_styles_dir = os.path.join(project_root, "frontend", "styles")
 
         self._config_path = config_path
-        self._data = {}
         self._vehicle_state = {}
+        self._trip_state = {}
         self._diagnostics_state = {}
         self._system_state = {}
         self._session_state = {}
+        self._calibration_state = {}
+        self._presentation_state = {}
         self._data_quality = {}
-        self._stats = {}
-        self._system_health = {}
-        self._storage_status = self._read_storage_status()
-        self._diag_state = (False, False, ())
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
@@ -71,12 +68,7 @@ class DashboardBridge(QObject):
         self.timer_fast.timeout.connect(self._update_fast_data)
         self.timer_fast.start(16)
 
-        # 2. Voie Moyenne (24 Hz / 41ms) - Télémétrie et consommation
-        self.timer_medium = QTimer()
-        self.timer_medium.timeout.connect(self._update_stats)
-        self.timer_medium.start(41)
-
-        # 3. Voie Lente (1 Hz / 1000ms) - Sante du systeme et logs
+        # 2. Voie Lente (1 Hz / 1000ms) - Sante du systeme et qualité
         self.timer_slow = QTimer()
         self.timer_slow.timeout.connect(self._update_health)
         self.timer_slow.start(1000)
@@ -85,72 +77,51 @@ class DashboardBridge(QObject):
 
     # Boucles de rafraîchissement.
     def _update_fast_data(self):
-        new_data = self._sanitize_for_qml(self.api.get_presentation_data())
-        runtime = self._sanitize_for_qml(self.api.get_runtime_state())
-
-        if new_data != self._data:
-            self._data = new_data
-            self.dataChanged.emit()
-
-            new_diag_state = self._extract_diag_state(new_data)
-            if new_diag_state != self._diag_state:
-                self._diag_state = new_diag_state
-                self.diagDataChanged.emit()
-
-        vehicle_domains = (
-            "powertrain", "motion", "wheels", "body", "assistance", "dynamics", "environment"
-        )
-        new_vehicle_state = {name: runtime.get(name, {}) for name in vehicle_domains}
-        domain_revisions = runtime.get("_meta", {}).get("domain_revisions", {})
-        vehicle_revisions = {
-            name: domain_revisions.get(name, 0) for name in vehicle_domains
-        }
-        new_vehicle_state["_meta"] = {
-            "revision": max(vehicle_revisions.values(), default=0),
-            "domain_revisions": vehicle_revisions,
-        }
+        snapshot = self.runtime.snapshot()
+        new_vehicle_state = self._sanitize_for_qml(snapshot.as_dict(VEHICLE_DOMAINS))
         if new_vehicle_state != self._vehicle_state:
             self._vehicle_state = new_vehicle_state
             self.vehicleStateChanged.emit()
 
-        new_diagnostics = runtime.get("diagnostics", {})
+        new_trip = self._sanitize_for_qml(snapshot.domain("trip"))
+        if new_trip != self._trip_state:
+            self._trip_state = new_trip
+            self.tripStateChanged.emit()
+
+        new_diagnostics = self._sanitize_for_qml(snapshot.domain("diagnostics"))
         if new_diagnostics != self._diagnostics_state:
             self._diagnostics_state = new_diagnostics
             self.diagnosticsStateChanged.emit()
 
-        new_system = runtime.get("system", {})
-        if new_system != self._system_state:
-            self._system_state = new_system
-            self.systemStateChanged.emit()
-
-        new_session = runtime.get("session", {})
+        new_session = self._sanitize_for_qml(snapshot.domain("session"))
         if new_session != self._session_state:
             self._session_state = new_session
             self.sessionStateChanged.emit()
 
-    def _extract_diag_state(self, data: dict) -> tuple:
-        scanning = bool(data.get("diag_scanning", False))
-        has_scanned = bool(data.get("diag_has_scanned", False))
-        codes = tuple(data.get("diag_codes", []))
-        return scanning, has_scanned, codes
+        new_calibration = self._sanitize_for_qml(snapshot.domain("calibration"))
+        if new_calibration != self._calibration_state:
+            self._calibration_state = new_calibration
+            self.calibrationStateChanged.emit()
 
-    def _update_stats(self):
-        if self.stats_service:
-            new_stats = self._sanitize_for_qml(self.stats_service.stats.copy())
-            if new_stats != self._stats:
-                self._stats = new_stats
-                self.statsChanged.emit()
+        new_presentation = self._sanitize_for_qml(self.runtime.presentation_snapshot())
+        if new_presentation != self._presentation_state:
+            self._presentation_state = new_presentation
+            self.presentationStateChanged.emit()
 
     def _update_health(self):
-        new_health = self._sanitize_for_qml(self.orchestrator.get_system_health())
-        if new_health != self._system_health:
-            self._system_health = new_health
-            self.systemHealthChanged.emit()
-        new_storage_status = self._read_storage_status()
-        if new_storage_status != self._storage_status:
-            self._storage_status = new_storage_status
-            self.storageStatusChanged.emit()
-        new_quality = self._sanitize_for_qml(self.api.get_data_quality())
+        system = self.runtime.snapshot().domain("system")
+        version = system.get("system_version", "unknown")
+        telemetry = {key: value for key, value in system.items() if key != "system_version"}
+        new_system = self._sanitize_for_qml({
+            "version": version,
+            "telemetry": telemetry,
+            "health": self.orchestrator.get_system_health(),
+            "storage": self._read_storage_status(),
+        })
+        if new_system != self._system_state:
+            self._system_state = new_system
+            self.systemStateChanged.emit()
+        new_quality = self._sanitize_for_qml(self.runtime.metadata_snapshot())
         if new_quality != self._data_quality:
             self._data_quality = new_quality
             self.dataQualityChanged.emit()
@@ -182,13 +153,13 @@ class DashboardBridge(QObject):
 
         return str(value)
 
-    @Property('QVariant', notify=dataChanged)
-    def data(self):
-        return self._data
-
     @Property('QVariant', notify=vehicleStateChanged)
     def vehicleState(self):
         return self._vehicle_state
+
+    @Property('QVariant', notify=tripStateChanged)
+    def tripState(self):
+        return self._trip_state
 
     @Property('QVariant', notify=diagnosticsStateChanged)
     def diagnosticsState(self):
@@ -202,6 +173,14 @@ class DashboardBridge(QObject):
     def sessionState(self):
         return self._session_state
 
+    @Property('QVariant', notify=calibrationStateChanged)
+    def calibrationState(self):
+        return self._calibration_state
+
+    @Property('QVariant', notify=presentationStateChanged)
+    def presentationState(self):
+        return self._presentation_state
+
     @Property('QVariant', notify=dataQualityChanged)
     def dataQuality(self):
         return self._data_quality
@@ -209,22 +188,6 @@ class DashboardBridge(QObject):
     @Property('QVariant', notify=configChanged)
     def config(self):
         return self._config
-
-    @Property('QVariant', notify=statsChanged)
-    def stats(self):
-        return self._stats
-
-    @Property('QVariant', notify=statsChanged)
-    def tripState(self):
-        return self._stats
-
-    @Property('QVariant', notify=systemHealthChanged)
-    def systemHealth(self):
-        return self._system_health
-
-    @Property('QVariant', notify=storageStatusChanged)
-    def storageStatus(self):
-        return self._storage_status
 
     @Slot(result='QVariantList')
     def getAvailableUiStyles(self):
@@ -282,20 +245,7 @@ class DashboardBridge(QObject):
     def setSessionState(self, state: str):
         allowed = {"IDLE", "RUNNING", "PAUSED", "WAITING_IGNITION", "ENDING", "ENDED"}
         if state in allowed:
-            self.api.update_domain("session", {"session_state": state}, source="dashboard")
-
-    # Lit l'état local déjà sérialisé pour éviter les accès concurrents à l'API.
-    @Property(bool, notify=diagDataChanged)
-    def isScanning(self):
-        return bool(self._data.get("diag_scanning", False))
-
-    @Property(bool, notify=diagDataChanged)
-    def hasScanned(self):
-        return bool(self._data.get("diag_has_scanned", False))
-
-    @Property('QVariantList', notify=diagDataChanged)
-    def diagnosticCodes(self):
-        return list(self._data.get("diag_codes", []))
+            self.runtime.publish("session", {"state": state}, source="dashboard")
 
     @Slot()
     def resetTripB(self):
@@ -414,8 +364,7 @@ class DashboardBridge(QObject):
         else:
             self.orchestrator.stop_service(service_name)
 
-        self._system_health = self.orchestrator.get_system_health()
-        self.systemHealthChanged.emit()
+        self._update_health()
 
     def send_notification(self, level: str, message: str, duration: int = 3000):
         self.notificationEvent.emit(level, message, duration)

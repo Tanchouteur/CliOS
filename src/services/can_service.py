@@ -6,15 +6,17 @@ from src.parser import DbcParser
 from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
 from src.signal_processor import SignalProcessor
+from src.signal_catalog import definition_for
+from src.state_store import StatePatch
 
 
 class CanService(BaseService):
     """Service autonome gerant le bus CAN via SocketCAN."""
 
-    def __init__(self, name: str, api, storage, dbc_path: str, provider, obd_callback=None):
+    def __init__(self, name: str, runtime, storage, dbc_path: str, provider, obd_callback=None):
         super().__init__(name, storage)
         self.name = name
-        self.api = api
+        self.runtime = runtime
         self.thread = None
         self.obd_callback = obd_callback
 
@@ -61,13 +63,11 @@ class CanService(BaseService):
         valid_ids.update(range(0x7E8, 0x7F0))
 
         # Références locales pour réduire le coût d'accès en boucle.
-        api_update = self.api.update
+        publish_many = self.runtime.publish_many
         processor_decode = self.processor.decode
         obd_call = self.obd_callback
 
-        ui_refresh_rate = 1.0 / 60.0
-        last_ui_update = time.time()
-        batch_data = {}
+        last_error_publish = 0.0
 
         while not stop_event.is_set():
             if not self.provider.is_connected:
@@ -103,7 +103,25 @@ class CanService(BaseService):
                         else:
                             decoded = processor_decode(frame, db[msg_id])
                             if decoded:
-                                batch_data.update(decoded)
+                                grouped = {}
+                                units = {}
+                                ttls = {}
+                                for signal_name, value in decoded.items():
+                                    definition = definition_for(signal_name)
+                                    grouped.setdefault(definition.domain, {})[signal_name] = value
+                                    if definition.unit:
+                                        units.setdefault(definition.domain, {})[signal_name] = definition.unit
+                                    ttls[definition.domain] = definition.ttl_s
+                                publish_many(
+                                    StatePatch(
+                                        domain=domain,
+                                        values=values,
+                                        source=f"can:0x{msg_id:03X}",
+                                        ttl_s=ttls[domain],
+                                        units=units.get(domain, {}),
+                                    )
+                                    for domain, values in grouped.items()
+                                )
                                 self._last_decoded_frame_ts = now
                     except Exception as e:
                         self._decode_errors += 1
@@ -127,15 +145,11 @@ class CanService(BaseService):
                 else:
                     self.set_ok(f"Trames CAN reçues sur {self.provider.channel}.")
 
-            # Publie les données agrégées à cadence fixe.
-            if now - last_ui_update >= ui_refresh_rate:
-                if batch_data:
-                    api_update(batch_data, source="can", ttl_s=self._stale_timeout_s)
-                    self.api.update_domain(
-                        "system", {"can_decode_errors": self._decode_errors}, source="can-service"
-                    )
-                    batch_data.clear()
-                last_ui_update = now
+            if now - last_error_publish >= 1.0:
+                self.runtime.publish(
+                    "system", {"can_decode_errors": self._decode_errors}, source="can-service", ttl_s=2.5
+                )
+                last_error_publish = now
 
     def stop(self):
         if self._stop_event is not None:

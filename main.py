@@ -27,9 +27,9 @@ from src.services.notification_service import NotificationService
 from src.orchestrator import SystemOrchestrator
 from src.services.system_monitor_service import SystemMonitorService
 from src.services.trip_stats_service import TripStatsService
-from src.services.powertrain_metrics_service import PowertrainMetricsService
+from src.services.vehicle_metrics_service import VehicleMetricsService
 from src.storage import PersistentStorage
-from src.api import VehicleAPI
+from src.runtime import VehicleRuntime
 from src.qt_bridge import DashboardBridge
 from src.services.dynamics_service import DynamicsService
 from src.logging_runtime import init_logging, relocate_log_dir, set_global_context, shutdown_logging, get_logger
@@ -79,14 +79,14 @@ def load_system_version(root_dir: str) -> str:
         return "unknown"
 
 
-def setup_services(api, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir,
+def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir,
                    storage_dir, storage_manager):
     """Initialise et enregistre tous les services via une boucle propre."""
 
-    diag_service = DiagnosticService(api, can_provider)
+    diag_service = DiagnosticService(runtime, can_provider)
     can_service = CanService(
         name="CAN_Moteur",
-        api=api,
+        runtime=runtime,
         storage=storage,
         dbc_path=profile_manager.get_can_path(),
         provider=can_provider,
@@ -94,25 +94,25 @@ def setup_services(api, storage, orchestrator, can_provider, vehicle_config, pro
     )
 
     led_service = BleLedController(storage)
-    stats_service = TripStatsService(api, vehicle_config, storage)
-    dynamics_service = DynamicsService(api, vehicle_config, storage)
-    gear_calib_service = GearCalibrationService(api, storage, profile_manager, dynamics_service)
-    session_manager = TripSessionManager(api, storage, stats_service, storage_dir)
+    stats_service = TripStatsService(runtime, vehicle_config, storage)
+    dynamics_service = DynamicsService(runtime, vehicle_config, storage)
+    gear_calib_service = GearCalibrationService(runtime, storage, profile_manager, dynamics_service)
+    session_manager = TripSessionManager(runtime, storage, stats_service, storage_dir)
 
     services_to_register = [
         (can_service, "services.CAN_Moteur.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
-        (PowertrainMetricsService(api, vehicle_config, storage), "services.PowertrainMetrics.enabled", True),
+        (VehicleMetricsService(runtime, vehicle_config, storage), "services.VehicleMetrics.enabled", True),
         (dynamics_service, "services.Dynamics.enabled", True),
         (gear_calib_service, "services.GearCalibration.enabled", True),
-        (SystemMonitorService(api, storage), "services.Monitor.enabled", True),
-        (EngineSoundService(api, storage, engine_path=engine_dir), "services.EngineSound.enabled", False),
-        (CabinNoiseService(api, storage), "services.Noise.enabled", True),
+        (SystemMonitorService(runtime, storage), "services.Monitor.enabled", True),
+        (EngineSoundService(runtime, storage, engine_path=engine_dir), "services.EngineSound.enabled", False),
+        (CabinNoiseService(runtime, storage), "services.Noise.enabled", True),
         (led_service, "services.Leds.enabled", True),
-        (PowerManagementService(api, storage, orchestrator), "services.PowerManager.enabled", True),
+        (PowerManagementService(runtime, storage, orchestrator), "services.PowerManager.enabled", True),
         (session_manager, "services.SessionManager.enabled", True),
-        (UsbStorageService(api, storage, storage_manager), None, True),
+        (UsbStorageService(runtime, storage, storage_manager), None, True),
     ]
 
     # Rétrocompatibilité: anciennes sauvegardes utilisaient services.Can.enabled
@@ -157,7 +157,7 @@ def main():
     SAVE_DASH_DIR = storage_mgr.resolve_path("dash_save")
     ENGINE_DIR = os.path.join(BASE_DIR, "assets", "sounds", "engine")
 
-    # --- 2. Initialisation Core (Fichiers, BDD, API) ---
+    # --- 2. Initialisation Core (Fichiers, BDD, Runtime) ---
     profile_manager = ProfileManager(
         CONFIG_DIR,
         CAN_DIR,
@@ -168,21 +168,21 @@ def main():
     vehicle_config = profile_manager.load_active_config()
 
     storage = PersistentStorage(profile_manager.get_save_path())
-    api = VehicleAPI(storage)
+    runtime = VehicleRuntime(storage)
 
     # Charge la version applicative et l'expose à l'interface.
     app_version = load_system_version(BASE_DIR)
     set_global_context(app_version=app_version)
-    api.update_domain("system", {"system_version": app_version}, source="application")
+    runtime.publish("system", {"system_version": app_version}, source="application")
     logger.info("Demarrage de ClOS", extra={"error_code": "APP_START"})
 
-    api.run_startup_sequence(duration_sec=1.5)
+    runtime.run_startup_sequence(duration_sec=1.5)
 
     orchestrator = SystemOrchestrator()
 
     # --- 3. Initialisation Hardware ---
     if args.mock:
-        can_provider = PhysicsMockProvider(api)
+        can_provider = PhysicsMockProvider(runtime)
     else:
         can_provider = Slcan()
 
@@ -191,7 +191,7 @@ def main():
 
     # --- 4. Branchement des Services ---
     led_srv, stats_srv, diag_srv, gear_calib_srv, session_manager = setup_services(
-        api, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR,
+        runtime, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR,
         storage_mgr
     )
 
@@ -226,7 +226,7 @@ def main():
         if args.ui == 'cli':
             cli_stop_event = threading.Event()
             orchestrator.start_all()
-            ui_loop(api, cli_stop_event)
+            ui_loop(runtime, cli_stop_event)
 
         elif args.ui == 'gui':
             QQuickStyle.setStyle("Basic")
@@ -235,7 +235,7 @@ def main():
 
             # Connexion du Bridge
             bridge = DashboardBridge(
-                api,
+                runtime,
                 profile_manager.get_config_path(),
                 orchestrator=orchestrator,
                 led_service=led_srv,
@@ -251,10 +251,10 @@ def main():
             engine.rootContext().setContextProperty("bridge", bridge)
 
             # Notifications Système
-            notif_service = NotificationService(bridge, storage)
+            notif_service = NotificationService(runtime, bridge.send_notification, storage)
             orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
 
-            exp_service = ExportService(bridge, storage, storage_mgr.resolve_path(folder_name))
+            exp_service = ExportService(bridge.send_notification, storage, storage_mgr.resolve_path(folder_name))
             runtime_targets["export"] = exp_service
             orchestrator.add_service(exp_service, enabled=storage.get("services.Export.enabled", True))
 

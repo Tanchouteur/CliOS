@@ -1,5 +1,6 @@
 import QtQuick
 import "../../../style"
+import "../../../state" as S
 
 Item {
     id: root
@@ -7,12 +8,12 @@ Item {
     height: 400
 
     // --- Propriétés Publiques (Données Véhicule) ---
-    property real speed: bridge.data.speed !== undefined ? bridge.data.speed : 0
-    property int max_speed: bridge.config.speedometer.max_speed !== undefined ? bridge.config.speedometer.max_speed : 260
+    property real speed: S.UiState.speed
+    property int max_speed: S.UiState.maxSpeed
 
-    property real targetSpeed: bridge.data.vitesse_regulateur !== undefined ? bridge.data.vitesse_regulateur : 0
-    property int regMode: bridge.data.regulateur_mode !== undefined ? bridge.data.regulateur_mode : 0
-    property int regStatut: bridge.data.regulateur_statut !== undefined ? bridge.data.regulateur_statut : 0
+    property real targetSpeed: S.UiState.cruiseTarget
+    property string regMode: S.UiState.cruiseMode
+    property string regStatut: S.UiState.cruiseStatus
 
     // --- Variables d'Animation ---
     property real smoothSpeed: root.speed
@@ -135,17 +136,17 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 radius: 2
-                property int safeMode: Math.round(root.regMode)
-                property int safeStatut: Math.round(root.regStatut)
+                property string safeMode: root.regMode
+                property string safeStatut: root.regStatut
 
                 // Coloration selon l'état du régulateur
                 color: {
-                    if (safeMode === 2 && safeStatut === 4) return Theme.redLine; // Régulateur Actif
-                    if (safeMode === 3 && safeStatut === 4) return "#ffa500"; // Limiteur Actif
+                    if (safeMode === "REG" && safeStatut === "ACTIF") return Theme.redLine; // Régulateur Actif
+                    if (safeMode === "LIM" && safeStatut === "ACTIF") return "#ffa500"; // Limiteur Actif
                     return Theme.unselected; // En attente
                 }
                 border.color: "white"
-                border.width: (safeMode > 0 && safeStatut === 4) ? 1 : 0
+                border.width: (safeMode !== "OFF" && safeStatut === "ACTIF") ? 1 : 0
             }
         }
 

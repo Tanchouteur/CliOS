@@ -152,7 +152,7 @@ Item {
                     Repeater {
                         model: [
                             { label: "ACCÉLÉRATEUR", value: Math.min(1, S.UiState.throttle / 100), text: S.UiState.fixed(S.UiState.throttle, 0, "0") + " %", color: T.StyleManager.accent },
-                            { label: "CHARGE LATÉRALE", value: Math.min(1, Math.abs(S.UiState.gForce)), text: S.UiState.fixed(S.UiState.gForce, 2, "0,00") + " G", color: "#FFB84D" }
+                            { label: "ACCÉLÉRATION LONG.", value: Math.min(1, Math.abs(S.UiState.longitudinalG)), text: S.UiState.fixed(S.UiState.longitudinalG, 2, "0,00") + " G", color: "#FFB84D" }
                         ]
                         delegate: Rectangle {
                             Layout.fillWidth: true

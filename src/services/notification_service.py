@@ -6,9 +6,10 @@ from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
 
 class NotificationService(BaseService):
-    def __init__(self, bridge, storage=None):
+    def __init__(self, runtime, notifier, storage=None):
         super().__init__("Notification", storage)
-        self.bridge = bridge
+        self.runtime = runtime
+        self._notifier = notifier
         self._states = {
             "obd_lost_notified": False,
             "clutch_start_time": None,
@@ -36,7 +37,7 @@ class NotificationService(BaseService):
         if not data:
             return
         current_time = time.time()
-        # Utilise le snapshot API reçu pour éviter les lectures concurrentes.
+        # Utilise le snapshot reçu pour éviter les lectures concurrentes.
         self._check_clutch_pressed(data.get('clutch', False), current_time, data)
 
     def _run(self, stop_event):
@@ -45,11 +46,11 @@ class NotificationService(BaseService):
 
         while not stop_event.is_set():
             try:
-                if self.bridge and hasattr(self.bridge, 'api'):
-                    safe_data = self.bridge.api.get_display_data()
-                    self.check_data(safe_data)
-                else:
-                    self.print_message("[ERREUR] Le bridge ou l'API n'est pas accessible.")
+                snapshot = self.runtime.snapshot()
+                data = {}
+                data.update(snapshot.domain("powertrain"))
+                data.update(snapshot.domain("motion"))
+                self.check_data(data)
             except Exception as e:
                 self.print_message(f"\n[ERREUR FATALE] Le service a planté : {e}")
                 traceback.print_exc()
@@ -73,11 +74,11 @@ class NotificationService(BaseService):
             if self._states["clutch_start_time"] is None:
                 self._states["clutch_start_time"] = current_time
             elif (current_time - self._states["clutch_start_time"] > time_limit) and not self._states["clutch_warned"] and current_speed > min_speed:
-                self.bridge.send_notification("WARNING", "ATTENTION : EMBRAYAGE SOLLICITÉ", duration)
+                self._notifier("WARNING", "ATTENTION : EMBRAYAGE SOLLICITÉ", duration)
                 self._states["clutch_warned"] = True
         else:
             self._states["clutch_start_time"] = None
             self._states["clutch_warned"] = False
 
     def send_notification(self,level: str ,message: str, duration: int):
-        self.bridge.send_notification(level ,message, duration)
+        self._notifier(level, message, duration)

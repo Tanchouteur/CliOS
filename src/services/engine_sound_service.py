@@ -8,9 +8,9 @@ from src.services.param_types import ServiceParamType
 
 
 class EngineSoundService(BaseService):
-    def __init__(self, api, storage, engine_path):
+    def __init__(self, runtime, storage, engine_path):
         super().__init__("EngineSound", storage)
-        self.api = api
+        self.runtime = runtime
         self.server = None
         self.engine_path = engine_path
 
@@ -207,9 +207,10 @@ class EngineSoundService(BaseService):
     def _run(self, stop_event: threading.Event):
         while not stop_event.is_set():
             if self.status.value == "OK" and self.server:
-                safe_data = self.api.get_display_data()
-
-                rpm = safe_data.get("rpm", 0.0)
+                snapshot = self.runtime.snapshot()
+                powertrain = snapshot.domain("powertrain")
+                motion = snapshot.domain("motion")
+                rpm = powertrain.get("rpm", 0.0)
 
                 if rpm < 100.0:
                     self.master_vol_ctrl.value = 0.0
@@ -221,9 +222,9 @@ class EngineSoundService(BaseService):
                     time.sleep(0.1)
                     continue
 
-                throttle = safe_data.get("accel_pos", 0.0) / 100.0
-                speed = safe_data.get("speed", 0.0)
-                raw_torque = safe_data.get("driver_torque_request")
+                throttle = powertrain.get("accel_pos", 0.0) / 100.0
+                speed = motion.get("speed", 0.0)
+                raw_torque = powertrain.get("driver_torque_request")
 
                 if raw_torque is not None:
                     engine_load = max(0.0, float(raw_torque)) / 100.0

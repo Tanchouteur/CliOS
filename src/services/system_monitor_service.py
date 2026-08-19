@@ -9,9 +9,9 @@ from src.services.param_types import ServiceParamType
 class SystemMonitorService(BaseService):
     """Surveille la consommation CPU/RAM globale et par service."""
 
-    def __init__(self, api, storage=None):
+    def __init__(self, runtime, storage=None):
         super().__init__("Monitor", storage)
-        self.api = api
+        self.runtime = runtime
 
         self.process = psutil.Process(os.getpid())
         self.last_thread_times = {}
@@ -88,8 +88,13 @@ class SystemMonitorService(BaseService):
 
                 self.last_thread_times = current_thread_times
 
-                # Ecriture securisee via le Lock de l'API
-                self.api.update_domain("system", updates, source="system-monitor")
+                # Publication thread-safe dans le runtime.
+                units = {key: "%" for key in updates if key.startswith("app_cpu_")}
+                units["app_ram_mb"] = "MB"
+                self.runtime.publish(
+                    "system", updates, source="system-monitor", ttl_s=sleep_time * 2.5,
+                    units=units,
+                )
 
                 cpu_limit = self._params["cpu_alert"]["value"]
                 ram_limit = self._params["ram_alert"]["value"]
@@ -100,8 +105,8 @@ class SystemMonitorService(BaseService):
                     self.set_ok("Ressources nominales.")
 
                 if self._params["console_debug"]["value"]:
-                    # Lecture securisee via la copie de l'API pour ne pas bloquer les autres threads
-                    safe_data = self.api.get_display_data()
+                    # Lecture d'un snapshot cohérent sans bloquer les producteurs.
+                    safe_data = self.runtime.snapshot().domain("system")
 
                     print("\n" + "=" * 45)
                     print(
