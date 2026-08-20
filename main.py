@@ -250,11 +250,6 @@ def main():
             bridge.storage = storage
             engine.rootContext().setContextProperty("bridge", bridge)
 
-            # Installation du filtre de geste tactile 4 doigts (transparent pour le tactile normal)
-            from src.qt_bridge import TouchGestureFilter
-            touch_filter = TouchGestureFilter(bridge, app)
-            app.installEventFilter(touch_filter)
-
             # Notifications Système
             notif_service = NotificationService(runtime, bridge.send_notification, storage)
             orchestrator.add_service(notif_service, enabled=storage.get("services.Notification", True))
@@ -263,14 +258,12 @@ def main():
             runtime_targets["export"] = exp_service
             orchestrator.add_service(exp_service, enabled=storage.get("services.Export.enabled", True))
 
-            # Lancement QML immédiat (First-Frame First : affichage prioritaire)
+            orchestrator.start_all()
+
+            # Lancement QML
             engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
             if not engine.rootObjects():
                 sys.exit(-1)
-
-            # Démarrage des services d'arrière-plan dès le premier tick d'affichage
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, orchestrator.start_all)
 
             # Outils de Mock
             mock_panel = None

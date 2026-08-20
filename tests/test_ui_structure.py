@@ -83,6 +83,8 @@ class MockBridge(QObject):
     def toggleOverlayFs(self): pass
     @Slot()
     def rebootSystem(self): pass
+    @Slot()
+    def openMaintenanceMenu(self): pass
 
 
 class UiStructureTest(unittest.TestCase):
