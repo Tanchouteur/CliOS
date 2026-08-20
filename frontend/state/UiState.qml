@@ -54,30 +54,67 @@ QtObject {
     readonly property real revisionIntervalKm: number(config.maintenance && config.maintenance.revision && config.maintenance.revision.interval_km, 20000)
     readonly property real revisionWarningKm: number(config.maintenance && config.maintenance.revision && config.maintenance.revision.warning_threshold_km, 2000)
 
+    // Signaux bruts d'entrée
+    readonly property real rawSpeed: signalFresh("motion", "speed") ? number(motion.speed, 0) : 0
+    readonly property real rawRpm: signalFresh("powertrain", "rpm") ? number(powertrain.rpm, 0) : 0
+    readonly property real rawEngineTemp: number(powertrain.engine_temp, 0)
+    readonly property real rawOutsideTemp: number(environment.outside_temp, 0)
+    readonly property real rawFuelLevel: number(powertrain.fuel_level, 0)
+    readonly property real rawThrottle: number(powertrain.accel_pos, 0)
+    readonly property real rawDriverTorqueRequest: number(powertrain.driver_torque_request, 0)
+    readonly property real rawEcuTorqueAvailablePct: number(powertrain.torque_available, 0)
+    readonly property real rawEngineLoad: number(powertrain.engine_load_pct, 0)
+    readonly property real rawAvailableTorque: number(powertrain.available_torque_nm, maxTorqueNm)
+    readonly property real rawEstimatedTorque: number(powertrain.estimated_torque_nm, 0)
+    readonly property real rawPower: number(powertrain.estimated_power_kw, 0)
+    readonly property real rawPowerHp: number(powertrain.estimated_power_hp, 0)
+    readonly property real rawInstantCons: number(tripState.inst_cons, 0)
+    readonly property real rawCabinDbSpl: number(environment.cabin_db_spl, 0)
+    readonly property real rawLongitudinalG: number(tripState.longitudinal_g, 0)
+    readonly property real rawSteeringAngle: number(dynamics.steering_angle, 0)
+    readonly property real rawSteeringSpeed: number(dynamics.steering_speed, 0)
+    readonly property real rawWheelSpeedFl: number(wheels.wheel_fl_speed, 0)
+    readonly property real rawWheelSpeedFr: number(wheels.wheel_fr_speed, 0)
+    readonly property real rawWheelSpeedRl: number(wheels.wheel_rl_speed, 0)
+    readonly property real rawWheelSpeedRr: number(wheels.wheel_rr_speed, 0)
+
     // =========================================================================
     // 3. MÉTROLOGIE MOTEUR, VITESSE & TRANSMISSION
     // =========================================================================
-    readonly property real speed: signalFresh("motion", "speed") ? number(motion.speed, 0) : 0
-    readonly property real rpm: signalFresh("powertrain", "rpm") ? number(powertrain.rpm, 0) : 0
+    property real speed: rawSpeed
+    property real rpm: rawRpm
     readonly property string gear: text(motion.gear, "N")
-    readonly property real engineTemp: number(powertrain.engine_temp, 0)
-    readonly property real outsideTemp: number(environment.outside_temp, 0)
-    readonly property real fuelLevel: number(powertrain.fuel_level, 0)
+    property real engineTemp: rawEngineTemp
+    property real outsideTemp: rawOutsideTemp
+    property real fuelLevel: rawFuelLevel
     readonly property real odometer: number(motion.odometer, 0)
     readonly property string sessionState: text(sessionRuntimeState.state, "IDLE")
 
     // Pédales & Couple
-    readonly property real throttle: number(powertrain.accel_pos, 0)
-    readonly property real pedalPos: throttle
+    property real throttle: rawThrottle
+    property real pedalPos: throttle
     readonly property real accelComputed: number(powertrain.accel_computed, 0)
-    readonly property real driverTorqueRequest: number(powertrain.driver_torque_request, 0)
-    readonly property real ecuTorqueAvailablePct: number(powertrain.torque_available, 0)
-    readonly property real engineLoad: number(powertrain.engine_load_pct, 0)
-    readonly property real availableTorque: number(powertrain.available_torque_nm, maxTorqueNm)
-    readonly property real estimatedTorque: number(powertrain.estimated_torque_nm, 0)
-    readonly property real torque: estimatedTorque
-    readonly property real power: number(powertrain.estimated_power_kw, 0)
-    readonly property real powerHp: number(powertrain.estimated_power_hp, 0)
+    property real driverTorqueRequest: rawDriverTorqueRequest
+    property real ecuTorqueAvailablePct: rawEcuTorqueAvailablePct
+    property real engineLoad: rawEngineLoad
+    property real availableTorque: rawAvailableTorque
+    property real estimatedTorque: rawEstimatedTorque
+    property real torque: estimatedTorque
+    property real power: rawPower
+    property real powerHp: rawPowerHp
+
+    // Lissage temporel adapté à l'inertie de chaque grandeur physique
+    Behavior on speed { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
+    Behavior on rpm { NumberAnimation { duration: 70; easing.type: Easing.OutQuad } }
+    Behavior on engineTemp { NumberAnimation { duration: 700; easing.type: Easing.OutCubic } }
+    Behavior on outsideTemp { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
+    Behavior on fuelLevel { NumberAnimation { duration: 1200; easing.type: Easing.OutCubic } }
+    Behavior on throttle { NumberAnimation { duration: 60; easing.type: Easing.OutQuad } }
+    Behavior on driverTorqueRequest { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+    Behavior on engineLoad { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
+    Behavior on estimatedTorque { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
+    Behavior on power { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
+    Behavior on powerHp { NumberAnimation { duration: 100; easing.type: Easing.OutQuad } }
 
     // État mécanique
     readonly property bool brakePressed: boolValue(motion.brake) || boolValue(motion.brake_pressed)
@@ -121,21 +158,29 @@ QtObject {
     readonly property real tripA: number(tripState.trip_a, 0)
     readonly property real tripB: number(tripState.trip_b, 0)
     readonly property real tripBFuel: number(tripState.trip_b_fuel, 0)
-    readonly property real instantCons: number(tripState.inst_cons, 0)
+    property real instantCons: rawInstantCons
     readonly property real avgConsB: number(tripState.avg_cons_b, 0)
     readonly property real avgConsSession: number(tripState.avg_cons_session, 0)
     readonly property real autonomy: number(tripState.autonomy, 0)
     readonly property real kmBeforeService: number(tripState.km_before_service, 0)
     readonly property bool serviceWarning: boolValue(tripState.service_warning)
-    readonly property real longitudinalG: number(tripState.longitudinal_g, 0)
+    property real longitudinalG: rawLongitudinalG
+
+    Behavior on instantCons { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+    Behavior on longitudinalG { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
 
     // =========================================================================
     // 6. CHÂSSIS, ROUES & DYNAMIQUE (DynamicsService)
     // =========================================================================
-    readonly property real wheelSpeedFl: number(wheels.wheel_fl_speed, 0)
-    readonly property real wheelSpeedFr: number(wheels.wheel_fr_speed, 0)
-    readonly property real wheelSpeedRl: number(wheels.wheel_rl_speed, 0)
-    readonly property real wheelSpeedRr: number(wheels.wheel_rr_speed, 0)
+    property real wheelSpeedFl: rawWheelSpeedFl
+    property real wheelSpeedFr: rawWheelSpeedFr
+    property real wheelSpeedRl: rawWheelSpeedRl
+    property real wheelSpeedRr: rawWheelSpeedRr
+
+    Behavior on wheelSpeedFl { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+    Behavior on wheelSpeedFr { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+    Behavior on wheelSpeedRl { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+    Behavior on wheelSpeedRr { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
 
     readonly property bool wheelSlipFl: boolValue(wheels.wheel_slip_fl)
     readonly property bool wheelSlipFr: boolValue(wheels.wheel_slip_fr)
@@ -149,8 +194,10 @@ QtObject {
     readonly property bool wheelLockRr: boolValue(wheels.wheel_lock_rr)
     readonly property bool hasWheelLock: wheelLockFl || wheelLockFr || wheelLockRl || wheelLockRr
 
-    readonly property real steeringAngle: number(dynamics.steering_angle, 0)
-    readonly property real steeringSpeed: number(dynamics.steering_speed, 0)
+    property real steeringAngle: rawSteeringAngle
+    property real steeringSpeed: rawSteeringSpeed
+    Behavior on steeringAngle { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
+    Behavior on steeringSpeed { NumberAnimation { duration: 80; easing.type: Easing.OutQuad } }
 
     // =========================================================================
     // 7. CARROSSERIE, OUVRANTS & CONFORT
@@ -180,7 +227,8 @@ QtObject {
     // =========================================================================
     // 8. ACOUSTIQUE HABITACLE & SURVEILLANCE SYSTÈME (Monitor / Noise / Storage)
     // =========================================================================
-    readonly property real cabinDbSpl: number(environment.cabin_db_spl, 0)
+    property real cabinDbSpl: rawCabinDbSpl
+    Behavior on cabinDbSpl { NumberAnimation { duration: 250; easing.type: Easing.OutQuad } }
     readonly property int cabinFreqHz: intValue(environment.cabin_freq_hz, 0)
     readonly property real appCpuTotalPct: number(telemetryState.app_cpu_total_pct, 0)
     readonly property real appRamMb: number(telemetryState.app_ram_mb, 0)

@@ -47,9 +47,14 @@ class CabinNoiseService(BaseService):
             raw_db = 20 * np.log10(rms)
             db_spl = raw_db + calib
 
+            if getattr(self, "_smoothed_db_spl", None) is None:
+                self._smoothed_db_spl = db_spl
+            else:
+                self._smoothed_db_spl = (self._smoothed_db_spl * 0.75) + (db_spl * 0.25)
+
             # Prépare les valeurs à publier dans le runtime.
             updates = {
-                "cabin_db_spl": db_spl
+                "cabin_db_spl": round(self._smoothed_db_spl, 1)
             }
 
             now = time.time()
