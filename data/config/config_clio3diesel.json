@@ -51,6 +51,8 @@
         "max_display": 120
     },
     "transmission": {
+        "type": "manual",
+        "gears_count": 5,
         "tolerance": 5.0,
         "ratios": {
             "1": 115.0,

@@ -47,13 +47,16 @@
         "max_display": 120
     },
     "transmission": {
+        "type": "manual",
+        "gears_count": 6,
         "tolerance": 5.0,
         "ratios": {
             "1": 115.0,
             "2": 64.5,
             "3": 40.0,
             "4": 29.0,
-            "5": 25.0
+            "5": 25.0,
+            "6": 21.0
         }
     },
     "instant_fuel_consumption": {

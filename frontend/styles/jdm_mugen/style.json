@@ -1,0 +1,23 @@
+{
+    "id": "jdm_mugen",
+    "label": "Mugen Power JDM",
+    "description": "Combiné d'instruments blanc sport Mugen Power avec triple compteur analogique",
+    "order": 2,
+    "dashboard": "Dashboard.qml",
+    "palette": {
+        "background": "#080B0F",
+        "surface": "#101620",
+        "surfaceRaised": "#182230",
+        "surfaceSoft": "#202E42",
+        "text": "#F5F8FA",
+        "textSecondary": "#9EACB9",
+        "outline": "#2A394E",
+        "gaugeTrack": "#E2E8F0"
+    },
+    "metrics": {
+        "radiusSmall": 8,
+        "radiusMedium": 14,
+        "radiusLarge": 22,
+        "borderWidth": 1.5
+    }
+}

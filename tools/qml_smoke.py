@@ -196,6 +196,18 @@ class FakeBridge(QObject):
                 },
                 "metrics": {"radiusSmall": 10, "radiusMedium": 18, "radiusLarge": 26, "borderWidth": 1},
             },
+            {
+                "id": "jdm_mugen", "label": "Mugen Power JDM",
+                "description": "Combiné d'instruments blanc sport Mugen Power avec triple compteur analogique",
+                "order": 2, "dashboard": "styles/jdm_mugen/Dashboard.qml",
+                "palette": {
+                    "background": "#080B0F", "surface": "#101620",
+                    "surfaceRaised": "#182230", "surfaceSoft": "#202E42",
+                    "text": "#F5F8FA", "textSecondary": "#9EACB9",
+                    "outline": "#2A394E", "gaugeTrack": "#E2E8F0",
+                },
+                "metrics": {"radiusSmall": 8, "radiusMedium": 14, "radiusLarge": 22, "borderWidth": 1.5},
+            },
         ]
 
     @Slot(result="QVariantList")
@@ -273,9 +285,10 @@ def main():
         "gt_modern": ["drive", "trip", "performance", "diagnostic", "menu", "appearance", "vehicle", "services", "system", "developer"],
         "apex": ["drive", "perf", "menu"],
         "atelier_luxe": ["main"],
+        "jdm_mugen": ["drive"],
         "legacy_dashboard": ["main"],
     }
-    styles = ["apex", "atelier_luxe", "gt_modern", "legacy_dashboard"]
+    styles = ["apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard"]
     failures = []
 
     if args.output:
@@ -384,6 +397,7 @@ def main():
                 "apex": "apexDashboardRoot",
                 "atelier_luxe": "atelierLuxeDashboardRoot",
                 "gt_modern": "dashboardRoot",
+                "jdm_mugen": "mugenDashboardRoot",
                 "legacy_dashboard": "legacyDashboardRoot",
             }[style]
             active_dashboard = window.findChild(QObject, object_name)

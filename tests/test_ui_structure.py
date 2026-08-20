@@ -114,6 +114,7 @@ class UiStructureTest(unittest.TestCase):
             "legacy_dashboard": ["Dashboard.qml", "components", "pages", "style.json"],
             "apex": ["Dashboard.qml", "components", "pages", "style.json"],
             "atelier_luxe": ["Dashboard.qml", "components", "style.json"],
+            "jdm_mugen": ["Dashboard.qml", "components", "style.json"],
             "_template": ["Dashboard.qml", "style.json"]
         }
 

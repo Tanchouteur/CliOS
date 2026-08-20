@@ -54,6 +54,31 @@ QtObject {
     readonly property real revisionIntervalKm: number(config.maintenance && config.maintenance.revision && config.maintenance.revision.interval_km, 20000)
     readonly property real revisionWarningKm: number(config.maintenance && config.maintenance.revision && config.maintenance.revision.warning_threshold_km, 2000)
 
+    // Transmission & Boîte de vitesses
+    readonly property var transmissionConfig: config.transmission || ({})
+    readonly property var gearRatios: transmissionConfig.ratios || ({})
+    readonly property string transmissionType: {
+        const t = text(transmissionConfig.type, "").toLowerCase()
+        if (t === "auto" || t === "bva" || t === "automatic" || t === "automatique") return "auto"
+        if (t === "manual" || t === "manuelle" || t === "mecanique" || t === "bvm") return "manual"
+        const rKeys = Object.keys(gearRatios)
+        if (rKeys.length > 0) return "manual"
+        if (gear === "P" || gear === "D" || gear === "D3") return "auto"
+        return "manual"
+    }
+    readonly property bool isManualGearbox: transmissionType === "manual"
+    readonly property bool isAutomaticGearbox: transmissionType === "auto"
+    readonly property int manualGearCount: {
+        if (transmissionConfig.gears_count !== undefined && Number(transmissionConfig.gears_count) > 0)
+            return Number(transmissionConfig.gears_count)
+        if (transmissionConfig.gears !== undefined && Number(transmissionConfig.gears) > 0)
+            return Number(transmissionConfig.gears)
+        const keys = Object.keys(gearRatios).map(k => parseInt(k, 10)).filter(n => !isNaN(n) && n > 0)
+        if (keys.length > 0)
+            return Math.max(...keys)
+        return 5
+    }
+
     // Signaux bruts d'entrée
     readonly property real rawSpeed: signalFresh("motion", "speed") ? number(motion.speed, 0) : 0
     readonly property real rawRpm: signalFresh("powertrain", "rpm") ? number(powertrain.rpm, 0) : 0
