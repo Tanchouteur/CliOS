@@ -1,10 +1,38 @@
 import os
 import threading
 import time
-from pyo import Server, SfPlayer, Mix, Biquad, Tone, Disto, SigTo, Sine, PinkNoise
-import sounddevice as sd
 from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
+
+try:
+    import sounddevice as sd
+except ImportError:
+    sd = None
+
+# Pyo est chargé paresseusement pour éviter d'importer Tkinter/GUI au démarrage de l'app
+_pyo_loaded = False
+Server = SfPlayer = Mix = Biquad = Tone = Disto = SigTo = Sine = PinkNoise = None
+
+
+def _ensure_pyo():
+    global _pyo_loaded, Server, SfPlayer, Mix, Biquad, Tone, Disto, SigTo, Sine, PinkNoise
+    if not _pyo_loaded:
+        from pyo import (
+            Server as _Server,
+            SfPlayer as _SfPlayer,
+            Mix as _Mix,
+            Biquad as _Biquad,
+            Tone as _Tone,
+            Disto as _Disto,
+            SigTo as _SigTo,
+            Sine as _Sine,
+            PinkNoise as _PinkNoise,
+        )
+        Server, SfPlayer, Mix, Biquad, Tone, Disto, SigTo, Sine, PinkNoise = (
+            _Server, _SfPlayer, _Mix, _Biquad, _Tone, _Disto, _SigTo, _Sine, _PinkNoise
+        )
+        _pyo_loaded = True
+
 
 
 class EngineSoundService(BaseService):
@@ -75,6 +103,8 @@ class EngineSoundService(BaseService):
 
     def _get_available_audio_devices(self) -> list:
         """Scan et retourne tous les peripheriques possedant des canaux de sortie."""
+        if sd is None:
+            return ["Default"]
         try:
             devices = sd.query_devices()
             valid_devices = []
@@ -93,6 +123,7 @@ class EngineSoundService(BaseService):
             self.set_warning("Redémarrez le service pour appliquer la nouvelle sortie audio.")
 
     def _load_sound_model(self):
+        _ensure_pyo()
         model_name = self._params["sound_model"]["value"]
         final_sound_path = os.path.join(self.engine_path, model_name)
 
@@ -138,6 +169,7 @@ class EngineSoundService(BaseService):
         super().start(stop_event, implemented=True)
 
         try:
+            _ensure_pyo()
             self.server = Server(duplex=0)
 
             # Application de la sortie audio si spécifiée
