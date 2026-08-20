@@ -21,6 +21,7 @@ class DashboardBridge(QObject):
     dataQualityChanged = Signal()
     configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
+    openMaintenanceRequested = Signal()
 
     def __init__(self, runtime, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
@@ -736,6 +737,11 @@ class DashboardBridge(QObject):
         self.logger.warning("Extinction système demandée", extra={"error_code": "SYS_SHUTDOWN"})
         self.send_notification("WARNING", "Extinction du système...", 3000)
         threading.Thread(target=self._handle_exit, args=(True, False), daemon=True).start()
+
+    @Slot()
+    def openMaintenanceMenu(self):
+        """Ouvre le menu de maintenance système."""
+        self.openMaintenanceRequested.emit()
 
     def _handle_exit(self, poweroff=False, reboot=False):
         import time

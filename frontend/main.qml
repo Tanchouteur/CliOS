@@ -25,37 +25,14 @@ ApplicationWindow {
         source: Qt.resolvedUrl(StyleManager.dashboardSource)
     }
 
-    // Raccourci secret tactile dans le coin supérieur droit (5 clics rapides ou appui long 3s)
-    // Ne bloque aucun toucher sur le reste de l'écran
-    Item {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        width: 80
-        height: 80
-        z: 9996
 
-        property int tapCount: 0
-        Timer {
-            id: secretTapReset
-            interval: 1200
-            onTriggered: parent.tapCount = 0
-        }
 
-        MouseArea {
-            anchors.fill: parent
-            pressAndHoldInterval: 3000
-            onClicked: {
-                parent.tapCount += 1
-                secretTapReset.restart()
-                if (parent.tapCount >= 5) {
-                    parent.tapCount = 0
-                    maintenanceOverlay.toggle()
-                }
-            }
-            onPressAndHold: {
-                parent.tapCount = 0
-                maintenanceOverlay.open()
-            }
+    // Écoute des demandes d'ouverture de maintenance depuis les pages de réglages
+    Connections {
+        target: bridge
+        ignoreUnknownSignals: true
+        function onOpenMaintenanceRequested() {
+            maintenanceOverlay.open()
         }
     }
 

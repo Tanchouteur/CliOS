@@ -738,13 +738,95 @@ Item {
                                 font.letterSpacing: 1.2
                             }
 
+                            // Bouton d'accès direct au menu de maintenance système & OverlayFS
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 50
+                                radius: 10
+                                color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.22)
+                                border.width: 1.5
+                                border.color: T.StyleManager.accent
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 8
+                                    Text { text: "🛠️"; font.pixelSize: 15 }
+                                    Text {
+                                        text: "Menu Maintenance & Protection SD"
+                                        color: "#FFFFFF"
+                                        font.family: T.StyleManager.fontFamily
+                                        font.pixelSize: 14
+                                        font.weight: Font.Bold
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: {
+                                        root.close()
+                                        bridge.openMaintenanceMenu()
+                                    }
+                                }
+                            }
+
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 12
 
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    height: 54
+                                    height: 46
+                                    radius: 10
+                                    color: "#182436"
+                                    border.width: 1
+                                    border.color: "#2C3F58"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Mise à Jour Git"
+                                        color: "#BAC8D9"
+                                        font.family: T.StyleManager.fontFamily
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: bridge.triggerGitUpdate()
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 46
+                                    radius: 10
+                                    color: "#182436"
+                                    border.width: 1
+                                    border.color: "#2C3F58"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Export Diagnostic"
+                                        color: "#BAC8D9"
+                                        font.family: T.StyleManager.fontFamily
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: bridge.exportDiagnosticBundle()
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 48
                                     radius: 10
                                     color: Qt.rgba(T.StyleManager.warning.r, T.StyleManager.warning.g, T.StyleManager.warning.b, 0.22)
                                     border.width: 1.2
@@ -755,7 +837,7 @@ Item {
                                         text: "Redémarrer CliOS"
                                         color: "#FFFFFF"
                                         font.family: T.StyleManager.fontFamily
-                                        font.pixelSize: 14
+                                        font.pixelSize: 13
                                         font.weight: Font.Bold
                                     }
 
@@ -767,7 +849,7 @@ Item {
 
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    height: 54
+                                    height: 48
                                     radius: 10
                                     color: Qt.rgba(T.StyleManager.danger.r, T.StyleManager.danger.g, T.StyleManager.danger.b, 0.22)
                                     border.width: 1.2
@@ -778,7 +860,7 @@ Item {
                                         text: "Éteindre Système"
                                         color: "#FFFFFF"
                                         font.family: T.StyleManager.fontFamily
-                                        font.pixelSize: 14
+                                        font.pixelSize: 13
                                         font.weight: Font.Bold
                                     }
 
@@ -791,18 +873,18 @@ Item {
 
                             Rectangle {
                                 Layout.fillWidth: true
-                                height: 50
+                                height: 44
                                 radius: 10
-                                color: "#182436"
+                                color: "#141C28"
                                 border.width: 1
-                                border.color: "#2C3F58"
+                                border.color: "#243246"
 
                                 Text {
                                     anchors.centerIn: parent
                                     text: "Quitter vers le Bureau"
                                     color: "#BAC8D9"
                                     font.family: T.StyleManager.fontFamily
-                                    font.pixelSize: 13
+                                    font.pixelSize: 12
                                     font.weight: Font.DemiBold
                                 }
 
