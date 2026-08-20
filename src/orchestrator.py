@@ -36,8 +36,10 @@ class SystemOrchestrator:
                         data["event"] = threading.Event()
                         event = data["event"]
                 if should_start:
-                    srv.start(event)
-                    #print(f"[INFO] Orchestrateur : {service_name} ALLUMÉ.")
+                    try:
+                        srv.start(event)
+                    except Exception as e:
+                        self.logger.error(f"Erreur au démarrage du service {service_name}: {e}", extra={"error_code": "SRV_START_ERR"})
                 return
         self.logger.warning(f"Service introuvable au demarrage: {service_name}", extra={"error_code": "SERVICE_NOT_FOUND"})
 
@@ -53,13 +55,14 @@ class SystemOrchestrator:
                     if should_stop:
                         data["event"].set()
                 if should_stop:
-                    srv.stop()
-                    #print(f"[INFO] Orchestrateur : {service_name} ÉTEINT.")
+                    try:
+                        srv.stop()
+                    except Exception as e:
+                        self.logger.error(f"Erreur à l'arrêt du service {service_name}: {e}", extra={"error_code": "SRV_STOP_ERR"})
                 return
 
     def start_all(self):
         """Démarre UNIQUEMENT les services cochés 'enabled'."""
-        #print("[INFO] Orchestrateur : Démarrage global selon la configuration...")
         with self._lock:
             if self.is_running:
                 return
@@ -72,7 +75,10 @@ class SystemOrchestrator:
                         continue
                     data["event"] = threading.Event()
                     event = data["event"]
-                srv.start(event)
+                try:
+                    srv.start(event)
+                except Exception as e:
+                    self.logger.error(f"Erreur démarrage service {srv.service_name}: {e}", extra={"error_code": "SRV_START_ERR"})
 
     def stop_all(self):
         """Coupe absolument tout."""
