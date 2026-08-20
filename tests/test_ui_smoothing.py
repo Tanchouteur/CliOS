@@ -49,8 +49,8 @@ class UiSmoothingTest(unittest.TestCase):
         self.assertEqual(raw_val, 25.0)
         self.assertGreater(smooth_val, 25.0)
 
-    def test_speed_and_rpm_smoothing(self):
-        """Vérifie que vitesse et RPM sont lissés pour une lecture digitale propre."""
+    def test_speed_smoothing_and_instant_rpm(self):
+        """Vérifie que la vitesse est lissée et que le RPM a une latence nulle (instantané)."""
         self.bridge._vehicle["motion"]["speed"] = 120.0
         self.bridge._vehicle["powertrain"]["rpm"] = 3500.0
         self.bridge.vehicleStateChanged.emit()
@@ -60,6 +60,10 @@ class UiSmoothingTest(unittest.TestCase):
         smooth_speed = self.ui_state.property("speed")
         self.assertEqual(raw_speed, 120.0)
         self.assertLess(smooth_speed, 120.0)
+
+        # Le RPM ne doit subir aucun délai d'animation
+        rpm_val = self.ui_state.property("rpm")
+        self.assertEqual(rpm_val, 3500.0)
 
 
 if __name__ == "__main__":

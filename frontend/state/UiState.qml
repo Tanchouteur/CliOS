@@ -82,7 +82,7 @@ QtObject {
     // 3. MÉTROLOGIE MOTEUR, VITESSE & TRANSMISSION
     // =========================================================================
     property real speed: rawSpeed
-    property real rpm: rawRpm
+    readonly property real rpm: rawRpm
     readonly property string gear: text(motion.gear, "N")
     property real engineTemp: rawEngineTemp
     property real outsideTemp: rawOutsideTemp
@@ -105,7 +105,6 @@ QtObject {
 
     // Lissage temporel adapté à l'inertie de chaque grandeur physique
     Behavior on speed { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
-    Behavior on rpm { NumberAnimation { duration: 70; easing.type: Easing.OutQuad } }
     Behavior on engineTemp { NumberAnimation { duration: 700; easing.type: Easing.OutCubic } }
     Behavior on outsideTemp { NumberAnimation { duration: 900; easing.type: Easing.OutCubic } }
     Behavior on fuelLevel { NumberAnimation { duration: 1200; easing.type: Easing.OutCubic } }
