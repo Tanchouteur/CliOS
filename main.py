@@ -55,13 +55,13 @@ def ensure_supported_pyside(is_gui: bool, allow_unsupported: bool) -> None:
         return tuple(parts)
 
     installed = parse_version(str(pyside_version))
-    minimum_stable = (6, 8, 2, 1)
+    minimum_stable = (6, 8, 0)
 
     if installed < minimum_stable and not allow_unsupported:
         print(
-            f"[ERREUR] PySide6 {pyside_version} est instable pour cette UI (segfault/bool_dealloc connus)."
+            f"[ERREUR] PySide6 {pyside_version} est instable pour cette UI (segfault/bool_dealloc connus sur < 6.8.0)."
         )
-        print("[ERREUR] Mettez à jour vers PySide6 6.8.2.1+ ou lancez avec --allow-unsupported-pyside.")
+        print("[ERREUR] Mettez à jour vers PySide6 6.8.0+ ou lancez avec --allow-unsupported-pyside.")
         sys.exit(2)
 
 

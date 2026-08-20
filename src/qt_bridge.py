@@ -498,17 +498,11 @@ class DashboardBridge(QObject):
         def _update_task():
             import subprocess
             try:
-                script_candidates = [
-                    os.path.expanduser("~/update_clios.sh"),
-                    os.path.expanduser("~/Desktop/update.sh"),
-                    os.path.expanduser("~/Desktop/git_pull.sh"),
-                    os.path.expanduser("~/git_pull.sh"),
-                ]
-                custom_script = next((s for s in script_candidates if os.path.isfile(s)), None)
-
                 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                if custom_script:
-                    res = subprocess.run(["bash", custom_script], capture_output=True, text=True, timeout=120)
+                project_update_script = os.path.join(project_root, "update.sh")
+
+                if os.path.isfile(project_update_script):
+                    res = subprocess.run(["bash", project_update_script], cwd=project_root, capture_output=True, text=True, timeout=180)
                 else:
                     res = subprocess.run(["git", "pull", "--rebase"], cwd=project_root, capture_output=True, text=True, timeout=60)
 
@@ -697,18 +691,16 @@ class DashboardBridge(QObject):
 
         def _toggle_task():
             import subprocess
-            script_candidates = [
-                os.path.expanduser("~/Desktop/protected.sh"),
-                os.path.expanduser("~/Desktop/toggle_readonly.sh"),
-                os.path.expanduser("~/toggle_overlay.sh"),
-                os.path.expanduser("~/protect_sd.sh"),
-            ]
-            custom_script = next((s for s in script_candidates if os.path.isfile(s)), None)
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            overlay_script = os.path.join(project_root, "tools", "toggle_overlayfs.sh")
 
             try:
-                if custom_script:
-                    res = subprocess.run(["bash", custom_script], capture_output=True, text=True, timeout=30)
-                    self.send_notification("WARNING", "Protection SD basculée ! Redémarrez le système.", 5000)
+                if os.path.isfile(overlay_script):
+                    res = subprocess.run(["bash", overlay_script], cwd=project_root, capture_output=True, text=True, timeout=30)
+                    if res.returncode == 0:
+                        self.send_notification("WARNING", "Protection SD basculée ! Redémarrez le système.", 5000)
+                    else:
+                        self.send_notification("ERROR", f"Erreur SD : {res.stderr.strip()[:50]}", 4000)
                 else:
                     check = subprocess.run(["sudo", "raspi-config", "nonint", "get_overlay_now"], capture_output=True, text=True)
                     is_enabled = check.stdout.strip() == "0"

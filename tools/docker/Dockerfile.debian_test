@@ -1,0 +1,26 @@
+# Dockerfile de test pour simuler l'installation de CliOS sur un environnement Debian / Raspberry Pi OS Bookworm
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Installation des outils de base pour simuler un Raspberry Pi propre
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sudo \
+    curl \
+    git \
+    ca-certificates \
+    procps \
+    locales \
+    python3 \
+    python3-venv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Création d'un utilisateur standard 'pi' avec droits sudo sans mot de passe
+RUN useradd -m -s /bin/bash pi && \
+    echo "pi ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+USER pi
+WORKDIR /home/pi/CliOS
+
+CMD ["/bin/bash"]

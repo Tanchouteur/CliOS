@@ -1,7 +1,9 @@
-# Guide Fichier
+# Guide Fichier Système & Matériel CAN
 
-## Python
-il faut installer les outils systeme manquant : 
+> [!TIP]
+> L'assistant interactif `./install.sh` configure et installe automatiquement ces services selon votre matériel. Ce guide détaille la configuration manuelle.
+
+## Dépendances Système 
 
 ```bash
 sudo apt update
