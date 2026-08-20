@@ -67,6 +67,55 @@ cd ClOS
 
 ---
 
+## Materiel requis (Installation dans le vehicule)
+
+Pour faire fonctionner CliOS dans une vraie voiture, les elements suivants sont necessaires :
+
+1. **Ordinateur monocarte (SBC)** :
+   - Raspberry Pi 5 (recommande) ou Raspberry Pi 4 sous Raspberry Pi OS 64-bit / Debian.
+2. **Ecran** :
+   - Ecran bandeau ultra-large 1920x720 (HDMI ou DSI) ou tout autre ecran tactile integre.
+3. **Adaptateur / Modem CAN** :
+   - Tout adaptateur compatible SocketCAN sous Linux (branche sur la prise OBD-II ou directement sur les fils CAN High / CAN Low).
+   - Materiel teste et supporte : **InnoMaker USB-CAN**, **CANable / CandleLight** (gs_usb), **Waveshare CAN HAT**, ou dongles serie **SLCAN** (OBDLink SX, etc.).
+
+---
+
+## Adapter CliOS a votre vehicule (Dictionnaire CAN et Profils)
+
+CliOS est concu pour etre adaptable a n'importe quel vehicule via deux fichiers JSON :
+
+### 1. Le dictionnaire de trames CAN (`data/can/<votre_vehicule>.json`)
+Il definit la correspondance entre les identifiants de trames brutes (CAN IDs) et les signaux utiles (regime moteur, vitesse, position pedale, angle volant, temperature liquide, etc.) :
+
+```json
+{
+  "0x181": {
+    "name": "ENGINE_DATA",
+    "signals": {
+      "rpm": { "start_byte": 0, "size": 2, "endian": "big", "factor": 0.125 },
+      "accel_pos": { "start_byte": 3, "size": 1, "offset": -7, "factor": 0.4201 },
+      "pedals": {
+        "start_byte": 5,
+        "bits": {
+          "brake": 0,
+          "clutch": 3
+        }
+      }
+    }
+  }
+}
+```
+
+### 2. Le profil de configuration du vehicule (`data/config/<votre_vehicule>.json`)
+Il contient les caracteristiques physiques et mecaniques du moteur pour le calcul en temps reel de la puissance et du couple :
+- Courbes de couple et puissance moteur
+- Regime maximal (rupteur) et regime de ralenti
+- Rapports de boite de vitesses et rapport de pont
+- Poids a vide, surface frontale et capacite du reservoir
+
+---
+
 ## Installation dans le vehicule (Raspberry Pi et Linux)
 
 CliOS integre un script d'installation interactif automatise :

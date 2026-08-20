@@ -68,6 +68,55 @@ cd ClOS
 
 ---
 
+## Hardware Requirements (In-Vehicle Deployment)
+
+To deploy CliOS inside a real car, the following hardware is required:
+
+1. **Single Board Computer**:
+   - Raspberry Pi 5 (recommended) or Raspberry Pi 4 running Raspberry Pi OS 64-bit / Debian.
+2. **Display**:
+   - 1920x720 ultrawide bar display (HDMI or DSI) or any standard automotive/embedded screen.
+3. **CAN Interface Adapter**:
+   - Any SocketCAN-compatible USB or SPI adapter connected to the vehicle's CAN bus (OBD-II port or direct CAN High/Low wiring).
+   - Supported adapters: **InnoMaker USB-CAN**, **CANable / CandleLight** (gs_usb), **Waveshare CAN HAT**, or **SLCAN** serial adapters (OBDLink SX, etc.).
+
+---
+
+## Adapting to Your Vehicle (CAN Dictionary & Profiles)
+
+CliOS is vehicle-agnostic. To use it on your own car, you provide two JSON definition files:
+
+### 1. The CAN Frame Dictionary (`data/can/<your_vehicle>.json`)
+Defines the mapping between raw CAN IDs and signals (RPM, speed, throttle position, brake status, steering angle, coolant temperature, etc.):
+
+```json
+{
+  "0x181": {
+    "name": "ENGINE_DATA",
+    "signals": {
+      "rpm": { "start_byte": 0, "size": 2, "endian": "big", "factor": 0.125 },
+      "accel_pos": { "start_byte": 3, "size": 1, "offset": -7, "factor": 0.4201 },
+      "pedals": {
+        "start_byte": 5,
+        "bits": {
+          "brake": 0,
+          "clutch": 3
+        }
+      }
+    }
+  }
+}
+```
+
+### 2. The Vehicle Config Profile (`data/config/<your_vehicle>.json`)
+Specifies vehicle dynamics parameters used for real-time power/torque modeling:
+- Engine torque/power curves
+- Redline and idle RPM
+- Gearbox ratios and final drive ratio
+- Vehicle curb weight, frontal area, and fuel tank capacity
+
+---
+
 ## In-Vehicle Installation (Raspberry Pi and Linux)
 
 CliOS includes an interactive installer for Raspberry Pi OS and Debian/Ubuntu:
