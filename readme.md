@@ -1,152 +1,164 @@
 # CliOS
 
-CliOS est un tableau de bord automobile modulaire en Python, PySide6 et QML,
-destiné à un écran tactile ultra-large 1920×720 installé dans l’habitacle.
-Il centralise la télémétrie CAN/OBD, les statistiques de trajet, le diagnostic,
-le stockage résilient et plusieurs interfaces visuelles.
-### Voici quelques captures d’écran de l’interface graphique
-Apex : 
-![apex.jpg](docs/images/apex.jpg)
-![CliOS Apex](docs/images/apex-3.jpg)
+<div align="center">
 
-Atelier Luxe :
-![CliOS Atelier Luxe](docs/images/atelier_luxe.jpg)
+**Open-source, modular digital cockpit and telemetry system for vehicles.**  
+*Built with Python, PySide6, QML, and SocketCAN for 1920x720 ultrawide displays.*
 
-## Fonctionnalités
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Qt / PySide6](https://img.shields.io/badge/PySide6-Qt_6.8%2B-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://www.qt.io/)
+[![Wayland / Cage](https://img.shields.io/badge/Display-Cage_Wayland-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/cage-kiosk/cage)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 
-- décodage CAN via SocketCAN et définitions JSON par profil véhicule ;
-- calculs moteur adaptés au profil actif, notamment puissance, couple disponible
-  et charge moteur ;
-- statistiques de trajet : distance, consommation, coût, autonomie,
-  agressivité, décélération sans accélérateur et accélération longitudinale ;
-- diagnostic OBD, monitoring système, stockage USB et export de trajets ;
-- quatre styles QML : Apex, Atelier Luxe, GT Modern et Legacy Dashboard ;
-- mode simulation avec `--mock`, sans véhicule connecté.
+[Lire la documentation en Francais](README_FR.md) • [Issues](../../issues) • [Discussions](../../discussions)
 
-## Architecture en une phrase
+<br/>
 
-Les producteurs publient des `StatePatch` dans [VehicleRuntime](src/runtime.py),
-le store conserve des domaines stricts et leurs métadonnées, le bridge Qt expose
-uniquement des dictionnaires structurés, puis `UiState.qml` fournit aux styles
-des propriétés sémantiques prêtes à afficher.
+<img src="docs/demos/clios_demo.gif" alt="CliOS Live Demo" width="100%" />
 
-La description détaillée se trouve dans
-[docs/backend_architecture.md](docs/backend_architecture.md), et les règles de
-migration dans [docs/migration_runtime.md](docs/migration_runtime.md).
+</div>
 
-## Organisation du dépôt
+---
 
-```text
-main.py                         démarrage et composition des services
-src/runtime.py                  passerelle de publication du runtime
-src/state_store.py              snapshots, domaines, TTL et qualité
-src/signal_catalog.py           catalogue strict des signaux CAN
-src/qt_bridge.py                contrat Python/QML structuré
-src/services/                  services métier et calculs dérivés
-frontend/state/UiState.qml      façade sémantique consommée par les dashboards
-frontend/styles/                paquets visuels indépendants
-data/can/                       définitions des trames CAN
-data/config/                    profils et courbes moteur
-tests/                          tests backend, QML et contrats d’architecture
-tools/qml_smoke.py              rendu hors écran à 1920×720
-```
+## Features
 
-Le bridge ne fournit volontairement plus les anciennes propriétés plates
-`data`, `stats`, `systemHealth` ou `storageStatus`. Toute nouvelle vue doit
-passer par `UiState.qml`.
+- **Real-Time CAN and OBD Telemetry**: Decodes live powertrain and chassis frames via SocketCAN and flexible JSON vehicle profiles.
+- **Dynamic Powertrain Engine**: Real-time calculations of horsepower, instantaneous torque, engine load, and longitudinal G-forces.
+- **Modular Multi-Theme UI (QML)**:
+  - **Apex**: High-contrast, track-inspired digital cluster with live G-meter and sport telemetry.
+  - **Atelier Luxe**: Minimalist design focused on cabin comfort, efficiency, and trip overview.
+  - **GT Modern** and **Legacy**: Classic performance and heritage cluster layouts.
+- **Trip Analytics and Auto-Export**: Automatic tracking of fuel consumption, trip cost, aggression index, and plug-and-play USB export.
+- **Audio DSP and Ambient LEDs**: Real-time cabin noise filtering and engine sound design (via `pyo` DSP) with BLE ambient light sync.
+- **Fail-Safe Architecture**: In-memory state store with strict TTL, domain snapshots, and volatile fallbacks.
+- **Zero-Hardware Mock Mode**: Fully interactive physics and CAN simulation engine to test and develop on macOS, Linux, or Windows without a car.
+- **Raspberry Pi 5 Fast-Boot**: Auto-launch into a distraction-free Wayland kiosk (`cage`) under 5 seconds.
 
-## Installation
+---
 
-### Installation rapide (Recommandée)
+## Screenshots
 
-Clonez le dépôt puis lancez l'assistant d'installation interactif :
+<div align="center">
+
+| Apex (Track and Performance) | Atelier Luxe (Comfort and Touring) |
+|:---:|:---:|
+| <img src="docs/images/apex.jpg" width="480" /> | <img src="docs/images/atelier_luxe.jpg" width="480" /> |
+| *High-G Telemetry & Powertrain Stats* | *Minimalist Navigation & Trip Stats* |
+
+</div>
+
+---
+
+## Quickstart (Test on your PC in 30 seconds)
+
+You do not need a vehicle or a Raspberry Pi to run CliOS. Use the built-in mock simulation:
 
 ```bash
-git clone https://github.com/VotreUser/CliOS.git
-cd CliOS
+# 1. Clone repository
+git clone https://github.com/Tanchouteur/ClOS.git
+cd ClOS
+
+# 2. Run universal launcher with mock mode (auto-configures virtualenv)
+./clios --mock
+```
+
+> [!TIP]
+> On laptop or desktop screens with high DPI scaling, run:  
+> `QT_SCALE_FACTOR=0.65 ./clios --mock` to comfortably fit the 1920x720 window.
+
+---
+
+## In-Vehicle Installation (Raspberry Pi and Linux)
+
+CliOS includes an interactive installer for Raspberry Pi OS and Debian/Ubuntu:
+
+```bash
+git clone https://github.com/Tanchouteur/ClOS.git
+cd ClOS
 ./install.sh
 ```
 
-L'installateur s'occupe de tout :
-- Détection de l'OS et installation des paquets système indispensables (`apt`, audio, `can-utils`, `cage`).
-- Création et configuration de l'environnement virtuel `.venv`.
-- Compilation adaptée de la bibliothèque audio DSP `pyo`.
-- Configuration optionnelle du matériel CAN (`can-usb`, `slcan`, `dfu-util`).
-- Configuration optionnelle du démarrage automatique Kiosk au boot via **Cage Wayland** (`clios.service`, sans nécessiter de bureau).
-- Optimisation optionnelle du démarrage rapide (Fast-Boot) pour Raspberry Pi.
+The installer handles:
+- System packages (`apt`, audio drivers, `can-utils`, `cage` Wayland compositor).
+- Python virtual environment `.venv` and DSP audio compilation (`pyo`).
+- CAN interface setup (`can-usb`, `slcan`, `candlelight`, `socketcan`).
+- Systemd Kiosk service (`clios.service`) for instant auto-boot without a desktop environment.
+- Optional Fast-Boot kernel and system tuning for Raspberry Pi 5.
 
-#### Options de l'installateur :
-```bash
-./install.sh --dry-run    # Mode simulation (prévisualise sans rien modifier)
-./install.sh --venv-only  # Configure uniquement Python sans privilèges sudo
-./install.sh --uninstall  # Supprime les services et règles système de CliOS
+#### Detailed Guides:
+- [Raspberry Pi 5 Fast-Boot Optimization Guide](installation/guide_optimisation_boot_rpi5.md)
+- [CAN Hardware and System Rules Guide](installation/guide_fichier_systeme.md)
+- [Pyo Audio DSP Setup Guide](installation/guide_installation_pyo.md)
+
+---
+
+## Architecture
+
+CliOS is designed around a strict decoupled unidirectional data flow:
+
+```text
+[ CAN Bus / OBD-II / Mock ]
+            │
+            ▼
+     [ CanService ] ──► (Publishes StatePatch)
+            │
+            ▼
+    [ VehicleRuntime ]
+            │
+            ▼
+     [ StateStore ] ──► (Strict domains, TTL & quality check)
+            │
+            ▼
+     [ Qt Bridge ] ──► (Thread-safe Python-to-QML bridge)
+            │
+            ▼
+    [ UiState.qml ] ──► (Semantic properties consumed by Dashboards)
+            │
+  ┌─────────┴─────────┐
+  ▼                   ▼
+[ Apex QML ]   [ Atelier Luxe QML ]
 ```
 
-Pour les détails d'installation manuelle et optimisations :
-- [Guide installation audio Pyo](installation/guide_installation_pyo.md)
-- [Guide fichiers système & matériel CAN](installation/guide_fichier_systeme.md)
-- [⚡ Guide optimisation Fast-Boot Raspberry Pi 5](installation/guide_optimisation_boot_rpi5.md)
+Read the full specifications in [docs/backend_architecture.md](docs/backend_architecture.md).
 
-## Lancement
+---
 
-Utilisez le lanceur universel `./clios` (active automatiquement le `.venv`) :
+## Repository Structure
 
-```bash
-# Interface graphique sur véhicule réel
-./clios
-
-# Interface graphique avec simulation (idéal pour tester sans matériel)
-./clios --mock
-
-# Interface CLI avec simulation
-./clios --ui cli --mock
+```text
+├── main.py                         # Application entrypoint and service composition
+├── clios                           # Universal executable runner
+├── src/
+│   ├── runtime.py                  # Core event publishing gateway
+│   ├── state_store.py              # Domain snapshots, TTL and quality handling
+│   ├── signal_catalog.py           # Strict CAN signal registry
+│   ├── qt_bridge.py                # Python/QML contract bridge
+│   ├── services/                   # Business logic (telemetry, stats, audio, storage)
+│   └── simulation/                 # Physics and mock CAN telemetry generators
+├── frontend/
+│   ├── state/UiState.qml           # Semantic UI state facade
+│   └── styles/                     # QML themes (Apex, Atelier Luxe, GT Modern)
+├── data/
+│   ├── can/                        # Vehicle CAN DBC and frame definitions (JSON)
+│   └── config/                     # Engine power curves and vehicle profiles
+├── tests/                          # Backend, QML, and contract test suites
+└── tools/                          # Smoke tests and developer utilities
 ```
 
-Options utiles :
+---
 
-```bash
-./clios --mock --log-level DEBUG
-./clios --mock --allow-unsupported-pyside
-```
+## Contributing
 
-## Mise à jour
+Contributions are welcome. Areas of active interest:
+- **Vehicle Profiles**: DBC and CAN JSON mappings for additional car models (BMW, VAG, Ford, Honda, etc.).
+- **QML Themes**: Custom digital clusters, retro layouts, or specialized track displays.
+- **Integrations**: Media player controls, GPS mapping, or CarPlay/Android Auto companion tools.
+- **Core Optimizations**: Fast boot improvements, DSP audio processing, and BLE peripherals.
 
-Pour mettre à jour CliOS (Git pull + dépendances Python .venv + permissions) en une commande :
+Please check [CONTRIBUTING.md](CONTRIBUTING.md) for architecture guidelines and testing procedures.
 
-```bash
-./update.sh
-```
+---
 
-*(Cette mise à jour peut également être déclenchée directement depuis l'interface tactile dans le menu Maintenance).*
+## License
 
-## Validation locale
-
-```bash
-python3 -m compileall -q src main.py
-QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -q
-QT_QPA_PLATFORM=offscreen python3 tools/qml_smoke.py
-```
-
-Le smoke test couvre les quatre styles, leurs routes principales et les états
-d’avertissement, pause, données absentes et confirmation à 1920×720.
-
-## Données persistantes et stockage
-
-Les profils et sauvegardes sont stockés sous `<clé USB>/clios/`. En l’absence de
-clé, CliOS utilise le mode volatile configuré par `StorageManager` ; les
-données sont alors perdues au redémarrage. Les trajets sont exportés sous
-`trips*/trip_*.json`.
-
-Le service `Export` détecte un fichier `clos_export.json` à la racine d’un
-support USB et copie les JSON de trajets avec une signature anti-doublon.
-
-## Contribution
-
-Les règles de contribution et le contrat UI sont décrits dans
-[CONTRIBUTING.md](CONTRIBUTING.md). Toute modification du runtime doit ajouter
-ou actualiser un test de contrat si elle change un domaine, un signal, une
-propriété du bridge ou une façade `UiState`.
-
-## Licence
-
-Projet distribué sous licence GPLv3 (voir [LICENSE](LICENSE)).
+Distributed under the **GNU General Public License v3.0** (GPLv3). See [LICENSE](LICENSE) for more details.
