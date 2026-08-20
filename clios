@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# CliOS - Lanceur Universel
+# Lance main.py directement au sein de l'environnement virtuel .venv
+# ==============================================================================
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_PYTHON="${SCRIPT_DIR}/.venv/bin/python3"
+MAIN_SCRIPT="${SCRIPT_DIR}/main.py"
+
+if [[ ! -f "$VENV_PYTHON" ]]; then
+    echo -e "\033[1;31m[ERREUR] L'environnement virtuel Python est introuvable (.venv).\033[0m"
+    echo -e "\033[1;33mPour installer et configurer CliOS automatiquement, lancez :\033[0m"
+    echo -e "  \033[1;36m./install.sh\033[0m"
+    echo ""
+    read -r -p "Souhaitez-vous lancer ./install.sh maintenant ? [O/n] : " answer
+    answer="${answer:-Y}"
+    if [[ "$answer" =~ ^[oOyY] ]]; then
+        exec "${SCRIPT_DIR}/install.sh"
+    else
+        exit 1
+    fi
+fi
+
+# Exécution de main.py avec passage intégral des arguments
+exec "$VENV_PYTHON" -u "$MAIN_SCRIPT" "$@"

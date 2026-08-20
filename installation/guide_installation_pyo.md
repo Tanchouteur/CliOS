@@ -1,5 +1,8 @@
 # Guide d'installation : Pyo & Environnement Python sur Raspberry Pi
 
+> [!TIP]
+> L'assistant interactif `./install.sh` automatise déjà l'intégralité de ces étapes (installation des paquets apt, création du `.venv` et compilation avec les bons drapeaux CFLAGS). Ce guide décrit la procédure manuelle détaillée.
+
 Guide pas-à-pas pour reconfigurer un environnement virtuel propre et compiler `pyo` sans erreurs de compilation GCC ni problèmes de permissions.
 
 ---

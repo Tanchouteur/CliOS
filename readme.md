@@ -57,34 +57,67 @@ passer par `UiState.qml`.
 
 ## Installation
 
+### Installation rapide (Recommandée)
+
+Clonez le dépôt puis lancez l'assistant d'installation interactif :
+
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -r requirements.txt
+git clone https://github.com/VotreUser/CliOS.git
+cd CliOS
+./install.sh
 ```
 
-Pour l’installation audio Raspberry Pi et la compilation de `pyo`, consulter
-[installation/guide_installation_pyo.md](installation/guide_installation_pyo.md).
+L'installateur s'occupe de tout :
+- Détection de l'OS et installation des paquets système indispensables (`apt`, audio, `can-utils`, `cage`).
+- Création et configuration de l'environnement virtuel `.venv`.
+- Compilation adaptée de la bibliothèque audio DSP `pyo`.
+- Configuration optionnelle du matériel CAN (`can-usb`, `slcan`, `dfu-util`).
+- Configuration optionnelle du démarrage automatique Kiosk au boot via **Cage Wayland** (`clios.service`, sans nécessiter de bureau).
+- Optimisation optionnelle du démarrage rapide (Fast-Boot) pour Raspberry Pi.
+
+#### Options de l'installateur :
+```bash
+./install.sh --dry-run    # Mode simulation (prévisualise sans rien modifier)
+./install.sh --venv-only  # Configure uniquement Python sans privilèges sudo
+./install.sh --uninstall  # Supprime les services et règles système de CliOS
+```
+
+Pour les détails d'installation manuelle et optimisations :
+- [Guide installation audio Pyo](installation/guide_installation_pyo.md)
+- [Guide fichiers système & matériel CAN](installation/guide_fichier_systeme.md)
+- [⚡ Guide optimisation Fast-Boot Raspberry Pi 5](installation/guide_optimisation_boot_rpi5.md)
 
 ## Lancement
 
+Utilisez le lanceur universel `./clios` (active automatiquement le `.venv`) :
+
 ```bash
 # Interface graphique sur véhicule réel
-python3 -u main.py --ui gui
+./clios
 
-# Interface graphique avec simulation
-python3 -u main.py --ui gui --mock
+# Interface graphique avec simulation (idéal pour tester sans matériel)
+./clios --mock
 
 # Interface CLI avec simulation
-python3 -u main.py --ui cli --mock
+./clios --ui cli --mock
 ```
 
 Options utiles :
 
 ```bash
-python3 -u main.py --ui gui --mock --log-level DEBUG
-python3 -u main.py --ui gui --mock --allow-unsupported-pyside
+./clios --mock --log-level DEBUG
+./clios --mock --allow-unsupported-pyside
 ```
+
+## Mise à jour
+
+Pour mettre à jour CliOS (Git pull + dépendances Python .venv + permissions) en une commande :
+
+```bash
+./update.sh
+```
+
+*(Cette mise à jour peut également être déclenchée directement depuis l'interface tactile dans le menu Maintenance).*
 
 ## Validation locale
 
