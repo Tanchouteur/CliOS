@@ -2,6 +2,8 @@ import os
 import sys
 import argparse
 import threading
+import platform
+import subprocess
 
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
@@ -79,19 +81,38 @@ def load_system_version(root_dir: str) -> str:
         return "unknown"
 
 
+def write_health_marker() -> None:
+    """Signale au lanceur qu'initialisation Python et chargement QML ont réussi."""
+    marker = os.environ.get("CLIOS_HEALTH_MARKER")
+    if not marker:
+        return
+    try:
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+        temporary = marker + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as stream:
+            stream.write(os.environ.get("CLIOS_RELEASE_VERSION", "healthy"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, marker)
+    except OSError:
+        pass
+
+
 def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir,
-                   storage_dir, storage_manager):
+                   storage_dir, storage_manager, enable_can=True):
     """Initialise et enregistre tous les services via une boucle propre."""
 
     diag_service = DiagnosticService(runtime, can_provider)
-    can_service = CanService(
-        name="CAN_Moteur",
-        runtime=runtime,
-        storage=storage,
-        dbc_path=profile_manager.get_can_path(),
-        provider=can_provider,
-        obd_callback=diag_service.receive_obd_frame
-    )
+    can_service = None
+    if enable_can:
+        can_service = CanService(
+            name="CAN_Moteur",
+            runtime=runtime,
+            storage=storage,
+            dbc_path=profile_manager.get_can_path(),
+            provider=can_provider,
+            obd_callback=diag_service.receive_obd_frame
+        )
 
     led_service = BleLedController(storage)
     stats_service = TripStatsService(runtime, vehicle_config, storage)
@@ -100,7 +121,6 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
     session_manager = TripSessionManager(runtime, storage, stats_service, storage_dir)
 
     services_to_register = [
-        (can_service, "services.CAN_Moteur.enabled", True),
         (diag_service, "services.Diag.enabled", True),
         (stats_service, "services.TripStats.enabled", True),
         (VehicleMetricsService(runtime, vehicle_config, storage), "services.VehicleMetrics.enabled", True),
@@ -114,6 +134,8 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
         (session_manager, "services.SessionManager.enabled", True),
         (UsbStorageService(runtime, storage, storage_manager), None, True),
     ]
+    if can_service is not None:
+        services_to_register.insert(0, (can_service, "services.CAN_Moteur.enabled", True))
 
     # Rétrocompatibilité: anciennes sauvegardes utilisaient services.Can.enabled
     can_enabled = storage.get("services.CAN_Moteur.enabled", storage.get("services.Can.enabled", True))
@@ -165,7 +187,19 @@ def main():
         args.mock,
         fallback_config_dir=STATIC_CONFIG_DIR,
     )
-    vehicle_config = profile_manager.load_active_config()
+    if profile_manager.recovery_mode:
+        vehicle_config = {
+            "schema_version": 1,
+            "theme": {"main": "#48B8FF"}, "ui": {"visual_style": "gt_modern"},
+            "tachometer": {"max_rpm": 7000, "redline_rpm": 6500},
+            "speedometer": {"max_speed": 220}, "fuel": {"max_liters": 50},
+            "engine_temp": {"warning": 105, "max_display": 120},
+            "transmission": {"type": "manual", "gears_count": 5, "ratios": {}},
+            "maintenance": {"revision": {"interval_km": 20000, "warning_threshold_km": 2000}},
+        }
+        ProfileManager._write_json_atomic(profile_manager.get_config_path(), vehicle_config)
+    else:
+        vehicle_config = profile_manager.load_active_config()
 
     storage = PersistentStorage(profile_manager.get_save_path())
     runtime = VehicleRuntime(storage)
@@ -196,7 +230,7 @@ def main():
     # --- 4. Branchement des Services ---
     led_srv, stats_srv, diag_srv, gear_calib_srv, session_manager = setup_services(
         runtime, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR,
-        storage_mgr
+        storage_mgr, enable_can=not profile_manager.recovery_mode,
     )
 
     runtime_targets = {"bridge": None, "export": None}
@@ -226,6 +260,7 @@ def main():
 
     # --- 5. Lancement de l'Application ---
     needs_restart = False
+    requested_power_action = ""
     try:
         if args.ui == 'cli':
             cli_stop_event = threading.Event()
@@ -270,6 +305,7 @@ def main():
             # Démarrage des services d'arrière-plan dès le premier tick d'affichage
             from PySide6.QtCore import QTimer
             QTimer.singleShot(0, orchestrator.start_all)
+            QTimer.singleShot(1000, write_health_marker)
 
             # Outils de Mock
             mock_panel = None
@@ -279,27 +315,34 @@ def main():
 
             app.exec()
             needs_restart = bridge.needs_restart
+            requested_power_action = bridge.requested_power_action
 
     except KeyboardInterrupt:
         logger.warning("Interruption manuelle detectee", extra={"error_code": "APP_KEYBOARD_INTERRUPT"})
     finally:
         # --- 6. Nettoyage et Arrêt ---
         logger.info("Extinction de l'orchestrateur", extra={"error_code": "APP_SHUTDOWN"})
-        storage_mgr.stop_monitoring()
-        orchestrator.stop_all()
         bridge = runtime_targets.get("bridge")
         if bridge is not None:
             bridge.close()
+        stop_report = orchestrator.stop_all()
+        if stop_report["errors"] or stop_report["unresponsive"]:
+            logger.error(
+                f"Arrêt incomplet: {stop_report}",
+                extra={"error_code": "APP_SHUTDOWN_INCOMPLETE"},
+            )
+        storage_mgr.stop_monitoring()
         if hasattr(storage, "close"):
             storage.close()
         shutdown_logging()
 
     # --- 7. Redémarrage Kiosk ---
     if needs_restart:
-        logger.warning("Redemarrage demande", extra={"error_code": "APP_RESTART"})
         executable = sys.executable
         args = [executable] + sys.argv
         os.execv(executable, args)
+    if requested_power_action in {"reboot", "poweroff"} and platform.system() not in {"Darwin", "Windows"}:
+        subprocess.run(["sudo", requested_power_action], check=False)
 
 
 if __name__ == "__main__":

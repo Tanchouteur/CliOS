@@ -3,6 +3,7 @@ import os
 import threading
 
 from src.logging_runtime import get_logger
+from src.schema_validation import migrate_to_v1, validate_can_dictionary, validate_profile_catalog, validate_vehicle_config
 
 
 class ProfileManager:
@@ -23,6 +24,7 @@ class ProfileManager:
         # État de validation du profil actif.
         self.has_error = False
         self.error_message = ""
+        self.recovery_mode = False
 
         self.data = self._load()
         self._validate_and_fallback()
@@ -34,7 +36,7 @@ class ProfileManager:
                 with open(self.profiles_path, 'r', encoding='utf-8') as f:
                     payload = json.load(f)
                 if isinstance(payload, dict):
-                    return payload
+                    return migrate_to_v1(self.profiles_path, payload)
             except (OSError, json.JSONDecodeError, TypeError):
                 pass
 
@@ -44,12 +46,15 @@ class ProfileManager:
                 with open(fallback_path, 'r', encoding='utf-8') as f:
                     payload = json.load(f)
                 if isinstance(payload, dict):
+                    payload = dict(payload)
+                    payload.setdefault("schema_version", 1)
                     self._write_json_atomic(self.profiles_path, payload)
                     return payload
             except (OSError, json.JSONDecodeError, TypeError):
                 pass
 
         return {
+            "schema_version": 1,
             "active_profile": "default",
             "profiles": {
                 "default": {
@@ -95,15 +100,20 @@ class ProfileManager:
             return self.save()
 
     def _validate_and_fallback(self):
-        """Vérifie si les fichiers du profil actif existent. Sinon, force le fallback."""
+        """Valide le profil actif et passe en récupération sans profil arbitraire."""
+        catalog_errors = validate_profile_catalog(self.data)
+        if catalog_errors:
+            self.has_error = True
+            self.recovery_mode = True
+            self.error_message = "Catalogue de profils invalide : " + " | ".join(catalog_errors)
+            return
         active_id = self.data.get("active_profile", "default")
 
         # Vérifie que le profil actif existe dans la configuration.
         if active_id not in self.data.get("profiles", {}):
             self.has_error = True
-            self.error_message = f"Le profil '{active_id}' n'existe pas. Chargement du profil par défaut."
-            self.data["active_profile"] = "default"
-            self.save()
+            self.recovery_mode = True
+            self.error_message = f"Le profil '{active_id}' n'existe pas. Mode récupération actif."
             return
 
         # Vérifie l'existence des fichiers associés au profil.
@@ -119,10 +129,23 @@ class ProfileManager:
 
         if errors:
             self.has_error = True
-            self.error_message = f"Erreur Profil '{info.get('name')}' : " + " | ".join(
-                errors) + ". Retour aux paramètres par défaut."
-            self.data["active_profile"] = "default"
-            self.save()
+            self.recovery_mode = True
+            self.error_message = f"Erreur Profil '{info.get('name')}' : " + " | ".join(errors) + ". Mode récupération actif."
+            return
+
+        try:
+            config_errors = validate_vehicle_config(self.load_active_config())
+            errors.extend(f"Config: {error}" for error in config_errors)
+            if not self.is_mock:
+                with open(can_path, encoding="utf-8") as stream:
+                    can_errors = validate_can_dictionary(json.load(stream))
+                errors.extend(f"CAN: {error}" for error in can_errors)
+        except (OSError, json.JSONDecodeError, RuntimeError) as exc:
+            errors.append(str(exc))
+        if errors:
+            self.has_error = True
+            self.recovery_mode = True
+            self.error_message = f"Profil '{info.get('name')}' invalide : " + " | ".join(errors)
 
     def get_available_profiles(self) -> list:
         """Retourne la liste des identifiants (clés) des profils disponibles."""
@@ -156,7 +179,9 @@ class ProfileManager:
             with open(target_path, 'r', encoding='utf-8') as f:
                 payload = json.load(f)
             if isinstance(payload, dict):
-                return payload
+                payload = migrate_to_v1(target_path, payload)
+                if not validate_vehicle_config(payload):
+                    return payload
         except (OSError, json.JSONDecodeError, TypeError):
             pass
 
@@ -167,8 +192,10 @@ class ProfileManager:
                 with open(fallback_path, 'r', encoding='utf-8') as f:
                     payload = json.load(f)
                 if isinstance(payload, dict):
-                    self._write_json_atomic(target_path, payload)
-                    return payload
+                    payload = dict(payload)
+                    payload = migrate_to_v1(target_path, payload)
+                    if not validate_vehicle_config(payload):
+                        return payload
             except (OSError, json.JSONDecodeError, TypeError):
                 pass
         raise RuntimeError(f"Configuration véhicule illisible: {filename}")
@@ -202,13 +229,18 @@ class ProfileManager:
         if os.path.exists(target_path):
             return False
 
-        # Crée une configuration minimale.
+        # Crée une configuration minimale conforme au schéma v1.
         base_config = {
-            "dashboard": {
-                "max_rpm": 7000,
-                "redline": 6000,
-                "max_speed": 220
-            }
+            "schema_version": 1,
+            "theme": {"main": "#48B8FF"},
+            "ui": {"visual_style": "gt_modern"},
+            "tachometer": {"max_rpm": 7000, "redline_rpm": 6500, "idle_rpm": 850},
+            "speedometer": {"max_speed": 220},
+            "engine": {"label": "Véhicule personnalisé", "max_torque_nm": 200, "performance_curve": []},
+            "fuel": {"max_liters": 50, "reserve_percentage": 0.15},
+            "engine_temp": {"min_display": 40, "optimal": 90, "warning": 105, "max_display": 120},
+            "transmission": {"type": "manual", "gears_count": 5, "tolerance": 5.0, "ratios": {}},
+            "maintenance": {"revision": {"interval_km": 20000, "warning_threshold_km": 2000}}
         }
         tmp_path = target_path + ".tmp"
         try:

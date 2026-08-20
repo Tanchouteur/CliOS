@@ -8,6 +8,8 @@ class DbcParser:
         self.optimized_db = {}
 
         for hex_id, definition in raw_db.items():
+            if hex_id == "schema_version":
+                continue
             int_id = int(hex_id, 16)
 
             if "signals" in definition:

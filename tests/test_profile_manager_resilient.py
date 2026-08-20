@@ -61,6 +61,24 @@ class ProfileManagerResilientTest(unittest.TestCase):
             self.assertEqual(manager.get_config_path(), os.path.join(config_dir, "default_config.json"))
             self.assertEqual(manager.get_save_path(), os.path.join(saves, "save.json"))
 
+    def test_invalid_active_profile_enters_recovery_without_fallback(self):
+        with tempfile.TemporaryDirectory() as root:
+            config_dir = os.path.join(root, "config")
+            can_dir = os.path.join(root, "can")
+            saves = os.path.join(root, "saves")
+            for directory in (config_dir, can_dir, saves):
+                os.makedirs(directory)
+            with open(os.path.join(config_dir, "profiles.json"), "w", encoding="utf-8") as stream:
+                json.dump({"schema_version": 1, "active_profile": "missing", "profiles": {
+                    "valid": {"name": "Valid", "can_file": "valid.json", "config_file": "valid.json", "save_file": "save.json"}
+                }}, stream)
+
+            manager = ProfileManager(config_dir, can_dir, saves, is_mock=True)
+
+            self.assertTrue(manager.recovery_mode)
+            self.assertEqual(manager.active_profile_id, "missing")
+            self.assertIn("introuvable", manager.error_message)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -81,15 +81,37 @@ class SystemOrchestrator:
                     self.logger.error(f"Erreur démarrage service {srv.service_name}: {e}", extra={"error_code": "SRV_START_ERR"})
 
     def stop_all(self):
-        """Coupe absolument tout."""
-        #print("[INFO] Orchestrateur : Signal d'arrêt global envoyé.")
+        """Arrête tout sans laisser une panne masquer les suivantes."""
         with self._lock:
             self.is_running = False
             services = list(self.services.items())
+        report = {"stopped": [], "errors": {}, "unresponsive": []}
         for srv, data in services:
             if data["event"] and not data["event"].is_set():
                 data["event"].set()
+            try:
                 srv.stop()
+                report["stopped"].append(srv.service_name)
+            except Exception as exc:
+                report["errors"][srv.service_name] = str(exc)
+                self.logger.error(
+                    f"Erreur à l'arrêt du service {srv.service_name}: {exc}",
+                    extra={"error_code": "SRV_STOP_ERR"},
+                )
+
+            workers = []
+            for attr in ("_thread", "thread"):
+                worker = getattr(srv, attr, None)
+                if worker is not None and worker not in workers:
+                    workers.append(worker)
+            alive = [worker.name for worker in workers if worker.is_alive()]
+            if alive:
+                report["unresponsive"].append({"service": srv.service_name, "workers": alive})
+                self.logger.error(
+                    f"Workers non arrêtés pour {srv.service_name}: {', '.join(alive)}",
+                    extra={"error_code": "SRV_STOP_TIMEOUT"},
+                )
+        return report
 
     def get_system_health(self) -> dict:
         """Récupère l'état de tous les services actifs ou signale ceux désactivés."""
