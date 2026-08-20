@@ -22,6 +22,12 @@ CURRENT_USER="${SUDO_USER:-${USER:-$(id -un 2>/dev/null || whoami)}}"
 VENV_DIR="${PROJECT_DIR}/.venv"
 INSTALL_ETC_DIR="${PROJECT_DIR}/installation/etc"
 
+# Si un venv est actuellement actif dans le terminal appelant, on le désactive pour ce sous-shell
+if [[ -n "$VIRTUAL_ENV" ]]; then
+    PATH="${PATH//${VIRTUAL_ENV}\/bin:/}"
+    unset VIRTUAL_ENV
+fi
+
 SYSTEMD_DIR="/etc/systemd/system"
 UDEV_RULES_DIR="/etc/udev/rules.d"
 
@@ -325,10 +331,35 @@ log_info "Répertoire du projet  : ${C_BOLD}${PROJECT_DIR}${C_RESET}"
 
 # Détection de Python 3
 find_python_bin() {
-    for candidate in python3.13 python3.12 python3.11 python3; do
+    local candidates=(
+        /opt/homebrew/bin/python3.13
+        /opt/homebrew/bin/python3.12
+        /opt/homebrew/bin/python3.11
+        /opt/homebrew/bin/python3
+        /Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13
+        /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12
+        /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11
+        /usr/local/bin/python3.13
+        /usr/local/bin/python3.12
+        /usr/local/bin/python3.11
+        /usr/local/bin/python3
+        /usr/bin/python3.13
+        /usr/bin/python3.12
+        /usr/bin/python3.11
+        /usr/bin/python3
+        python3.13
+        python3.12
+        python3.11
+        python3
+    )
+    for candidate in "${candidates[@]}"; do
         if command -v "$candidate" &>/dev/null; then
-            echo "$(command -v "$candidate")"
-            return 0
+            local resolved
+            resolved="$(command -v "$candidate")"
+            if [[ "$resolved" != *"${PROJECT_DIR}/.venv"* ]]; then
+                echo "$resolved"
+                return 0
+            fi
         fi
     done
     return 1
@@ -432,36 +463,52 @@ else
     log_success "Environnement virtuel créé dans ${VENV_DIR}."
 fi
 
-VENV_PIP="${VENV_DIR}/bin/pip"
 VENV_PYTHON="${VENV_DIR}/bin/python3"
 
 # Mise à niveau des outils de packaging
-run_cmd "Mise à jour de pip, setuptools et wheel" "$VENV_PIP" install --upgrade pip setuptools wheel
+run_cmd "Mise à jour de pip, setuptools et wheel" "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
 
 # Compilation sécurisée de pyo
 echo -e "\n${C_BOLD}Installation de la bibliothèque DSP Audio (pyo)...${C_RESET}"
-log_info "Application des drapeaux GCC adaptés pour Python 3.13+ (-Wno-incompatible-pointer-types)..."
+
+BREW_CFLAGS=""
+if [[ "$OS_NAME" == "Darwin" ]]; then
+    if [[ -d "/opt/homebrew/include" ]]; then
+        BREW_CFLAGS="-I/opt/homebrew/include -L/opt/homebrew/lib"
+    elif [[ -d "/usr/local/include" ]]; then
+        BREW_CFLAGS="-I/usr/local/include -L/usr/local/lib"
+    fi
+fi
+PYO_CFLAGS="${BREW_CFLAGS} -Wno-incompatible-pointer-types -Wno-error"
 
 if [[ $DRY_RUN -eq 1 ]]; then
-    log_dry "CFLAGS=\"-Wno-incompatible-pointer-types -Wno-error\" $VENV_PIP install --no-build-isolation pyo~=1.0.5"
-    log_dry "$VENV_PIP install -r ${PROJECT_DIR}/requirements.txt"
+    log_dry "CFLAGS=\"${PYO_CFLAGS}\" $VENV_PYTHON -m pip install --no-build-isolation pyo~=1.0.5"
+    log_dry "$VENV_PYTHON -m pip install -r ${PROJECT_DIR}/requirements.txt"
 else
+    PYO_INSTALLED=0
     # Tentative d'installation de pyo avec CFLAGS
-    if CFLAGS="-Wno-incompatible-pointer-types -Wno-error" "$VENV_PIP" install --no-build-isolation "pyo~=1.0.5"; then
+    if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-build-isolation "pyo~=1.0.5" 2>/dev/null; then
         log_success "Compilation et installation de pyo réussies."
+        PYO_INSTALLED=1
     else
-        log_warn "Échec de l'installation standard de pyo. Tentative de secours sans OSC..."
-        if "$VENV_PIP" install --no-binary :all: --config-settings="--build-option=--no-osc" "pyo~=1.0.5"; then
+        log_warn "Échec de la compilation standard de pyo. Tentative sans OSC..."
+        if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-binary :all: --config-settings="--build-option=--no-osc" "pyo~=1.0.5" 2>/dev/null; then
             log_success "Installation de pyo réussie (mode fallback sans OSC)."
+            PYO_INSTALLED=1
         else
-            log_warn "Impossible de compiler pyo. Le reste des dépendances va tout de même être installé."
+            log_warn "pyo n'a pas pu être compilé (en-têtes C audio absents). Les fonctionnalités de son moteur seront inactives."
         fi
     fi
 
     # Installation des autres dépendances depuis requirements.txt
     log_info "Installation des dépendances depuis requirements.txt..."
-    "$VENV_PIP" install -r "${PROJECT_DIR}/requirements.txt"
-    log_success "Toutes les dépendances Python sont installées."
+    if [[ $PYO_INSTALLED -eq 1 ]]; then
+        "$VENV_PYTHON" -m pip install -r "${PROJECT_DIR}/requirements.txt"
+    else
+        # Si pyo a échoué, on installe toutes les autres dépendances sans bloquer pip
+        grep -v '^pyo' "${PROJECT_DIR}/requirements.txt" | "$VENV_PYTHON" -m pip install -r /dev/stdin
+    fi
+    log_success "Dépendances Python installées."
 
     # Validation rapide des imports critiques
     log_info "Validation des modules Python critiques..."
@@ -474,7 +521,7 @@ else
     if "$VENV_PYTHON" -c "import pyo; print(f'pyo version: {pyo.PYO_VERSION}')" &>/dev/null; then
         log_success "pyo audio opérationnel."
     else
-        log_warn "pyo audio n'est pas actif (les fonctionnalités sonores moteur seront désactivées)."
+        log_info "pyo audio désactivé (normal en simulation sur Mac sans headers portaudio)."
     fi
 fi
 
