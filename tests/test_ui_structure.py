@@ -85,6 +85,8 @@ class MockBridge(QObject):
     def rebootSystem(self): pass
     @Slot()
     def openMaintenanceMenu(self): pass
+    @Slot(str, float, result=bool)
+    def executeUiCommand(self, _command, _speed): return True
 
 
 class UiStructureTest(unittest.TestCase):
@@ -103,7 +105,10 @@ class UiStructureTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.frontend_dir, "pages")), "frontend/pages ne doit plus exister")
 
         components = sorted([f for f in os.listdir(os.path.join(self.frontend_dir, "components")) if f.endswith(".qml")])
-        self.assertEqual(components, ["MaintenanceOverlay.qml", "NotificationCenter.qml"], "frontend/components doit contenir MaintenanceOverlay.qml et NotificationCenter.qml")
+        self.assertEqual(
+            components,
+            ["AppShell.qml", "DashboardHost.qml", "MaintenanceOverlay.qml", "NotificationCenter.qml", "SettingsShell.qml"],
+        )
 
     def test_dashboard_folders_structure(self):
         """Vérifie la présence et la structure des dashboards installés."""

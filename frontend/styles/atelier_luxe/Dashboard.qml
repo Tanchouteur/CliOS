@@ -7,6 +7,8 @@ import "./components"
 Item {
     id: root
     objectName: "atelierLuxeDashboardRoot"
+    signal settingsRequested(string route)
+    signal commandRequested(string command)
     width: 1920
     height: 720
     clip: true
@@ -17,60 +19,11 @@ Item {
     property string pendingDescription: ""
 
     function handleAction(action) {
-        if (action === "reset_a") {
-            pendingAction = "reset_a"
-            pendingTitle = "RÉINITIALISATION DU TRIP A"
-            pendingDescription = "Voulez-vous remettre le compteur journalier A à zéro ?"
-            confirmDialog.open()
-        } else if (action === "reset_b") {
-            pendingAction = "reset_b"
-            pendingTitle = "RÉINITIALISATION DU TRIP B"
-            pendingDescription = "Voulez-vous remettre le compteur journalier B et sa moyenne à zéro ?"
-            confirmDialog.open()
-        } else if (action === "reset_maintenance") {
-            pendingAction = "reset_maintenance"
-            pendingTitle = "VALIDATION DE L'ENTRETIEN"
-            pendingDescription = "Confirmez-vous la réalisation de la révision / vidange du véhicule ?"
-            confirmDialog.open()
-        } else if (action === "end_trip") {
-            pendingAction = "end_trip"
-            pendingTitle = "CLÔTURE DU TRAJET"
-            pendingDescription = "Voulez-vous clôturer la session active et enregistrer les statistiques ?"
-            confirmDialog.open()
-        } else if (action === "quit") {
-            pendingAction = "quit"
-            pendingTitle = "QUITTER L'APPLICATION"
-            pendingDescription = "Voulez-vous quitter l'interface CliOS et revenir au système d'exploitation ?"
-            confirmDialog.open()
-        } else if (action === "restart") {
-            pendingAction = "restart"
-            pendingTitle = "REDÉMARRER CLI-OS"
-            pendingDescription = "L'application va redémarrer immédiatement."
-            confirmDialog.open()
-        } else if (action === "shutdown") {
-            pendingAction = "shutdown"
-            pendingTitle = "EXTINCTION DU SYSTÈME"
-            pendingDescription = "Voulez-vous éteindre complètement le calculateur de bord ?"
-            confirmDialog.open()
-        }
+        root.commandRequested(action)
     }
 
     function executePendingAction() {
-        if (pendingAction === "reset_a") {
-            bridge.resetTripA()
-        } else if (pendingAction === "reset_b") {
-            bridge.resetTripB()
-        } else if (pendingAction === "reset_maintenance") {
-            bridge.resetMaintenance()
-        } else if (pendingAction === "end_trip") {
-            bridge.endTripSession()
-        } else if (pendingAction === "quit") {
-            bridge.quitApplication()
-        } else if (pendingAction === "restart") {
-            bridge.restartApplication()
-        } else if (pendingAction === "shutdown") {
-            bridge.shutdownSystem()
-        }
+        root.commandRequested(pendingAction)
         pendingAction = ""
         confirmDialog.close()
     }
@@ -87,7 +40,7 @@ Item {
         anchors.topMargin: 10
         anchors.left: parent.left
         anchors.right: parent.right
-        onOpenSettingsRequested: controlDrawer.open()
+        onOpenSettingsRequested: root.settingsRequested("appearance")
     }
 
     // 3. Cluster Principal 1920×720 à Profondeur 3D
@@ -133,14 +86,6 @@ Item {
         anchors.fill: parent
         visible: status === Loader.Ready && item !== null
         z: 700
-    }
-
-    // 5. Capsule de Personnalisation & Nuancier d'Accent (Drawer Flottant)
-    LuxeControlDrawer {
-        id: controlDrawer
-        objectName: "controlDrawer"
-        z: 800
-        onActionRequested: function(action) { root.handleAction(action) }
     }
 
     // 6. Overlay Récapitulatif de Fin / Pause de Trajet

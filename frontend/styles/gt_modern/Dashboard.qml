@@ -8,6 +8,8 @@ import "../../state" as S
 Item {
     id: root
     objectName: "dashboardRoot"
+    signal settingsRequested(string route)
+    signal commandRequested(string command)
     focus: true
     property string destination: "drive"
     property string previousDestination: "drive"
@@ -25,17 +27,14 @@ Item {
     function routeInfo(id) {
         for (let i = 0; i < destinations.length; ++i)
             if (destinations[i].id === id) return destinations[i]
-        const deep = {
-            appearance: {id:"appearance", source:"../../shared_pages/AppearancePage.qml", complex:true},
-            vehicle: {id:"vehicle", source:"../../shared_pages/VehiclePage.qml", complex:true},
-            services: {id:"services", source:"../../shared_pages/ServicesPage.qml", complex:true},
-            system: {id:"system", source:"../../shared_pages/SystemPage.qml", complex:true},
-            developer: {id:"developer", source:"../../shared_pages/DeveloperPage.qml", complex:true}
-        }
-        return deep[id] || destinations[0]
+        return destinations[0]
     }
 
     function navigate(id) {
+        if (["appearance", "vehicle", "services", "system", "diagnostic", "developer"].indexOf(id) >= 0) {
+            root.settingsRequested(id)
+            return
+        }
         const info = routeInfo(id)
         if (info.complex && S.UiState.complexInteraction) {
             attentionBanner.shown = true
@@ -47,47 +46,18 @@ Item {
     }
 
     function askConfirmation(action) {
-        if (action === "resume_trip") {
-            bridge.resumeTripSession()
-            return
-        }
-        confirmationAction = action
-        const copy = {
-            reset_a: ["Remettre Trip A à zéro ?", "La distance Trip A sera effacée.", "REMETTRE À ZÉRO", true],
-            reset_b: ["Remettre Trip B à zéro ?", "La distance et la consommation Trip B seront effacées.", "REMETTRE À ZÉRO", true],
-            reset_maintenance: ["Confirmer la révision ?", "Le compteur d’entretien repartira sur un intervalle complet.", "CONFIRMER LA RÉVISION", false],
-            end_trip: ["Terminer le trajet ?", "Le trajet sera clôturé et ses statistiques sauvegardées.", "TERMINER LE TRAJET", true],
-            quit: ["Quitter CliOS ?", "Les services seront arrêtés proprement avant la fermeture.", "QUITTER", true],
-            restart: ["Redémarrer CliOS ?", "Les services seront relancés et le profil en attente sera chargé.", "REDÉMARRER", true],
-            shutdown: ["Éteindre le système ?", "Le Raspberry Pi et les services CliOS seront arrêtés proprement.", "ÉTEINDRE", true]
-        }
-        const data = copy[action]
-        if (!data) return
-        confirmDialog.title = data[0]
-        confirmDialog.message = data[1]
-        confirmDialog.acceptText = data[2]
-        confirmDialog.dangerous = data[3]
-        confirmDialog.visible = true
+        root.commandRequested(action)
     }
 
     function executeConfirmed() {
         confirmDialog.visible = false
-        switch (confirmationAction) {
-        case "reset_a": bridge.resetTripA(); break
-        case "reset_b": bridge.resetTripB(); break
-        case "reset_maintenance": bridge.resetMaintenance(); break
-        case "end_trip": bridge.endTripSession(); break
-        case "quit": bridge.quitApplication(); break
-        case "restart": bridge.restartApplication(); break
-        case "shutdown": bridge.shutdownSystem(); break
-        }
+        root.commandRequested(confirmationAction)
         confirmationAction = ""
     }
 
     Keys.onPressed: event => {
         if (event.key === Qt.Key_T) {
-            if (S.UiState.sessionState === "PAUSED") bridge.resumeTripSession()
-            else bridge.setSessionState("PAUSED")
+            root.commandRequested(S.UiState.sessionState === "PAUSED" ? "resume_trip" : "pause_trip")
         }
     }
 
@@ -202,7 +172,7 @@ Item {
                     Row {
                         visible: S.UiState.sessionState === "PAUSED"
                         Layout.alignment: Qt.AlignHCenter; spacing: 18
-                        GtButton { width: 280; text: "CONTINUER"; primary: true; onClicked: bridge.resumeTripSession() }
+                        GtButton { width: 280; text: "CONTINUER"; primary: true; onClicked: root.commandRequested("resume_trip") }
                         GtButton { width: 320; text: "TERMINER LE TRAJET"; destructive: true; onClicked: root.askConfirmation("end_trip") }
                     }
                     Text { visible: S.UiState.sessionState === "ENDED"; Layout.alignment: Qt.AlignHCenter; text: "Données sauvegardées"; color: T.StyleManager.success; font.pixelSize: 24; font.weight: Font.DemiBold }

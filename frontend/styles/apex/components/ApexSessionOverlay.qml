@@ -132,7 +132,7 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         onPressed: parent.opacity = 0.7; onReleased: parent.opacity = 1.0
-                        onClicked: bridge.resumeTripSession()
+                        onClicked: root.actionRequested("resume_trip")
                     }
                 }
 

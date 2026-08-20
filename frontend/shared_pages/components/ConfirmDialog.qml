@@ -3,6 +3,7 @@ import "../../style" as T
 
 Rectangle {
     id: root
+    objectName: "globalConfirmDialog"
     signal accepted()
     signal rejected()
     property string title: "Confirmer l’action"

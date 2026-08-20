@@ -1,12 +1,13 @@
 import QtQuick
 import "components"
-import "pages"
 import "../../style"
 import "../../state" as S
 
 Item {
     id: root
     objectName: "legacyDashboardRoot"
+    signal settingsRequested(string route)
+    signal commandRequested(string command)
     property string sessionState: S.UiState.sessionState
 
     Rectangle { anchors.fill: parent; color: "#000000" }
@@ -33,7 +34,11 @@ Item {
         anchors.verticalCenterOffset: -30
         z: 10
 
-        CenterHub { anchors.fill: parent }
+        CenterHub {
+            anchors.fill: parent
+            onSettingsRequested: route => root.settingsRequested(route)
+            onCommandRequested: command => root.commandRequested(command)
+        }
 
         Image {
             source: "../../assets/Renault-Logo-w.png"
@@ -119,8 +124,8 @@ Item {
                     visible: root.sessionState === "PAUSED"
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 20
-                    LegacyButton { text: "CONTINUER"; onClicked: bridge.resumeTripSession() }
-                    LegacyButton { text: "TERMINER"; dangerous: true; onClicked: bridge.endTripSession() }
+                    LegacyButton { text: "CONTINUER"; onClicked: root.commandRequested("resume_trip") }
+                    LegacyButton { text: "TERMINER"; dangerous: true; onClicked: root.commandRequested("end_trip") }
                 }
             }
         }
@@ -177,13 +182,13 @@ Item {
 
         Text {
             anchors.centerIn: parent
-            text: "RETOUR AUX STYLES GT"
+            text: "RÉGLAGES CLIOS"
             color: "white"
             font.family: "Arial"
             font.pixelSize: 16
             font.bold: true
         }
-        MouseArea { anchors.fill: parent; onClicked: StyleManager.selectStyle("gt_modern") }
+        MouseArea { anchors.fill: parent; onClicked: root.settingsRequested("appearance") }
     }
 
     component LegacyMetric: Column {

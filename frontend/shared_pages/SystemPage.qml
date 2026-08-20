@@ -52,7 +52,7 @@ Item {
         }
         RowLayout {
             Layout.fillWidth: true; Layout.preferredHeight: 72; spacing: 12
-            Button { Layout.fillWidth: true; text: "MAINTENANCE"; primary: true; subtext: "Menu système & OverlayFS"; onClicked: bridge.openMaintenanceMenu() }
+            Button { Layout.fillWidth: true; text: "MAINTENANCE"; primary: true; subtext: "Menu système & OverlayFS"; onClicked: root.actionRequested("maintenance") }
             Button { Layout.fillWidth: true; text: "DIAGNOSTIC"; subtext: root.exportPath ? root.exportPath : "Exporter les logs"; onClicked: root.exportPath = bridge.exportDiagnosticBundle() }
             Button { Layout.fillWidth: true; text: "QUITTER"; onClicked: root.actionRequested("quit") }
             Button { Layout.fillWidth: true; text: "REDÉMARRER"; destructive: true; onClicked: root.actionRequested("restart") }

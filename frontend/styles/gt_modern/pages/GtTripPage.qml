@@ -11,7 +11,7 @@ Item {
     function adjustFuelPrice(delta) {
         const current = S.UiState.number(S.UiState.fuelPrice, 1.70)
         const next = Math.max(0.50, Math.min(3.50, Math.round((current + delta) * 100) / 100))
-        bridge.updateFuelPrice(next)
+        root.actionRequested("set_fuel_price:" + next)
     }
 
     ColumnLayout {

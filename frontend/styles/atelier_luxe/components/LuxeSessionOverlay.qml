@@ -80,7 +80,7 @@ Rectangle {
                     width: 260; height: 58; radius: 12
                     color: touchResume.pressed ? Qt.darker(T.StyleManager.accent, 1.3) : T.StyleManager.accent
                     Text { anchors.centerIn: parent; text: "REPRENDRE"; color: "#000000"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
-                    MouseArea { id: touchResume; anchors.fill: parent; onClicked: bridge.resumeTripSession() }
+                    MouseArea { id: touchResume; anchors.fill: parent; onClicked: root.actionRequested("resume_trip") }
                 }
 
                 Rectangle {

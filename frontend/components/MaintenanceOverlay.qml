@@ -6,6 +6,7 @@ import "../state" as S
 
 Item {
     id: root
+    signal commandRequested(string command)
     anchors.fill: parent
     z: 9998
     visible: opacity > 0.001
@@ -208,7 +209,7 @@ Item {
             columnSpacing: 16
             rowSpacing: 16
 
-            // 1. Mettre à jour (Git Pull)
+            // 1. Rechercher une release préparée
             Rectangle {
                 Layout.fillWidth: true; Layout.fillHeight: true; radius: 16
                 color: "#131C2E"; border.width: 1.5; border.color: T.StyleManager.accent
@@ -221,14 +222,14 @@ Item {
                     }
                     Text {
                         Layout.fillWidth: true
-                        text: "Exécute git pull pour télécharger les dernières fonctionnalités."
+                        text: "Recherche une release stable ou bêta sans modifier la version active."
                         color: "#94A3B8"; font.pixelSize: 13; wrapMode: Text.WordWrap
                     }
                 }
                 MouseArea {
                     anchors.fill: parent
                     onClicked: {
-                        bridge.triggerGitUpdate()
+                        bridge.checkForUpdates()
                     }
                 }
             }
@@ -252,11 +253,7 @@ Item {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: {
-                        root.confirmAction = "toggle_sd"
-                        root.confirmTitle = "Bascule protection SD ?"
-                        root.confirmMessage = "L état de protection en lecture seule de la carte SD va être modifié. Un redémarrage sera requis."
-                    }
+                    onClicked: root.commandRequested("toggle_overlayfs")
                 }
             }
 
@@ -280,7 +277,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     onClicked: {
-                        bridge.restartApplication()
+                        root.commandRequested("restart")
                     }
                 }
             }
@@ -304,11 +301,7 @@ Item {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: {
-                        root.confirmAction = "quit"
-                        root.confirmTitle = "Quitter CliOS ?"
-                        root.confirmMessage = "L interface va se fermer et les services de communication CAN seront arrêtés."
-                    }
+                    onClicked: root.commandRequested("quit")
                 }
             }
 
@@ -331,11 +324,7 @@ Item {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: {
-                        root.confirmAction = "reboot"
-                        root.confirmTitle = "Redémarrer le Raspberry Pi ?"
-                        root.confirmMessage = "L ordinateur de bord va s éteindre puis redémarrer complètement."
-                    }
+                    onClicked: root.commandRequested("reboot")
                 }
             }
 
@@ -358,11 +347,7 @@ Item {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: {
-                        root.confirmAction = "shutdown"
-                        root.confirmTitle = "Éteindre le système ?"
-                        root.confirmMessage = "Le Raspberry Pi et tous les services vont s arrêter en toute sécurité."
-                    }
+                    onClicked: root.commandRequested("shutdown")
                 }
             }
         }
@@ -429,10 +414,8 @@ Item {
                             onClicked: {
                                 const act = root.confirmAction
                                 root.confirmAction = ""
-                                if (act === "toggle_sd") bridge.toggleOverlayFs()
-                                else if (act === "quit") bridge.quitApplication()
-                                else if (act === "reboot") bridge.rebootSystem()
-                                else if (act === "shutdown") bridge.shutdownSystem()
+                                if (act === "toggle_sd") root.commandRequested("toggle_overlayfs")
+                                else root.commandRequested(act)
                             }
                         }
                     }

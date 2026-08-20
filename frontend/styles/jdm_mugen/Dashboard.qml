@@ -12,6 +12,8 @@ Item {
 
     objectName: "mugenDashboardRoot"
     focus: true
+    signal settingsRequested(string route)
+    signal commandRequested(string command)
 
     // Propriétés d'état
     property string currentView: "drive" // "drive" ou nom de sous-page
@@ -20,75 +22,30 @@ Item {
     property string pendingDescription: ""
     property bool pendingDangerous: false
 
-    // Table de routage vers les pages partagées CliOS
-    readonly property var subPageRoutes: ({
-        appearance: "../../shared_pages/AppearancePage.qml",
-        vehicle:    "../../shared_pages/VehiclePage.qml",
-        services:   "../../shared_pages/ServicesPage.qml",
-        system:     "../../shared_pages/SystemPage.qml",
-        diagnostic: "../../shared_pages/DiagnosticPage.qml",
-        developer:  "../../shared_pages/DeveloperPage.qml"
-    })
-
     function navigate(viewId) {
         currentView = viewId
         if (viewId === "drive" || viewId === "cockpit" || viewId === "main") {
             subPageOverlay.visible = false
             subPageLoader.source = ""
-        } else if (subPageRoutes[viewId]) {
-            subPageLoader.source = Qt.resolvedUrl(subPageRoutes[viewId])
-            subPageOverlay.visible = true
+        } else if (["appearance", "vehicle", "services", "system", "diagnostic", "developer"].indexOf(viewId) >= 0) {
+            root.settingsRequested(viewId)
         }
     }
 
     function askConfirmation(action) {
-        if (action === "resume_trip") {
-            bridge.resumeTripSession()
-            return
-        }
-
-        const copy = {
-            reset_a: ["Remettre Trip A à zéro ?", "La distance Trip A sera effacée.", "REMETTRE À ZÉRO", true],
-            reset_b: ["Remettre Trip B à zéro ?", "La distance et la consommation moyenne Trip B seront effacées.", "REMETTRE À ZÉRO", true],
-            reset_maintenance: ["Confirmer la révision ?", "Le compteur d'entretien repartira sur un intervalle complet.", "CONFIRMER LA RÉVISION", false],
-            end_trip: ["Terminer le trajet ?", "Le trajet sera clôturé et ses statistiques sauvegardées.", "TERMINER LE TRAJET", true],
-            quit: ["Quitter CliOS ?", "Les services seront arrêtés proprement avant la fermeture.", "QUITTER", true],
-            restart: ["Redémarrer CliOS ?", "Les services seront relancés et le profil en attente sera rechargé.", "REDÉMARRER", true],
-            shutdown: ["Éteindre le système ?", "Le calculateur et le système d'exploitation seront arrêtés proprement.", "ÉTEINDRE", true]
-        }
-
-        const d = copy[action]
-        if (!d) return
-        pendingAction = action
-        pendingTitle = d[0]
-        pendingDescription = d[1]
-        pendingDangerous = d[3]
-        confirmDialog.title = d[0]
-        confirmDialog.message = d[1]
-        confirmDialog.acceptText = d[2]
-        confirmDialog.dangerous = d[3]
-        confirmDialog.open()
+        root.commandRequested(action)
     }
 
     function executeConfirmed() {
         confirmDialog.close()
-        switch (pendingAction) {
-        case "reset_a": bridge.resetTripA(); break
-        case "reset_b": bridge.resetTripB(); break
-        case "reset_maintenance": bridge.resetMaintenance(); break
-        case "end_trip": bridge.endTripSession(); break
-        case "quit": bridge.quitApplication(); break
-        case "restart": bridge.restartApplication(); break
-        case "shutdown": bridge.shutdownSystem(); break
-        }
+        root.commandRequested(pendingAction)
         pendingAction = ""
     }
 
     // Gestion des touches raccourcis
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_T) {
-            if (S.UiState.sessionState === "PAUSED") bridge.resumeTripSession()
-            else bridge.setSessionState("PAUSED")
+            root.commandRequested(S.UiState.sessionState === "PAUSED" ? "resume_trip" : "pause_trip")
             event.accepted = true
         } else if (event.key === Qt.Key_M) {
             menuDrawer.open()

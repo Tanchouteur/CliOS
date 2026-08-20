@@ -338,8 +338,7 @@ Item {
                                         anchors.fill: parent
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            if (S.UiState.sessionState === "PAUSED") bridge.resumeTripSession()
-                                            else bridge.setSessionState("PAUSED")
+                                            root.actionRequested(S.UiState.sessionState === "PAUSED" ? "resume_trip" : "pause_trip")
                                         }
                                     }
                                 }
@@ -485,7 +484,7 @@ Item {
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         root.close()
-                                        bridge.openMaintenanceMenu()
+                                        root.actionRequested("maintenance")
                                     }
                                 }
                             }
@@ -519,7 +518,7 @@ Item {
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: bridge.triggerGitUpdate()
+                                    onClicked: root.navigateRequested("system")
                                 }
                             }
 

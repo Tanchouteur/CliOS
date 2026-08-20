@@ -22,6 +22,9 @@ class UiStyleCatalogTest(unittest.TestCase):
     def make_bridge(self, styles_dir):
         bridge = DashboardBridge.__new__(DashboardBridge)
         bridge._ui_styles_dir = styles_dir
+        bridge._dev_styles_dir = os.path.join(styles_dir, "dev")
+        bridge._config = {}
+        bridge._clios_version = (2, 0, 0)
         bridge.logger = type("Logger", (), {"error": lambda *args, **kwargs: None})()
         return bridge
 
@@ -39,18 +42,23 @@ class UiStyleCatalogTest(unittest.TestCase):
             self.write_style(styles_dir, "valid_style", {
                 "id": "valid_style", "label": "Valide", "description": "Test",
                 "order": 5, "dashboard": "Dashboard.qml", "palette": PALETTE,
+                "apiVersion": 1, "minCliOSVersion": "2.0.0",
+                "supportedResolutions": ["1920x720"], "capabilities": [],
             })
             self.write_style(styles_dir, "wrong_id", {
                 "id": "another_id", "label": "Invalide", "dashboard": "Dashboard.qml",
-                "palette": PALETTE,
+                "palette": PALETTE, "apiVersion": 1,
+                "supportedResolutions": ["1920x720"], "capabilities": [],
             })
             self.write_style(styles_dir, "missing_qml", {
                 "id": "missing_qml", "label": "Invalide", "dashboard": "Dashboard.qml",
-                "palette": PALETTE,
+                "palette": PALETTE, "apiVersion": 1,
+                "supportedResolutions": ["1920x720"], "capabilities": [],
             }, with_dashboard=False)
             self.write_style(styles_dir, "_template", {
                 "id": "_template", "label": "Gabarit", "dashboard": "Dashboard.qml",
-                "palette": PALETTE,
+                "palette": PALETTE, "apiVersion": 1,
+                "supportedResolutions": ["1920x720"], "capabilities": [],
             })
 
             styles = DashboardBridge.getAvailableUiStyles(self.make_bridge(styles_dir))

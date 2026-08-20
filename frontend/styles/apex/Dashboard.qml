@@ -16,6 +16,8 @@ Item {
     clip:   true
 
     objectName: "apexDashboardRoot"
+    signal settingsRequested(string route)
+    signal commandRequested(string command)
 
     // ── État de navigation ────────────────────────────────────────────────────
     property string currentTab: "drive"
@@ -38,38 +40,12 @@ Item {
     }
 
     function askConfirmation(action) {
-        if (action === "resume_trip") { bridge.resumeTripSession(); return }
-
-        var copy = {
-            reset_a:            ["Remettre Trip A à zéro ?",       "La distance Trip A sera effacée.",                               "REMETTRE À ZÉRO",      true  ],
-            reset_b:            ["Remettre Trip B à zéro ?",       "Distance et consommation Trip B seront effacées.",               "REMETTRE À ZÉRO",      true  ],
-            reset_maintenance:  ["Confirmer la révision ?",         "Le compteur d'entretien repartira sur un intervalle complet.",   "CONFIRMER LA RÉVISION", false ],
-            end_trip:           ["Terminer le trajet ?",            "Le trajet sera clôturé et ses statistiques sauvegardées.",       "TERMINER LE TRAJET",   true  ],
-            quit:               ["Quitter CliOS ?",                 "Les services seront arrêtés proprement avant la fermeture.",     "QUITTER",              true  ],
-            restart:            ["Redémarrer CliOS ?",              "Les services seront relancés et le profil rechargé.",            "REDÉMARRER",           true  ],
-            shutdown:           ["Éteindre le système ?",           "Le Raspberry Pi sera arrêté proprement.",                       "ÉTEINDRE",             true  ]
-        }
-        var d = copy[action]
-        if (!d) return
-        pendingAction = action
-        pendingTitle  = d[0]
-        pendingMsg    = d[1]
-        pendingDanger = d[3]
-        confirmDlg.acceptText = d[2]
-        confirmDlg.open()
+        root.commandRequested(action)
     }
 
     function executeConfirmed() {
         confirmDlg.close()
-        switch (pendingAction) {
-            case "reset_a":           bridge.resetTripA();          break
-            case "reset_b":           bridge.resetTripB();          break
-            case "reset_maintenance": bridge.resetMaintenance();    break
-            case "end_trip":          bridge.endTripSession();      break
-            case "quit":              bridge.quitApplication();     break
-            case "restart":           bridge.restartApplication();  break
-            case "shutdown":          bridge.shutdownSystem();      break
-        }
+        root.commandRequested(pendingAction)
         pendingAction = ""
     }
 
@@ -126,16 +102,8 @@ Item {
             ignoreUnknownSignals: true
             function onNavigateRequested(tgt) {
                 // Pages secondaires partagées (Apparence, Véhicule, Services, Système, Développeur)
-                var subPages = {
-                    appearance: "../../shared_pages/AppearancePage.qml",
-                    vehicle:    "../../shared_pages/VehiclePage.qml",
-                    services:   "../../shared_pages/ServicesPage.qml",
-                    system:     "../../shared_pages/SystemPage.qml",
-                    developer:  "../../shared_pages/DeveloperPage.qml"
-                }
-                if (subPages[tgt]) {
-                    subPageLoader.source = Qt.resolvedUrl(subPages[tgt])
-                    subPageOverlay.visible = true
+                if (["appearance", "vehicle", "services", "system", "diagnostic", "developer"].indexOf(tgt) >= 0) {
+                    root.settingsRequested(tgt)
                 } else {
                     root.navigate(tgt)
                 }
