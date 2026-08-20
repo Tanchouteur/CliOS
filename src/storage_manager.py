@@ -20,7 +20,8 @@ except ImportError:  # pyudev n'est disponible que sur Linux en production.
 
 class StorageMode(Enum):
     USB = "USB"
-    VOLATILE = "VOLATILE"
+    INTERNAL = "INTERNAL"
+    VOLATILE = "RAM"
 
 
 class StorageManager:
@@ -34,16 +35,20 @@ class StorageManager:
         usb_folder_name: str = "clios",
         media_root: str = "/media/clios",
         volatile_root: str | None = None,
+        internal_root: str = "/var/lib/clios",
         scan_interval: float = 1.0,
         mount_provider: Callable[[], Iterable[str]] | None = None,
+        mount_table_provider: Callable[[], str] | None = None,
     ):
         self._base_dir = os.path.abspath(base_dir)
         self._logger = logging.getLogger("StorageManager")
         self._usb_folder_name = usb_folder_name
         self._media_root = os.path.abspath(media_root)
         self._volatile_root = os.path.abspath(volatile_root or self._default_volatile_root())
+        self._internal_root = os.path.abspath(internal_root)
         self._scan_interval = max(0.2, float(scan_interval))
         self._mount_provider = mount_provider or self._mounted_volumes
+        self._mount_table_provider = mount_table_provider or self._read_mount_table
 
         self._mode = StorageMode.VOLATILE
         self._usb_root: str | None = None
@@ -55,19 +60,25 @@ class StorageManager:
         self._udev_observer = None
 
         self._ensure_tree(self._volatile_root)
+        if not self._root_is_overlay() and self._prepare_root(self._internal_root):
+            self._mode = StorageMode.INTERNAL
         self.refresh()
 
     @staticmethod
     def _default_volatile_root() -> str:
-        # /dev/shm est un tmpfs sur Linux. /tmp reste le fallback de développement.
-        shm = "/dev/shm"
-        if os.name == "posix" and os.path.isdir(shm) and os.access(shm, os.W_OK):
-            return os.path.join(shm, "clios_volatile")
+        # /run est un tmpfs sur Raspberry Pi OS. /tmp reste le repli développement.
+        run_root = "/run"
+        if os.name == "posix" and os.path.isdir(run_root) and os.access(run_root, os.W_OK):
+            return os.path.join(run_root, "clios")
         return os.path.join(tempfile.gettempdir(), "clios_volatile")
 
     def get_writable_root(self) -> str:
         with self._lock:
-            return self._usb_root if self._mode is StorageMode.USB and self._usb_root else self._volatile_root
+            if self._mode is StorageMode.USB and self._usb_root:
+                return self._usb_root
+            if self._mode is StorageMode.INTERNAL:
+                return self._internal_root
+            return self._volatile_root
 
     def resolve_path(self, relative_path: str) -> str:
         relative = self._validate_relative_path(relative_path)
@@ -131,7 +142,7 @@ class StorageManager:
             self._switch_to_usb(candidate)
             return True
         if not candidate and current_mode is StorageMode.USB:
-            self._switch_to_volatile()
+            self._switch_to_base_storage()
             return True
         return False
 
@@ -162,9 +173,10 @@ class StorageManager:
 
         free_mb = 0.0
         total_mb = 0.0
-        if usb_root:
+        active_root = self.get_writable_root()
+        if active_root:
             try:
-                usage = shutil.disk_usage(usb_root)
+                usage = shutil.disk_usage(active_root)
                 free_mb = usage.free / (1024 * 1024)
                 total_mb = usage.total / (1024 * 1024)
             except OSError:
@@ -186,7 +198,7 @@ class StorageManager:
             "mode": mode.value,
             "usb_connected": mode is StorageMode.USB,
             "mount_point": os.path.dirname(usb_root) if usb_root else "",
-            "storage_root": usb_root or self._volatile_root,
+            "storage_root": active_root,
             "free_space_mb": round(free_mb, 1),
             "total_space_mb": round(total_mb, 1),
             "trip_count": trip_count,
@@ -271,7 +283,7 @@ class StorageManager:
     def _switch_to_usb(self, usb_root: str) -> None:
         try:
             self._ensure_tree(usb_root)
-            self._migrate_volatile_to_usb(usb_root)
+            self._migrate_without_overwrite(self.get_writable_root(), usb_root)
         except OSError:
             return
 
@@ -280,24 +292,30 @@ class StorageManager:
             self._mode = StorageMode.USB
         self._notify_callbacks(StorageMode.USB)
 
-    def _switch_to_volatile(self) -> None:
-        try:
-            self._ensure_tree(self._volatile_root)
-        except OSError:
-            return
+    def _switch_to_base_storage(self) -> None:
+        mode = StorageMode.VOLATILE
+        target = self._volatile_root
+        if not self._root_is_overlay() and self._prepare_root(self._internal_root):
+            mode = StorageMode.INTERNAL
+            target = self._internal_root
+        self._ensure_tree(target)
         with self._lock:
             self._usb_root = None
-            self._mode = StorageMode.VOLATILE
-        self._notify_callbacks(StorageMode.VOLATILE)
+            self._mode = mode
+        self._notify_callbacks(mode)
 
     def _migrate_volatile_to_usb(self, usb_root: str) -> None:
         """Copie les fichiers volatils sans écraser silencieusement l'USB."""
-        if not os.path.isdir(self._volatile_root):
-            return
-        for source_dir, dirnames, filenames in os.walk(self._volatile_root, followlinks=False):
+        self._migrate_without_overwrite(self._volatile_root, usb_root)
+
+    def _migrate_without_overwrite(self, source_root: str, target_root: str) -> dict:
+        report = {"source": source_root, "target": target_root, "copied": [], "conflicts": []}
+        if not os.path.isdir(source_root) or os.path.realpath(source_root) == os.path.realpath(target_root):
+            return report
+        for source_dir, dirnames, filenames in os.walk(source_root, followlinks=False):
             dirnames[:] = [name for name in dirnames if not os.path.islink(os.path.join(source_dir, name))]
-            relative_dir = os.path.relpath(source_dir, self._volatile_root)
-            target_dir = usb_root if relative_dir == "." else os.path.join(usb_root, relative_dir)
+            relative_dir = os.path.relpath(source_dir, source_root)
+            target_dir = target_root if relative_dir == "." else os.path.join(target_root, relative_dir)
             os.makedirs(target_dir, exist_ok=True)
             for filename in filenames:
                 if filename.endswith(".tmp"):
@@ -308,12 +326,64 @@ class StorageManager:
                 target = os.path.join(target_dir, filename)
                 if not os.path.exists(target):
                     shutil.copy2(source, target)
+                    report["copied"].append(os.path.relpath(target, target_root))
                     continue
                 if self._same_file_contents(source, target):
                     continue
-                if relative_dir in {"trips", "trips_mock", "diagnostics", "logs"}:
-                    conflict = self._conflict_path(target)
-                    shutil.copy2(source, conflict)
+                conflict = self._conflict_path(target)
+                shutil.copy2(source, conflict)
+                report["conflicts"].append(os.path.relpath(conflict, target_root))
+        return report
+
+    def migrate_existing_data(self, source_root: str, report_path: str | None = None) -> dict:
+        """Copie une ancienne installation vers le stockage actif sans supprimer la source."""
+        import json
+        report = self._migrate_without_overwrite(os.path.abspath(source_root), self.get_writable_root())
+        if report_path:
+            os.makedirs(os.path.dirname(report_path), exist_ok=True)
+            with open(report_path, "w", encoding="utf-8") as stream:
+                json.dump(report, stream, indent=2, ensure_ascii=False)
+        return report
+
+    @classmethod
+    def _prepare_root(cls, root: str) -> bool:
+        try:
+            cls._ensure_tree(root)
+            probe = os.path.join(root, ".write-probe")
+            with open(probe, "w", encoding="utf-8") as stream:
+                stream.write("ok")
+            os.remove(probe)
+            return True
+        except OSError:
+            return False
+
+    @staticmethod
+    def _read_mount_table() -> str:
+        for path in ("/proc/self/mountinfo", "/proc/mounts"):
+            try:
+                with open(path, encoding="utf-8") as stream:
+                    return stream.read()
+            except OSError:
+                continue
+        return ""
+
+    def _root_is_overlay(self) -> bool:
+        """Détecte le type du montage racine, pas sa simple inscriptibilité."""
+        try:
+            table = self._mount_table_provider()
+        except Exception:
+            return False
+        for line in table.splitlines():
+            fields = line.split()
+            if " - " in line:
+                before, after = line.split(" - ", 1)
+                mount_fields = before.split()
+                after_fields = after.split()
+                if len(mount_fields) >= 5 and mount_fields[4] == "/" and after_fields:
+                    return after_fields[0] == "overlay"
+            elif len(fields) >= 3 and fields[1] == "/":
+                return fields[2] == "overlay"
+        return False
 
     @staticmethod
     def _same_file_contents(left: str, right: str) -> bool:
@@ -336,7 +406,7 @@ class StorageManager:
         stem, suffix = os.path.splitext(path)
         index = 1
         while True:
-            candidate = f"{stem}.volatile-{index}{suffix}"
+            candidate = f"{stem}.migration-{index}{suffix}"
             if not os.path.exists(candidate):
                 return candidate
             index += 1

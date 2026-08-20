@@ -34,7 +34,7 @@ class UsbStorageService(BaseService):
                 self.set_warning("Mode dégradé — données temporaires en RAM")
 
             self.runtime.publish("system", {
-                "storage_mode": status.get("mode", "VOLATILE"),
+                "storage_mode": status.get("mode", "RAM"),
                 "storage_usb_connected": bool(status.get("usb_connected", False)),
                 "storage_free_mb": free_mb,
                 "storage_mount": status.get("mount_point", ""),
