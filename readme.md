@@ -1,5 +1,7 @@
 # CliOS
 
+> CliOS 2.0 officially targets Raspberry Pi OS Bookworm 64-bit on Raspberry Pi 4/5 with a 1920×720 display. Other resolutions and desktop platforms remain experimental development targets.
+
 <div align="center">
 
 **Open-source, modular digital cockpit and telemetry system for vehicles.**  
@@ -33,6 +35,13 @@
 - **Fail-Safe Architecture**: In-memory state store with strict TTL, domain snapshots, and volatile fallbacks.
 - **Zero-Hardware Mock Mode**: Fully interactive physics and CAN simulation engine to test and develop on macOS, Linux, or Windows without a car.
 - **Raspberry Pi 5 Fast-Boot**: Auto-launch into a distraction-free Wayland kiosk (`cage`) under 5 seconds.
+- **Safe Releases**: SHA-256 verified staging, atomic `/opt/clios/current` activation, first-boot health checks, and automatic N-1 rollback.
+
+## CliOS 2.x compatibility
+
+Theme API v1 and the v1 theme, vehicle, CAN, and profile schemas remain stable throughout the 2.x series. A future incompatible contract requires a new major API version. Local themes are trusted, unsandboxed QML and are only loaded in developer mode. Python services remain statically registered and must be reviewed in this repository.
+
+Community guides: [create a theme, adapt a vehicle, and develop a service](docs/community_en.md). Validate contributions with `python3 tools/validate_data.py --all`.
 
 ---
 
@@ -75,7 +84,7 @@ To deploy CliOS inside a real car, the following hardware is required:
 1. **Single Board Computer**:
    - Raspberry Pi 5 (recommended) or Raspberry Pi 4 running Raspberry Pi OS 64-bit / Debian.
 2. **Display**:
-   - 1920x720 ultrawide bar display (HDMI or DSI) or any standard automotive/embedded screen.
+   - 1920x720 ultrawide display (HDMI or DSI). This is the only guaranteed layout; other formats are experimental.
 3. **CAN Interface Adapter**:
    - Any SocketCAN-compatible USB or SPI adapter connected to the vehicle's CAN bus (OBD-II port or direct CAN High/Low wiring).
    - Supported adapters: **InnoMaker USB-CAN**, **CANable / CandleLight** (gs_usb), **Waveshare CAN HAT**, or **SLCAN** serial adapters (OBDLink SX, etc.).
