@@ -21,8 +21,10 @@ def main():
 
     project_root = Path(__file__).resolve().parent.parent
     styles_dir = project_root / "frontend" / "styles"
+    target_root = project_root / "frontend" / "dev_styles"
+    target_root.mkdir(parents=True, exist_ok=True)
     template_dir = styles_dir / "_template"
-    target_dir = styles_dir / args.style_id
+    target_dir = target_root / args.style_id
     if target_dir.exists():
         parser.error(f"le style existe déjà: {target_dir}")
 

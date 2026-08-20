@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clios.dev/schemas/v1/vehicle-config.schema.json",
+  "title": "CliOS vehicle configuration v1",
+  "type": "object",
+  "required": ["schema_version", "theme", "ui", "tachometer", "speedometer", "fuel", "engine_temp", "transmission", "maintenance"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "theme": {"type": "object", "required": ["main"]},
+    "ui": {"type": "object", "required": ["visual_style"]},
+    "tachometer": {"type": "object", "required": ["max_rpm", "redline_rpm"]},
+    "speedometer": {"type": "object", "required": ["max_speed"]},
+    "fuel": {"type": "object", "required": ["max_liters"]},
+    "engine_temp": {"type": "object", "required": ["warning", "max_display"]},
+    "transmission": {"type": "object", "required": ["type", "gears_count", "ratios"]},
+    "maintenance": {"type": "object", "required": ["revision"]}
+  }
+}

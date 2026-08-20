@@ -22,10 +22,24 @@ class ServiceStatus(Enum):
     ERROR = "ERROR"
 
 class BaseService:
-    """Classe parente (Interface) pour tous les services d'arrière-plan."""
+    """Service API v1 : identité, paramètres typés, santé et cycle de vie."""
 
-    def __init__(self, service_name: str, storage=None):
+    API_VERSION = 1
+
+    def __init__(self, service_name: str, storage=None, *, service_id: str | None = None,
+                 description: str = "", version: str = "1.0.0"):
         self.service_name = service_name
+        self.service_id = service_id or service_name
+        if not self.service_id or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-" for char in self.service_id):
+            raise ValueError("service_id doit être stable et ne contenir que lettres, chiffres, _, . ou -")
+        self.metadata = {
+            "api_version": self.API_VERSION,
+            "id": self.service_id,
+            "name": service_name,
+            "description": description,
+            "version": version,
+        }
+        self.lifecycle_state = "CREATED"
         self.status = ServiceStatus.OK
         self.status_msg = ""
         self._params = {}
@@ -42,6 +56,7 @@ class BaseService:
         if not implemented:
             raise NotImplementedError("La méthode start() doit être redéfinie !")
         self._stop_event = stop_event
+        self.lifecycle_state = "RUNNING"
 
     def stop(self):
         """Arrêt commun : signale puis rejoint les workers connus."""
@@ -55,6 +70,7 @@ class BaseService:
                 seen.add(worker)
                 worker.join(timeout=2.0)
         self.logger.info("Arret du service", extra={"error_code": "SERVICE_STOP"})
+        self.lifecycle_state = "STOPPED"
 
     def register_param(self, key: str, label: str, param_type: str | ServiceParamType, default_val, persistent=True, **kwargs):
         """Enregistre un paramètre. Si persistent=True, le service gère sa propre sauvegarde."""
@@ -157,8 +173,14 @@ class BaseService:
         with self._state_lock:
             return {
                 "status": self.status.value,
-                "message": self.status_msg
+                "message": self.status_msg,
+                "service_id": self.service_id,
+                "api_version": self.API_VERSION,
+                "lifecycle": self.lifecycle_state,
             }
+
+    def get_metadata(self) -> dict:
+        return dict(self.metadata)
 
     def print_message(self, message: str):
         self.logger.info(message)

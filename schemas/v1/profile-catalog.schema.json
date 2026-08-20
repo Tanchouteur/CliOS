@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clios.dev/schemas/v1/profile-catalog.schema.json",
+  "title": "CliOS vehicle profile catalog v1",
+  "type": "object",
+  "required": ["schema_version", "active_profile", "profiles"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "active_profile": {"type": "string", "minLength": 1},
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name", "can_file", "config_file", "save_file"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "can_file": {"type": "string", "pattern": "^[^/]+\\.json$"},
+          "config_file": {"type": "string", "pattern": "^[^/]+\\.json$"},
+          "save_file": {"type": "string", "pattern": "^[^/]+\\.json$"}
+        }
+      }
+    }
+  }
+}
