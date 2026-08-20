@@ -25,94 +25,13 @@ ApplicationWindow {
         source: Qt.resolvedUrl(StyleManager.dashboardSource)
     }
 
-    // Réception des événements de maintien 4 doigts depuis le filtre C++/Python (aucun blocage tactile QML)
-    Connections {
-        target: bridge
-        ignoreUnknownSignals: true
-        function onOpenMaintenanceRequested() {
-            holdAnim.stop()
-            holdProgressBar.width = 0
-            holdIndicator.visible = false
-            maintenanceOverlay.open()
-        }
-        function onMaintenanceHoldProgressChanged(active) {
-            if (active && !maintenanceOverlay.visible) {
-                holdIndicator.visible = true
-                holdAnim.restart()
-            } else {
-                holdAnim.stop()
-                holdProgressBar.width = 0
-                holdIndicator.visible = false
-            }
-        }
-    }
-
-    // Indicateur visuel discret lors du maintien à 4 doigts
-    Rectangle {
-        id: holdIndicator
-        anchors.centerIn: parent
-        width: 320
-        height: 64
-        radius: 32
-        color: "#F00F172A"
-        border.width: 2
-        border.color: StyleManager.accent
-        z: 9997
-        visible: false
-        clip: true
-
-        RowLayout {
-            anchors.centerIn: parent
-            spacing: 12
-            Text {
-                text: "🛠️"
-                font.pixelSize: 22
-            }
-            ColumnLayout {
-                spacing: 2
-                Text {
-                    text: "Accès Maintenance..."
-                    color: "#FFFFFF"
-                    font.family: StyleManager.fontFamily
-                    font.pixelSize: 14
-                    font.bold: true
-                }
-                Text {
-                    text: "Maintenez 4 doigts appuyés"
-                    color: "#94A3B8"
-                    font.family: StyleManager.fontFamily
-                    font.pixelSize: 11
-                }
-            }
-        }
-
-        // Barre de progression en bas de la capsule
-        Rectangle {
-            id: holdProgressBar
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            height: 4
-            radius: 2
-            color: StyleManager.accent
-            width: 0
-
-            NumberAnimation {
-                id: holdAnim
-                target: holdProgressBar
-                property: "width"
-                from: 0
-                to: holdIndicator.width
-                duration: 4000
-            }
-        }
-    }
-
-    // Raccourci secret tactile 1 doigt dans le coin supérieur droit (5 clics rapides ou appui long 3s)
+    // Raccourci secret tactile dans le coin supérieur droit (5 clics rapides ou appui long 3s)
+    // Ne bloque aucun toucher sur le reste de l'écran
     Item {
         anchors.top: parent.top
         anchors.right: parent.right
-        width: 70
-        height: 70
+        width: 80
+        height: 80
         z: 9996
 
         property int tapCount: 0

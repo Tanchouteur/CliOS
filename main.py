@@ -258,12 +258,14 @@ def main():
             runtime_targets["export"] = exp_service
             orchestrator.add_service(exp_service, enabled=storage.get("services.Export.enabled", True))
 
-            orchestrator.start_all()
-
-            # Lancement QML
+            # Lancement QML immédiat (First-Frame First : affichage prioritaire)
             engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
             if not engine.rootObjects():
                 sys.exit(-1)
+
+            # Démarrage des services d'arrière-plan dès le premier tick d'affichage
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, orchestrator.start_all)
 
             # Outils de Mock
             mock_panel = None

@@ -2,7 +2,7 @@ import json
 import os
 import threading
 
-from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication, QEvent
+from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
 from src.logging_runtime import get_logger, get_recent_events
 from src.diagnostic_bundle import create_diagnostic_bundle
 from src.state_store import VEHICLE_DOMAINS
@@ -21,8 +21,6 @@ class DashboardBridge(QObject):
     dataQualityChanged = Signal()
     configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
-    openMaintenanceRequested = Signal()
-    maintenanceHoldProgressChanged = Signal(bool)
 
     def __init__(self, runtime, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
@@ -491,7 +489,6 @@ class DashboardBridge(QObject):
         if self.session_manager:
             self.session_manager.end_trip()
 
-
     @Slot()
     def triggerGitUpdate(self):
         """Déclenche la mise à jour Git de CliOS en arrière-plan."""
@@ -734,7 +731,6 @@ class DashboardBridge(QObject):
         self.send_notification("WARNING", "Redémarrage du système...", 3000)
         threading.Thread(target=self._handle_exit, args=(False, True), daemon=True).start()
 
-    # Pas super propre. A re faire
     @Slot()
     def quitApplication(self):
         """Arrête proprement les services et ferme l'application."""
@@ -748,11 +744,6 @@ class DashboardBridge(QObject):
         self.logger.warning("Extinction système demandée", extra={"error_code": "SYS_SHUTDOWN"})
         self.send_notification("WARNING", "Extinction du système...", 3000)
         threading.Thread(target=self._handle_exit, args=(True, False), daemon=True).start()
-
-    @Slot()
-    def openMaintenanceMenu(self):
-        """Ouvre le menu de maintenance."""
-        self.openMaintenanceRequested.emit()
 
     def _handle_exit(self, poweroff=False, reboot=False):
         import time
@@ -774,4 +765,3 @@ class DashboardBridge(QObject):
         else:
             # os._exit(0) est plus radical que quit() pour s'assurer que le thread principal s'arrête
             os._exit(0)
-
