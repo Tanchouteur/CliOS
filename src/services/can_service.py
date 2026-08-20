@@ -23,6 +23,8 @@ class CanService(BaseService):
         self.parser = DbcParser(dbc_path)
         self.processor = SignalProcessor()
         self.provider = provider
+        if hasattr(self.provider, "register_obd_callback") and self.obd_callback:
+            self.provider.register_obd_callback(self.obd_callback)
         self._last_frame_ts = None
         self._last_decoded_frame_ts = None
         self._stale_timeout_s = 1.5

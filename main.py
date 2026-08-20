@@ -182,7 +182,11 @@ def main():
 
     # --- 3. Initialisation Hardware ---
     if args.mock:
-        can_provider = PhysicsMockProvider(runtime)
+        can_provider = PhysicsMockProvider(
+            runtime,
+            config=vehicle_config,
+            can_db_path=profile_manager.get_can_path(),
+        )
     else:
         can_provider = Slcan()
 
