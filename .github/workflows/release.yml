@@ -52,7 +52,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${GITHUB_WORKSPACE}:/work" -w /work debian:bookworm \
-            bash -ceu 'apt-get update; apt-get install -y python3 python3-pip python3-venv build-essential libjack-jackd2-dev portaudio19-dev libsndfile1-dev liblo-dev; ./tools/build_wheelhouse.sh'
+            bash -ceu 'apt-get update; apt-get install -y python3 python3-pip python3-venv python3-wheel build-essential libjack-jackd2-dev portaudio19-dev libsndfile1-dev liblo-dev; ./tools/build_wheelhouse.sh'
 
       - name: Construire et contrôler les assets
         shell: bash

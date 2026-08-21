@@ -10,7 +10,7 @@ test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_in
 mkdir -p "${WHEEL_DIR}"
 BUILD_VENV="$(mktemp -d -t clios-wheelhouse.XXXXXX)"
 trap 'rm -rf -- "${BUILD_VENV}"' EXIT
-python3 -m venv "${BUILD_VENV}"
+python3 -m venv --system-site-packages "${BUILD_VENV}"
 "${BUILD_VENV}/bin/pip" wheel --require-hashes --wheel-dir "${WHEEL_DIR}" --requirement "${LOCK_FILE}"
 
 # Un wheel doit exister pour chaque exigence active : aucun build ne sera fait
