@@ -1,18 +1,105 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://clios.dev/schemas/v1/vehicle-config.schema.json",
+  "$id": "https://github.com/Tanchouteur/CliOS/schemas/v1/vehicle-config.schema.json",
   "title": "CliOS vehicle configuration v1",
   "type": "object",
   "required": ["schema_version", "theme", "ui", "tachometer", "speedometer", "fuel", "engine_temp", "transmission", "maintenance"],
   "properties": {
     "schema_version": {"const": 1},
-    "theme": {"type": "object", "required": ["main"]},
-    "ui": {"type": "object", "required": ["visual_style"]},
-    "tachometer": {"type": "object", "required": ["max_rpm", "redline_rpm"]},
-    "speedometer": {"type": "object", "required": ["max_speed"]},
-    "fuel": {"type": "object", "required": ["max_liters"]},
-    "engine_temp": {"type": "object", "required": ["warning", "max_display"]},
-    "transmission": {"type": "object", "required": ["type", "gears_count", "ratios"]},
-    "maintenance": {"type": "object", "required": ["revision"]}
+    "theme": {
+      "type": "object", "required": ["main"],
+      "properties": {"main": {"$ref": "#/$defs/color"}}
+    },
+    "ui": {
+      "type": "object", "required": ["visual_style"],
+      "properties": {"visual_style": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}}
+    },
+    "tachometer": {
+      "type": "object", "required": ["max_rpm", "redline_rpm"],
+      "properties": {
+        "max_rpm": {"type": "number", "exclusiveMinimum": 0, "maximum": 30000},
+        "redline_rpm": {"type": "number", "minimum": 0, "maximum": 30000},
+        "idle_rpm": {"type": "number", "minimum": 0, "maximum": 5000},
+        "color_normal": {"$ref": "#/$defs/color"},
+        "color_redline": {"$ref": "#/$defs/color"}
+      }
+    },
+    "speedometer": {
+      "type": "object", "required": ["max_speed"],
+      "properties": {"max_speed": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000}}
+    },
+    "engine": {
+      "type": "object",
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "max_power_kw": {"type": "number", "exclusiveMinimum": 0},
+        "max_power_rpm": {"type": "number", "minimum": 0},
+        "max_torque_nm": {"type": "number", "exclusiveMinimum": 0},
+        "max_torque_rpm": {"type": "number", "minimum": 0},
+        "performance_curve": {
+          "type": "array", "uniqueItems": true,
+          "items": {
+            "type": "object", "required": ["rpm", "torque_nm"],
+            "properties": {
+              "rpm": {"type": "number", "minimum": 0, "maximum": 30000},
+              "torque_nm": {"type": "number", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "fuel": {
+      "type": "object", "required": ["max_liters"],
+      "properties": {
+        "max_liters": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000},
+        "reserve_percentage": {"type": "number", "minimum": 0, "maximum": 1},
+        "counter_modulus_l": {"type": "number", "exclusiveMinimum": 0},
+        "max_plausible_rate_lph": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "engine_temp": {
+      "type": "object", "required": ["warning", "max_display"],
+      "properties": {
+        "min_display": {"type": "number", "minimum": -100, "maximum": 300},
+        "optimal": {"type": "number", "minimum": -100, "maximum": 300},
+        "warning": {"type": "number", "minimum": -100, "maximum": 300},
+        "max_display": {"type": "number", "minimum": -100, "maximum": 300}
+      }
+    },
+    "transmission": {
+      "type": "object", "required": ["type", "gears_count", "ratios"],
+      "properties": {
+        "type": {"enum": ["manual", "automatic", "cvt", "electric"]},
+        "gears_count": {"type": "integer", "minimum": 1, "maximum": 20},
+        "tolerance": {"type": "number", "minimum": 0, "maximum": 100},
+        "ratios": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[1-9][0-9]*$"},
+          "additionalProperties": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
+    "instant_fuel_consumption": {
+      "type": "object",
+      "properties": {
+        "min_display": {"type": "number", "minimum": 0},
+        "max_display": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "maintenance": {
+      "type": "object", "required": ["revision"],
+      "properties": {
+        "revision": {
+          "type": "object", "required": ["interval_km", "warning_threshold_km"],
+          "properties": {
+            "interval_km": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000000},
+            "warning_threshold_km": {"type": "number", "minimum": 0, "maximum": 1000000}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "color": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$"}
   }
 }

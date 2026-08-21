@@ -1,19 +1,45 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://clios.dev/schemas/v1/can-dictionary.schema.json",
+  "$id": "https://github.com/Tanchouteur/CliOS/schemas/v1/can-dictionary.schema.json",
   "title": "CliOS CAN dictionary v1",
   "type": "object",
   "required": ["schema_version"],
   "properties": {"schema_version": {"const": 1}},
   "patternProperties": {
-    "^0x[0-9a-fA-F]+$": {
-      "type": "object",
-      "required": ["name", "signals"],
+    "^0x[0-9a-fA-F]{1,8}$": {
+      "type": "object", "required": ["name", "signals"],
       "properties": {
-        "name": {"type": "string"},
-        "signals": {"type": "object", "minProperties": 1}
+        "name": {"type": "string", "minLength": 1},
+        "signals": {
+          "type": "object", "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/signal"}
+        }
       }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "signal": {
+      "type": "object", "required": ["start_byte"],
+      "properties": {
+        "start_byte": {"type": "integer", "minimum": 0, "maximum": 7},
+        "size": {"type": "integer", "minimum": 1, "maximum": 8},
+        "endian": {"enum": ["big", "little"]},
+        "signed": {"type": "boolean"},
+        "factor": {"type": "number"},
+        "offset": {"type": "number"},
+        "shift": {"type": "integer", "minimum": 0, "maximum": 63},
+        "bit_length": {"type": "integer", "minimum": 1, "maximum": 64},
+        "mask": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "string", "pattern": "^0x[0-9A-Fa-f]+$"}]},
+        "unit": {"type": ["string", "null"]},
+        "min_value": {"type": ["number", "null"]},
+        "max_value": {"type": ["number", "null"]},
+        "bits": {
+          "type": "object", "minProperties": 1,
+          "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 63}
+        }
+      },
+      "anyOf": [{"required": ["size"]}, {"required": ["bits"]}]
+    }
+  }
 }

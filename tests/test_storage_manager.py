@@ -1,7 +1,9 @@
 import json
 import os
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 from src.storage_manager import StorageManager, StorageMode
 
@@ -58,6 +60,29 @@ class StorageManagerTest(unittest.TestCase):
         self.assertTrue(self.manager.refresh())
         self.assertEqual(self.manager.mode, StorageMode.USB)
         self.assertEqual(self.manager.get_writable_root(), os.path.realpath(usb_root))
+
+    def test_fuse_mount_is_not_filtered_by_psutil(self):
+        volume = os.path.join(self.media_root, "sda1")
+        usb_root = os.path.join(volume, "clios")
+        os.makedirs(usb_root)
+
+        fake_psutil = mock.Mock()
+        fake_psutil.disk_partitions.return_value = [
+            SimpleNamespace(mountpoint=volume, fstype="fuseblk", device="/dev/sda1")
+        ]
+        with mock.patch("src.storage_manager.psutil", fake_psutil):
+            manager = StorageManager(
+                self.root,
+                media_root=self.media_root,
+                volatile_root=os.path.join(self.root, "fuse-volatile"),
+                mount_table_provider=lambda: "overlay / overlay rw 0 0",
+            )
+        try:
+            self.assertEqual(manager.mode, StorageMode.USB)
+            self.assertEqual(manager.get_writable_root(), os.path.realpath(usb_root))
+            fake_psutil.disk_partitions.assert_called_once_with(all=True)
+        finally:
+            manager.stop_monitoring()
 
     def test_path_traversal_is_rejected(self):
         for invalid in ("../secret", "/absolute", "trips/../../secret", ""):

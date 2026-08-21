@@ -5,7 +5,7 @@ import tempfile
 import threading
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, TypedDict
 
 try:
     import psutil
@@ -22,6 +22,13 @@ class StorageMode(Enum):
     USB = "USB"
     INTERNAL = "INTERNAL"
     VOLATILE = "RAM"
+
+
+class MigrationReport(TypedDict):
+    source: str
+    target: str
+    copied: list[str]
+    conflicts: list[str]
 
 
 class StorageManager:
@@ -52,6 +59,8 @@ class StorageManager:
 
         self._mode = StorageMode.VOLATILE
         self._usb_root: str | None = None
+        self._usb_diagnostic = "Aucun stockage USB CliOS détecté"
+        self._last_logged_usb_diagnostic = ""
         self._lock = threading.RLock()
         self._callbacks: list[Callable[[StorageMode], None]] = []
         self._monitor_thread: threading.Thread | None = None
@@ -202,6 +211,7 @@ class StorageManager:
             "free_space_mb": round(free_mb, 1),
             "total_space_mb": round(total_mb, 1),
             "trip_count": trip_count,
+            "usb_diagnostic": self._usb_diagnostic,
         }
 
     def register_callback(self, callback: Callable[[StorageMode], None]) -> None:
@@ -227,58 +237,114 @@ class StorageManager:
             context = pyudev.Context()
             monitor = pyudev.Monitor.from_netlink(context)
             monitor.filter_by(subsystem="block")
-            self._udev_observer = pyudev.MonitorObserver(
+            observer = pyudev.MonitorObserver(
                 monitor,
                 callback=lambda _action, _device: self._wake_event.set(),
                 name="StorageUdev",
             )
-            self._udev_observer.start()
+            observer.start()
+            self._udev_observer = observer
         except Exception:
             # Le rescan périodique reste fonctionnel si udev est indisponible.
             self._udev_observer = None
 
     def _mounted_volumes(self) -> Iterable[str]:
+        """Énumère tous les montages, y compris NTFS/FUSE, sans doublon."""
+        seen: set[str] = set()
         if psutil is not None:
-            for partition in psutil.disk_partitions(all=False):
-                yield partition.mountpoint
-            return
+            try:
+                # all=False élimine les types marqués nodev dans
+                # /proc/filesystems. Cela exclut notamment fuseblk/ntfs-3g.
+                for partition in psutil.disk_partitions(all=True):
+                    mountpoint = os.path.abspath(str(partition.mountpoint))
+                    if mountpoint not in seen:
+                        seen.add(mountpoint)
+                        yield mountpoint
+            except (OSError, RuntimeError) as exc:
+                self._logger.warning(
+                    "Énumération psutil des montages impossible: %s",
+                    exc,
+                    extra={"error_code": "USB_PSUTIL_SCAN_FAILED"},
+                )
         try:
             with open("/proc/self/mounts", "r", encoding="utf-8") as mounts:
                 for line in mounts:
                     fields = line.split()
                     if len(fields) >= 2:
-                        yield fields[1].replace("\\040", " ")
-        except OSError:
-            return
+                        mountpoint = os.path.abspath(self._decode_mount_path(fields[1]))
+                        if mountpoint not in seen:
+                            seen.add(mountpoint)
+                            yield mountpoint
+        except OSError as exc:
+            log = self._logger.warning if os.path.isdir("/proc") else self._logger.debug
+            log(
+                "Lecture de /proc/self/mounts impossible: %s",
+                exc,
+                extra={"error_code": "USB_MOUNT_TABLE_FAILED"},
+            )
+
+    @staticmethod
+    def _decode_mount_path(value: str) -> str:
+        return (
+            value.replace("\\040", " ")
+            .replace("\\011", "\t")
+            .replace("\\012", "\n")
+            .replace("\\134", "\\")
+        )
 
     def _find_usb_root(self) -> str | None:
         candidates = []
         try:
-            mountpoints = self._mount_provider()
-        except Exception:
+            mountpoints = list(self._mount_provider())
+        except (OSError, RuntimeError, TypeError) as exc:
+            self._set_usb_diagnostic(f"Énumération des montages impossible: {exc}", "USB_MOUNT_SCAN_FAILED")
             return None
 
         media_prefix = self._media_root + os.sep
+        managed_mounts = 0
         for mountpoint in mountpoints:
             mount_abs = os.path.abspath(str(mountpoint))
             if mount_abs != self._media_root and not mount_abs.startswith(media_prefix):
                 continue
+            managed_mounts += 1
             candidate = os.path.join(mount_abs, self._usb_folder_name)
             try:
                 real_candidate = os.path.realpath(candidate)
-                if (
-                    not os.path.islink(candidate)
-                    and real_candidate.startswith(os.path.realpath(mount_abs) + os.sep)
-                    and os.path.isdir(real_candidate)
-                    and os.access(real_candidate, os.W_OK)
-                ):
-                    candidates.append(real_candidate)
-            except OSError:
+                if os.path.islink(candidate):
+                    self._set_usb_diagnostic(f"Lien symbolique USB refusé: {candidate}", "USB_ROOT_SYMLINK")
+                    continue
+                if not real_candidate.startswith(os.path.realpath(mount_abs) + os.sep):
+                    self._set_usb_diagnostic(f"Racine USB hors du montage: {candidate}", "USB_ROOT_ESCAPE")
+                    continue
+                if not os.path.isdir(real_candidate):
+                    self._set_usb_diagnostic(f"Dossier CliOS absent: {candidate}", "USB_ROOT_MISSING")
+                    continue
+                if not os.access(real_candidate, os.W_OK):
+                    self._set_usb_diagnostic(f"Dossier CliOS non inscriptible: {candidate}", "USB_ROOT_NOT_WRITABLE")
+                    continue
+                candidates.append(real_candidate)
+            except OSError as exc:
+                self._set_usb_diagnostic(f"Inspection USB impossible pour {candidate}: {exc}", "USB_ROOT_SCAN_FAILED")
                 continue
 
         if not candidates:
+            if not managed_mounts:
+                self._set_usb_diagnostic("Aucun montage sous /media/clios", "USB_MOUNT_NOT_FOUND", warning=False)
             return None
-        return sorted(candidates)[0]
+        selected = sorted(candidates)[0]
+        self._usb_diagnostic = f"Stockage USB actif: {selected}"
+        self._last_logged_usb_diagnostic = ""
+        return selected
+
+    def _set_usb_diagnostic(self, message: str, error_code: str, *, warning: bool = True) -> None:
+        self._usb_diagnostic = message
+        if message == self._last_logged_usb_diagnostic:
+            return
+        self._last_logged_usb_diagnostic = message
+        if warning:
+            self._logger.warning(message, extra={"error_code": error_code})
+        else:
+            self._logger.debug(message, extra={"error_code": error_code})
 
     def _switch_to_usb(self, usb_root: str) -> None:
         try:
@@ -308,8 +374,8 @@ class StorageManager:
         """Copie les fichiers volatils sans écraser silencieusement l'USB."""
         self._migrate_without_overwrite(self._volatile_root, usb_root)
 
-    def _migrate_without_overwrite(self, source_root: str, target_root: str) -> dict:
-        report = {"source": source_root, "target": target_root, "copied": [], "conflicts": []}
+    def _migrate_without_overwrite(self, source_root: str, target_root: str) -> MigrationReport:
+        report: MigrationReport = {"source": source_root, "target": target_root, "copied": [], "conflicts": []}
         if not os.path.isdir(source_root) or os.path.realpath(source_root) == os.path.realpath(target_root):
             return report
         for source_dir, dirnames, filenames in os.walk(source_root, followlinks=False):
@@ -335,7 +401,7 @@ class StorageManager:
                 report["conflicts"].append(os.path.relpath(conflict, target_root))
         return report
 
-    def migrate_existing_data(self, source_root: str, report_path: str | None = None) -> dict:
+    def migrate_existing_data(self, source_root: str, report_path: str | None = None) -> MigrationReport:
         """Copie une ancienne installation vers le stockage actif sans supprimer la source."""
         import json
         report = self._migrate_without_overwrite(os.path.abspath(source_root), self.get_writable_root())

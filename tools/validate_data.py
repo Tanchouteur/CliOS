@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 from src.schema_validation import (  # noqa: E402
     validate_can_dictionary,
     validate_profile_catalog,
+    validate_profile_references,
     validate_theme_manifest,
     validate_vehicle_config,
 )
@@ -53,6 +54,14 @@ def main() -> int:
     failed = False
     for path, kind in jobs:
         errors = validate(path, kind)
+        if kind == "theme" and not errors:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            errors = validate_theme_manifest(payload, path.parent.name, path.parent)
+        if kind == "profiles" and not errors:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            errors = validate_profile_references(
+                payload, ROOT / "data/config", ROOT / "data/can", ROOT / "frontend/styles"
+            )
         if errors:
             failed = True
             print(f"ERREUR {path}: " + " | ".join(errors))
