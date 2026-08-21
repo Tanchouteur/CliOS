@@ -40,11 +40,14 @@ Item {
             onCommandRequested: command => root.commandRequested(command)
         }
 
-        Image {
-            source: "../../assets/Renault-Logo-w.png"
+        Text {
+            text: "CliOS"
             anchors.centerIn: parent
-            width: 240
-            fillMode: Image.PreserveAspectFit
+            color: "white"
+            font.family: "Arial"
+            font.pixelSize: 58
+            font.bold: true
+            font.letterSpacing: 3
         }
 
         CarStatusWidget { anchors.centerIn: parent }

@@ -46,8 +46,8 @@ CliOS v1.21.1 introduces an automated interactive installation script, Cage Wayl
 Run without hardware on macOS, Linux, or Windows:
 
 ```bash
-git clone https://github.com/Tanchouteur/ClOS.git
-cd ClOS
+git clone https://github.com/Tanchouteur/CliOS.git
+cd CliOS
 ./clios --mock
 ```
 

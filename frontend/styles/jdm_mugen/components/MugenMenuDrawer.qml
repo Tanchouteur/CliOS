@@ -69,7 +69,7 @@ Item {
                     }
                     Column {
                         Text {
-                            text: "MENU PRINCIPAL CLI-OS · MUGEN POWER"
+                            text: "MENU PRINCIPAL CliOS · MUGEN POWER"
                             color: "#FFFFFF"
                             font.family: "Arial, sans-serif"
                             font.pixelSize: 18

@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible CliOS defect
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Review diagnostic bundles before sharing; they may contain logs, profiles, network details, and vehicle information.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description and impact
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: CliOS version
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware, OS, display, CAN adapter, and vehicle/profile
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or reviewed diagnostic bundle

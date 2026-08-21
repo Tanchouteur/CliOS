@@ -1,0 +1,24 @@
+name: Vehicle profile proposal
+description: Propose or qualify a vehicle/CAN profile
+title: "[Vehicle]: "
+labels: [vehicle-profile]
+body:
+  - type: input
+    id: vehicle
+    attributes:
+      label: Vehicle, year, engine, and market
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: CAN data provenance and permission
+      description: Explain how data was obtained and confirm it can be published under GPL-3.0-only.
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Tested hardware and scenarios
+    validations:
+      required: true

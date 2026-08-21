@@ -1,6 +1,6 @@
 # CliOS
 
-> CliOS 2.0.1 officially targets Raspberry Pi OS Bookworm or Trixie 64-bit on Raspberry Pi 4/5 with a 1920×720 display. Other resolutions and desktop platforms remain experimental development targets.
+> CliOS 2.0.1 supports Raspberry Pi 5 with Raspberry Pi OS Bookworm or Trixie 64-bit and a 1920×720 display. Raspberry Pi 4 is experimental; macOS, Windows, and x86 are development/mock targets only.
 
 <div align="center">
 
@@ -34,7 +34,7 @@
 - **Audio DSP and Ambient LEDs**: Real-time cabin noise filtering and engine sound design (via `pyo` DSP) with BLE ambient light sync.
 - **Fail-Safe Architecture**: In-memory state store with strict TTL, domain snapshots, and volatile fallbacks.
 - **Zero-Hardware Mock Mode**: Fully interactive physics and CAN simulation engine to test and develop on macOS, Linux, or Windows without a car.
-- **Raspberry Pi 5 Fast-Boot**: Auto-launch into a distraction-free Wayland kiosk (`cage`) under 5 seconds.
+- **Raspberry Pi 5 Kiosk**: Auto-launch into a distraction-free Wayland kiosk (`cage`).
 - **Safe Releases**: SHA-256 verified staging, atomic `/opt/clios/current` activation, first-boot health checks, and automatic N-1 rollback.
 
 ## CliOS 2.x compatibility
@@ -60,14 +60,14 @@ Maintainer workflow: [CI, branches, releases and update channels (French)](docs/
 
 ---
 
-## Quickstart (Test on your PC in 30 seconds)
+## Quickstart (development/mock)
 
 You do not need a vehicle or a Raspberry Pi to run CliOS. Use the built-in mock simulation:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/Tanchouteur/ClOS.git
-cd ClOS
+git clone https://github.com/Tanchouteur/CliOS.git
+cd CliOS
 
 # 2. Run universal launcher with mock mode (auto-configures virtualenv)
 ./clios --mock
@@ -84,7 +84,8 @@ cd ClOS
 To deploy CliOS inside a real car, the following hardware is required:
 
 1. **Single Board Computer**:
-   - Raspberry Pi 5 (recommended) or Raspberry Pi 4 running Raspberry Pi OS 64-bit / Debian.
+   - Raspberry Pi 5 with Raspberry Pi OS Bookworm/Trixie 64-bit (supported).
+   - Raspberry Pi 4 (experimental until hardware qualification is complete).
 2. **Display**:
    - 1920x720 ultrawide display (HDMI or DSI). This is the only guaranteed layout; other formats are experimental.
 3. **CAN Interface Adapter**:
@@ -133,8 +134,8 @@ Specifies vehicle dynamics parameters used for real-time power/torque modeling:
 CliOS includes an interactive installer for Raspberry Pi OS and Debian/Ubuntu:
 
 ```bash
-git clone https://github.com/Tanchouteur/ClOS.git
-cd ClOS
+git clone https://github.com/Tanchouteur/CliOS.git
+cd CliOS
 ./install.sh
 ```
 
@@ -217,8 +218,12 @@ Contributions are welcome. Areas of active interest:
 
 Please check [CONTRIBUTING.md](CONTRIBUTING.md) for architecture guidelines and testing procedures.
 
+Diagnostic bundles can contain logs, profiles, network/platform details, and vehicle information. Review an archive before sharing it; report security-sensitive findings through the private channel described in [SECURITY.md](SECURITY.md).
+
 ---
 
 ## License
 
 Distributed under the **GNU General Public License v3.0** (GPLv3). See [LICENSE](LICENSE) for more details.
+
+CliOS is an accessory information display, not a certified replacement for legally required vehicle instruments. It is not affiliated with or endorsed by any vehicle manufacturer or trademark owner. See [ASSETS.md](ASSETS.md) for asset provenance and licensing.

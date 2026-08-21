@@ -1,5 +1,7 @@
 # Guide de contribution
 
+Les profils véhicule, dictionnaires CAN, thèmes, images et sons doivent indiquer leur provenance, leur auteur ou propriétaire, et une licence compatible avec GPL-3.0-only. Une ressource « trouvée en ligne » sans autorisation vérifiable sera refusée. Consultez [ASSETS.md](ASSETS.md) et les parcours détaillés [français](docs/community_fr.md) / [anglais](docs/community_en.md).
+
 Ce document définit les standards et les processus pour contribuer au projet. Le respect de ces directives permet de maintenir un historique propre, de faciliter les revues de code et d'assurer la stabilité du système.
 
 ## 1. Signaler un problème (Bug Report)
