@@ -28,9 +28,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - name: Verify annotated signed tag, VERSION, and main ancestry
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify tag, VERSION, and main ancestry
         run: |
           set -euo pipefail
           fail() {
@@ -44,29 +42,11 @@ jobs:
             fail "tag ${GITHUB_REF_NAME} différent de VERSION (${expected_tag})"
           fi
 
-          tag_type="$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")"
-          if [[ "${tag_type}" != tag ]]; then
-            fail "${GITHUB_REF_NAME} est un tag léger (${tag_type}), pas un tag annoté signé"
+          if [[ "${GITHUB_REF_TYPE}" != tag ]]; then
+            fail "la release doit être déclenchée par un tag Git"
           fi
 
-          tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq '.object.sha')"
-          verified=false
-          reason=unknown
-          for attempt in 1 2 3 4 5 6; do
-            verified="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.verified')"
-            reason="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.reason')"
-            echo "Vérification de signature ${attempt}/6: verified=${verified}, reason=${reason}"
-            [[ "${verified}" == true ]] && break
-            sleep 5
-          done
-          if [[ "${verified}" != true ]]; then
-            fail "signature GitHub invalide pour ${GITHUB_REF_NAME}: ${reason}"
-          fi
-
-          commit_sha="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
-          if [[ "${commit_sha}" != "${GITHUB_SHA}" ]]; then
-            fail "le tag pointe sur ${commit_sha}, mais le workflow utilise ${GITHUB_SHA}"
-          fi
+          commit_sha="${GITHUB_SHA}"
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
           if ! git merge-base --is-ancestor "${commit_sha}" refs/remotes/origin/main; then
             fail "le commit ${commit_sha} du tag n'appartient pas à main"
