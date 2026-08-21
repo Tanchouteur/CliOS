@@ -204,7 +204,7 @@ class CanFrameEncoder:
     def handle_obd_request(self, frame: can.Message, active_dtcs: list[str]) -> list[can.Message]:
         """Traite une requête envoyée à l'ECU (0x7DF ou 0x7E0) et retourne la réponse ISO-TP sur 0x7E8."""
         responses = []
-        if frame.arbitration_id not in (0x7DF, 0x7E0, 0x7E8):
+        if frame.arbitration_id not in (0x7DF, 0x7E0):
             return responses
 
         data = list(frame.data)
@@ -214,7 +214,7 @@ class CanFrameEncoder:
         pci_type = data[0] >> 4
 
         # 1. Flow Control reçu du client (0x30 = Continue to Send)
-        if pci_type == 3 or (data[0] == 0x30):
+        if (pci_type == 3 or data[0] == 0x30) and frame.arbitration_id == 0x7E0:
             # Débloque l'envoi des trames consécutives en attente
             while self._isotp_pending_consecutive:
                 cf = self._isotp_pending_consecutive.pop(0)

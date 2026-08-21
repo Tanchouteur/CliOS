@@ -104,7 +104,8 @@ class SystemOrchestrator:
                 worker = getattr(srv, attr, None)
                 if worker is not None and worker not in workers:
                     workers.append(worker)
-            alive = [worker.name for worker in workers if worker.is_alive()]
+            current = threading.current_thread()
+            alive = [worker.name for worker in workers if worker is not current and worker.is_alive()]
             if alive:
                 report["unresponsive"].append({"service": srv.service_name, "workers": alive})
                 self.logger.error(

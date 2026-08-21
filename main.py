@@ -15,6 +15,8 @@ from src.profile_manager import ProfileManager
 from src.driver import Slcan
 from src.services.gear_calibration_service import GearCalibrationService
 from src.services.power_management_service import PowerManagementService
+from src.services.power_management_service import SystemPowerExecutor
+from src.can_activity import CanActivitySource
 from src.services.trip_session_manager import TripSessionManager
 from src.services.usb_storage_service import UsbStorageService
 from src.simulation.physique_mock import PhysicsMockProvider
@@ -99,10 +101,11 @@ def write_health_marker() -> None:
 
 
 def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir,
-                   storage_dir, storage_manager, enable_can=True):
+                   storage_dir, storage_manager, enable_can=True, mock=False):
     """Initialise et enregistre tous les services via une boucle propre."""
 
     diag_service = DiagnosticService(runtime, can_provider)
+    can_activity = CanActivitySource()
     can_service = None
     if enable_can:
         can_service = CanService(
@@ -111,7 +114,8 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
             storage=storage,
             dbc_path=profile_manager.get_can_path(),
             provider=can_provider,
-            obd_callback=diag_service.receive_obd_frame
+            obd_callback=diag_service.receive_obd_frame,
+            activity_source=can_activity,
         )
 
     led_service = BleLedController(storage)
@@ -130,7 +134,10 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
         (EngineSoundService(runtime, storage, engine_path=engine_dir), "services.EngineSound.enabled", False),
         (CabinNoiseService(runtime, storage), "services.Noise.enabled", True),
         (led_service, "services.Leds.enabled", True),
-        (PowerManagementService(runtime, storage, orchestrator), "services.PowerManager.enabled", True),
+        (PowerManagementService(
+            runtime, storage, orchestrator, can_activity,
+            power_executor=SystemPowerExecutor(mock=mock),
+        ), "services.PowerManager.enabled", True),
         (session_manager, "services.SessionManager.enabled", True),
         (UsbStorageService(runtime, storage, storage_manager), None, True),
     ]
@@ -197,7 +204,6 @@ def main():
             "transmission": {"type": "manual", "gears_count": 5, "ratios": {}},
             "maintenance": {"revision": {"interval_km": 20000, "warning_threshold_km": 2000}},
         }
-        ProfileManager._write_json_atomic(profile_manager.get_config_path(), vehicle_config)
     else:
         vehicle_config = profile_manager.load_active_config()
 
@@ -208,7 +214,7 @@ def main():
     app_version = load_system_version(BASE_DIR)
     set_global_context(app_version=app_version)
     runtime.publish("system", {"system_version": app_version}, source="application")
-    logger.info("Demarrage de ClOS", extra={"error_code": "APP_START"})
+    logger.info("Demarrage de CliOS", extra={"error_code": "APP_START"})
 
     runtime.run_startup_sequence(duration_sec=1.5)
 
@@ -230,7 +236,7 @@ def main():
     # --- 4. Branchement des Services ---
     led_srv, stats_srv, diag_srv, gear_calib_srv, session_manager = setup_services(
         runtime, storage, orchestrator, can_provider, vehicle_config, profile_manager, ENGINE_DIR, TRIPS_DIR,
-        storage_mgr, enable_can=not profile_manager.recovery_mode,
+        storage_mgr, enable_can=not profile_manager.recovery_mode, mock=args.mock,
     )
 
     runtime_targets = {"bridge": None, "export": None}
