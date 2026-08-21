@@ -26,6 +26,18 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn('RELEASE_TARGET="trixie-arm64"', installer)
         self.assertIn("--no-index --require-hashes", installer)
 
+    def test_installer_stages_release_without_copying_local_venv(self):
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("install_release_tree", installer)
+        self.assertIn("--exclude='./.venv'", installer)
+        self.assertIn('mv "$VENV_DIR" "${staging_dir}/.venv"', installer)
+        self.assertIn("Self-check QML de la release", installer)
+        self.assertNotIn('cp -a "${PROJECT_DIR}/." "${RELEASE_DIR}/"', installer)
+        self.assertLess(
+            installer.index('install_release_tree "$RELEASE_DIR"'),
+            installer.index('ln -sfn "${RELEASE_DIR}" /opt/clios/current'),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

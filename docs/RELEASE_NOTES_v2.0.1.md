@@ -11,6 +11,7 @@ jour fondées sur Git par une chaîne GitHub Releases vérifiée par SHA-256.
 - staging isolé, activation atomique, contrôle du premier démarrage et rollback N-1 ;
 - cockpit avec états détaillés, recherche réseau limitée à une fois par 24 h et diagnostic updater.
 - montage automatique des clés de données USB par udev/systemd, y compris sans bureau graphique.
+- installation initiale transactionnelle sans recopier les fichiers Qt du `.venv`.
 
 ## Sécurité
 

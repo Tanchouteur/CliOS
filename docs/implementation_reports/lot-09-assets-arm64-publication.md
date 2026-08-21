@@ -13,6 +13,11 @@ Le workflow refuse un tag différent de `VERSION` ou un commit absent de
 contient les hashes PyPI et chaque wheelhouse est construit sous QEMU ARM64. Un
 cache indexé par lock évite de recompiler `pyo` à chaque tag.
 
+Lors d'une installation initiale depuis un checkout, le code est préparé dans
+un staging sans recopier le `.venv`. L'environnement validé est transféré par
+renommage dans la release, puis celle-ci est mise en place avant le changement
+du lien `current`; une copie partielle ne peut donc pas être activée.
+
 ## Compatibilité
 
 PySide6 est fixé à 6.8.0.2 : ses wheels ARM64 manylinux_2_31 sont compatibles
