@@ -13,6 +13,9 @@ concurrency:
 
 jobs:
   quality:
+    permissions:
+      contents: read
+      security-events: write
     uses: ./.github/workflows/ci.yml
 
   validate-tag:
