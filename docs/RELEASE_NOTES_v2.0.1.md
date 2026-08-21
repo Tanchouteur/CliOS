@@ -1,5 +1,16 @@
 # CliOS v2.0.1
 
+## RC4
+
+- machine d’état d’alimentation déterministe fondée sur le contact et le silence CAN monotone ;
+- extinction ordonnée, simulée hors Linux/mode voiture, commande sans shell et règle Polkit limitée ;
+- transport ISO-TP multi-ECU strict avec Flow Control physique ;
+- schémas JSON autoritaires au démarrage et en CI, avec mode récupération ;
+- bootstrap Ed25519 des releases, chaîne CI durcie et provenance attestée ;
+- identité CliOS, documentation matérielle/sécurité/confidentialité et provenance des assets harmonisées.
+
+La stable 2.0.1 reste conditionnée à la qualification réelle en voiture décrite dans `docs/qualification_v2.0.1.md`.
+
 Cette version consolide la livraison ARM64 Bookworm/Trixie et remplace les mises à
 jour fondées sur Git par une chaîne GitHub Releases vérifiée par SHA-256.
 
