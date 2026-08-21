@@ -1,0 +1,3 @@
+# Ne confier à CliOS que les périphériques bloc USB contenant un système de fichiers.
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}+="clios-usb-mount@%k.service"
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", ENV{ID_BUS}!="usb", ENV{ID_PATH}=="*usb*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="clios-usb-mount@%k.service"

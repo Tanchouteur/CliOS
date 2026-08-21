@@ -30,6 +30,7 @@ fi
 
 SYSTEMD_DIR="/etc/systemd/system"
 UDEV_RULES_DIR="/etc/udev/rules.d"
+LOCAL_LIBEXEC_DIR="/usr/local/libexec"
 
 # Flags d'exécution
 DRY_RUN=0
@@ -212,7 +213,8 @@ do_uninstall() {
     log_step "DÉSINSTALLATION" "Suppression des services et configurations système"
 
     if prompt_confirm "Voulez-vous désactiver et supprimer les services CliOS de /etc/systemd et /etc/udev ?" "N"; then
-        local services=("clios.service" "clios-updater.service" "clios-updater.socket" "can-usb.service" "can-wake.service" "slcan.service")
+        safe_systemctl "Arrêt des montages USB CliOS" stop "clios-usb-mount@*.service" 2>/dev/null || true
+        local services=("clios.service" "clios-updater.service" "clios-updater.socket" "clios-usb-mount@.service" "can-usb.service" "can-wake.service" "slcan.service")
         for srv in "${services[@]}"; do
             if [[ -f "${SYSTEMD_DIR}/${srv}" ]]; then
                 log_info "Désactivation du service ${srv}..."
@@ -225,6 +227,15 @@ do_uninstall() {
         if [[ -f "${UDEV_RULES_DIR}/99-slcan.rules" ]]; then
             run_sudo_cmd "Suppression de ${UDEV_RULES_DIR}/99-slcan.rules" rm -f "${UDEV_RULES_DIR}/99-slcan.rules"
             log_success "Règles udev supprimées."
+        fi
+
+        if [[ -f "${UDEV_RULES_DIR}/90-clios-usb-storage.rules" ]]; then
+            run_sudo_cmd "Suppression de ${UDEV_RULES_DIR}/90-clios-usb-storage.rules" rm -f "${UDEV_RULES_DIR}/90-clios-usb-storage.rules"
+            log_success "Règle de stockage USB supprimée."
+        fi
+
+        if [[ -f "${LOCAL_LIBEXEC_DIR}/clios-usb-mount" ]]; then
+            run_sudo_cmd "Suppression du helper de montage USB" rm -f "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
         fi
 
         safe_systemctl "Rechargement de systemd et udev" daemon-reload
@@ -442,6 +453,8 @@ elif [[ "$OS_NAME" == "Linux" && -f /etc/debian_version ]]; then
         libglib2.0-0
         libfontconfig1
         libdbus-1-3
+        exfatprogs
+        ntfs-3g
     )
 
     echo -e "\n Paquets système requis pour l'audio (pyo), le bus CAN et le rendu graphique Qt / Cage (OpenGL/Wayland) :"
@@ -693,12 +706,15 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" /etc/clios /var/lib/clios /run/clios
+        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" "${UDEV_RULES_DIR}" "${LOCAL_LIBEXEC_DIR}" /etc/clios /var/lib/clios /run/clios /media/clios
         run_sudo_cmd "Droits des données updater" chown root:clios /var/lib/clios /run/clios
         run_sudo_cmd "Permissions des données updater" chmod 0770 /var/lib/clios /run/clios
         backup_system_file "${SYSTEMD_DIR}/clios.service"
         backup_system_file "${SYSTEMD_DIR}/clios-updater.service"
         backup_system_file "${SYSTEMD_DIR}/clios-updater.socket"
+        backup_system_file "${SYSTEMD_DIR}/clios-usb-mount@.service"
+        backup_system_file "${UDEV_RULES_DIR}/90-clios-usb-storage.rules"
+        backup_system_file "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
         backup_system_file "/etc/clios/updater.json"
 
         if [[ $DRY_RUN -eq 1 ]]; then
@@ -709,10 +725,16 @@ EOF
             run_sudo_cmd "Permission sur clios.service" chmod 644 "${SYSTEMD_DIR}/clios.service"
             run_sudo_cmd "Installation de clios-updater.service" cp "${INSTALL_ETC_DIR}/systemd/system/clios-updater.service" "${SYSTEMD_DIR}/clios-updater.service"
             run_sudo_cmd "Installation de clios-updater.socket" cp "${INSTALL_ETC_DIR}/systemd/system/clios-updater.socket" "${SYSTEMD_DIR}/clios-updater.socket"
+            run_sudo_cmd "Installation du service de montage USB" cp "${INSTALL_ETC_DIR}/systemd/system/clios-usb-mount@.service" "${SYSTEMD_DIR}/clios-usb-mount@.service"
+            run_sudo_cmd "Installation de la règle de stockage USB" cp "${INSTALL_ETC_DIR}/udev/rules.d/90-clios-usb-storage.rules" "${UDEV_RULES_DIR}/90-clios-usb-storage.rules"
+            run_sudo_cmd "Installation du helper de montage USB" cp "${PROJECT_DIR}/installation/usr/local/libexec/clios-usb-mount" "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
+            run_sudo_cmd "Permissions du helper de montage USB" chmod 0755 "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
             run_sudo_cmd "Installation de la source de confiance updater" cp "${INSTALL_ETC_DIR}/clios/updater.json" /etc/clios/updater.json
             run_sudo_cmd "Droits de la source de confiance updater" chown root:root /etc/clios/updater.json
             run_sudo_cmd "Permissions de la source de confiance updater" chmod 0644 /etc/clios/updater.json
             safe_systemctl "Rechargement daemon systemd" daemon-reload
+            safe_udevadm "Rechargement des règles de stockage USB" control --reload-rules
+            safe_udevadm "Détection des stockages USB déjà branchés" trigger --subsystem-match=block --action=add
             safe_systemctl "Activation du socket updater" enable --now clios-updater.socket
             rm -f "$TMP_SERVICE_FILE"
 

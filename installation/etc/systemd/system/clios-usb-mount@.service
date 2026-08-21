@@ -1,0 +1,15 @@
+[Unit]
+Description=Montage du stockage USB CliOS (%I)
+BindsTo=dev-%i.device
+After=dev-%i.device local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=20
+TimeoutStopSec=20
+ExecStart=/usr/local/libexec/clios-usb-mount mount %I
+ExecStop=/usr/local/libexec/clios-usb-mount unmount %I
+
+[Install]
+WantedBy=multi-user.target

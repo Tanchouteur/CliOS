@@ -50,6 +50,15 @@ class StorageManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.mode, StorageMode.VOLATILE)
         self.assertEqual(transitions[-1], StorageMode.VOLATILE)
 
+    def test_direct_media_root_mount_is_detected(self):
+        usb_root = os.path.join(self.media_root, "clios")
+        os.makedirs(usb_root)
+        self.mounts.append(self.media_root)
+
+        self.assertTrue(self.manager.refresh())
+        self.assertEqual(self.manager.mode, StorageMode.USB)
+        self.assertEqual(self.manager.get_writable_root(), os.path.realpath(usb_root))
+
     def test_path_traversal_is_rejected(self):
         for invalid in ("../secret", "/absolute", "trips/../../secret", ""):
             with self.subTest(invalid=invalid):
