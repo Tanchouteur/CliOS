@@ -60,7 +60,11 @@ class UpdaterServiceTest(unittest.TestCase):
     def engine(self, manifests, timeout=0.2):
         def download(url, destination):
             Path(destination).write_bytes(self.archives[url].read_bytes())
-        manager = ReleaseManager(str(self.install), str(self.state), downloader=download)
+        manager = ReleaseManager(
+            str(self.install), str(self.state), downloader=download,
+            platform_id="raspberry-pi-os-bookworm-arm64",
+        )
+        manager._install_environment = lambda _root, _platform: None
         return UpdaterEngine(manager, Catalog(manifests), str(self.state / "updater-status.json"), restart=lambda: None, health_timeout=timeout)
 
     def test_protocol_rejects_urls_paths_and_extra_fields(self):

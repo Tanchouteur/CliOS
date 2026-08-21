@@ -113,6 +113,22 @@ class ReleaseManagerTest(unittest.TestCase):
         self.assertEqual(restored.resolve(), stable.resolve())
         self.assertEqual(self.manager.current_link.resolve(), stable.resolve())
 
+    def test_strict_manifest_rejects_another_platform(self):
+        manager = ReleaseManager(
+            str(self.install), str(self.state), downloader=self._copy_download,
+            platform_id="raspberry-pi-os-bookworm-arm64",
+        )
+        with self.assertRaisesRegex(ReleaseError, "incompatible"):
+            manager._validate_manifest({
+                "schema_version": 1,
+                "version": "2.0.1-rc.2",
+                "channel": "beta",
+                "platform": "raspberry-pi-os-trixie-arm64",
+                "archive_url": "https://github.com/Tanchouteur/CliOS/releases/download/v2.0.1-rc.2/archive.tar.gz",
+                "archive_sha256": "a" * 64,
+                "files": {"main.py": "b" * 64},
+            }, strict=True)
+
 
 if __name__ == "__main__":
     unittest.main()

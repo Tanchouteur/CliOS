@@ -20,6 +20,12 @@ class LauncherSystemdTest(unittest.TestCase):
             self.assertNotIn("WantedBy=graphical.target", payload)
             self.assertNotIn("After=graphical.target", payload)
 
+    def test_installer_has_offline_targets_for_both_supported_distributions(self):
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn('RELEASE_TARGET="bookworm-arm64"', installer)
+        self.assertIn('RELEASE_TARGET="trixie-arm64"', installer)
+        self.assertIn("--no-index --require-hashes", installer)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,11 @@ import urllib.request
 from pathlib import Path
 
 from src.release_contract import ReleaseContractError, SemVer, validate_manifest
+from src.release_platform import (
+    ReleasePlatformError,
+    detect_release_platform,
+    get_release_platform,
+)
 
 
 class ReleaseError(RuntimeError):
@@ -23,7 +28,8 @@ class ReleaseManager:
     VALID_CHANNELS = {"stable", "beta"}
 
     def __init__(self, install_root: str = "/opt/clios", state_root: str = "/var/lib/clios",
-                 downloader=None, progress_callback=None, self_check_user: str | None = None):
+                 downloader=None, progress_callback=None, self_check_user: str | None = None,
+                 platform_id: str | None = None):
         self.install_root = Path(install_root)
         self.releases_dir = self.install_root / "releases"
         self.current_link = self.install_root / "current"
@@ -33,6 +39,7 @@ class ReleaseManager:
         self.downloader = downloader or urllib.request.urlretrieve
         self.progress_callback = progress_callback
         self.self_check_user = self_check_user
+        self.platform = get_release_platform(platform_id) if platform_id else None
 
     @staticmethod
     def _read_json(path_or_url: str) -> dict:
@@ -102,7 +109,7 @@ class ReleaseManager:
             release_root = self._single_root(unpacked)
             self._verify_files(release_root, manifest.get("files", {}))
             self._progress("DOWNLOADING", 100, "Installation de l'environnement")
-            self._install_environment(release_root)
+            self._install_environment(release_root, str(manifest.get("platform", "")))
             self.self_check(release_root, run_as=self.self_check_user)
             os.replace(release_root, target)
             self._write_json_atomic(target / "release-manifest.json", manifest)
@@ -194,7 +201,7 @@ class ReleaseManager:
             raise ReleaseError("self-check Python: " + (result.stderr or result.stdout))
         if release_python.exists():
             result = subprocess.run(
-                [python, "-c", "import PySide6, numpy, psutil, can, serial, pyudev, bleak, sounddevice, pyo"],
+                [python, "-c", "import PySide6, numpy, psutil, can, serial, pyudev, bleak, sounddevice, pyo, aifc, audioop"],
                 cwd=release_root, env=check_env, capture_output=True, text=True, timeout=60,
                 **run_options,
             )
@@ -221,14 +228,20 @@ class ReleaseManager:
                 raise ReleaseError("self-check QML: " + (result.stderr or result.stdout))
 
     @staticmethod
-    def _install_environment(release_root: Path) -> None:
-        lock = release_root / "requirements-bookworm-arm64.lock"
+    def _install_environment(release_root: Path, platform_id: str = "") -> None:
+        if not platform_id:
+            return
+        try:
+            release_platform = get_release_platform(platform_id)
+        except ReleasePlatformError as exc:
+            raise ReleaseError(str(exc)) from exc
+        lock = release_root / f"requirements-{release_platform.target}.lock"
         wheels = release_root / "wheels"
         if not lock.exists():
-            return
-        python = shutil.which("python3.11") or shutil.which("python3")
+            raise ReleaseError(f"lock absent pour {release_platform.target}")
+        python = shutil.which(f"python{release_platform.python_minor}")
         if not python:
-            raise ReleaseError("Python 3.11 indisponible")
+            raise ReleaseError(f"Python {release_platform.python_minor} indisponible")
         subprocess.run([python, "-m", "venv", str(release_root / ".venv")], check=True, timeout=90)
         pip = str(release_root / ".venv/bin/pip")
         wheel_files = sorted(wheels.glob("*.whl")) if wheels.is_dir() else []
@@ -282,12 +295,17 @@ class ReleaseManager:
             if ReleaseManager.sha256(candidate) != str(expected).lower():
                 raise ReleaseError(f"SHA-256 incorrect: {relative}")
 
-    @staticmethod
-    def _validate_manifest(manifest: dict, *, strict: bool = False) -> str:
+    def _validate_manifest(self, manifest: dict, *, strict: bool = False) -> str:
         if strict or "schema_version" in manifest:
             try:
-                return validate_manifest(manifest, require_https=strict)["version"]
-            except ReleaseContractError as exc:
+                normalized = validate_manifest(manifest, require_https=strict)
+                expected = self.platform or detect_release_platform()
+                if normalized["platform"] != expected.identifier:
+                    raise ReleaseError(
+                        f"release {normalized['platform']} incompatible avec {expected.identifier}"
+                    )
+                return normalized["version"]
+            except (ReleaseContractError, ReleasePlatformError) as exc:
                 raise ReleaseError(str(exc)) from exc
         for key in ("version", "channel", "archive_url", "archive_sha256"):
             if not manifest.get(key):

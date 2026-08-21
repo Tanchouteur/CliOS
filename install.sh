@@ -314,6 +314,8 @@ log_step "1/6" "Analyse de l'environnement système"
 OS_NAME="$(uname -s)"
 ARCH_NAME="$(uname -m)"
 DISTRO="Inconnue"
+RELEASE_TARGET=""
+EXPECTED_PYTHON_MINOR=""
 
 if [[ "$OS_NAME" == "Linux" ]]; then
     if [[ -f /etc/os-release ]]; then
@@ -325,13 +327,34 @@ elif [[ "$OS_NAME" == "Darwin" ]]; then
     DISTRO="macOS $(sw_vers -productVersion 2>/dev/null || true)"
 fi
 
+if [[ "$OS_NAME" == "Linux" && "$ARCH_NAME" == "aarch64" && -f /etc/debian_version ]]; then
+    case "${VERSION_CODENAME:-}" in
+        bookworm)
+            RELEASE_TARGET="bookworm-arm64"
+            EXPECTED_PYTHON_MINOR="3.11"
+            ;;
+        trixie)
+            RELEASE_TARGET="trixie-arm64"
+            EXPECTED_PYTHON_MINOR="3.13"
+            ;;
+        *)
+            log_error "Version Debian ARM64 non prise en charge : ${VERSION_CODENAME:-inconnue}. Utilisez Bookworm ou Trixie."
+            exit 1
+            ;;
+    esac
+fi
+
 log_info "Système d'exploitation : ${C_BOLD}${DISTRO}${C_RESET} (${OS_NAME} ${ARCH_NAME})"
 log_info "Utilisateur cible     : ${C_BOLD}${CURRENT_USER}${C_RESET}"
 log_info "Répertoire du projet  : ${C_BOLD}${PROJECT_DIR}${C_RESET}"
 
 # Détection de Python 3
 find_python_bin() {
-    local candidates=(
+    local candidates=()
+    if [[ -n "$EXPECTED_PYTHON_MINOR" ]]; then
+        candidates+=("/usr/bin/python${EXPECTED_PYTHON_MINOR}" "python${EXPECTED_PYTHON_MINOR}")
+    fi
+    candidates+=(
         /opt/homebrew/bin/python3.13
         /opt/homebrew/bin/python3.12
         /opt/homebrew/bin/python3.11
@@ -369,7 +392,15 @@ PYTHON_BIN="$(find_python_bin || true)"
 
 if [[ -n "$PYTHON_BIN" ]]; then
     PY_VER="$($PYTHON_BIN --version 2>&1 | awk '{print $2}')"
+    PY_MINOR="$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    if [[ -n "$EXPECTED_PYTHON_MINOR" && "$PY_MINOR" != "$EXPECTED_PYTHON_MINOR" ]]; then
+        log_error "${RELEASE_TARGET} exige Python ${EXPECTED_PYTHON_MINOR}, mais ${PYTHON_BIN} fournit ${PY_MINOR}."
+        exit 1
+    fi
     log_info "Binaire Python détecté : ${C_BOLD}${PYTHON_BIN}${C_RESET} (version ${PY_VER})"
+    if [[ -n "$RELEASE_TARGET" ]]; then
+        log_info "Cible de release      : ${C_BOLD}${RELEASE_TARGET}${C_RESET}"
+    fi
     log_success "Environnement identifié avec succès."
 else
     if [[ "$OS_NAME" == "Linux" && -f /etc/debian_version && $VENV_ONLY -eq 0 ]]; then
@@ -464,53 +495,63 @@ else
 fi
 
 VENV_PYTHON="${VENV_DIR}/bin/python3"
+BUNDLED_LOCK="${PROJECT_DIR}/requirements-${RELEASE_TARGET}.lock"
+BUNDLED_WHEELS="${PROJECT_DIR}/wheels"
 
-# Mise à niveau des outils de packaging
-run_cmd "Mise à jour de pip, setuptools et wheel" "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
-
-# Compilation sécurisée de pyo
-echo -e "\n${C_BOLD}Installation de la bibliothèque DSP Audio (pyo)...${C_RESET}"
-
-BREW_CFLAGS=""
-if [[ "$OS_NAME" == "Darwin" ]]; then
-    if [[ -d "/opt/homebrew/include" ]]; then
-        BREW_CFLAGS="-I/opt/homebrew/include -L/opt/homebrew/lib"
-    elif [[ -d "/usr/local/include" ]]; then
-        BREW_CFLAGS="-I/usr/local/include -L/usr/local/lib"
-    fi
-fi
-PYO_CFLAGS="${BREW_CFLAGS} -Wno-incompatible-pointer-types -Wno-error"
-
-if [[ $DRY_RUN -eq 1 ]]; then
-    log_dry "CFLAGS=\"${PYO_CFLAGS}\" $VENV_PYTHON -m pip install --no-build-isolation pyo~=1.0.5"
-    log_dry "$VENV_PYTHON -m pip install -r ${PROJECT_DIR}/requirements.txt"
-else
-    PYO_INSTALLED=0
-    # Tentative d'installation de pyo avec CFLAGS
-    if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-build-isolation "pyo~=1.0.5" 2>/dev/null; then
-        log_success "Compilation et installation de pyo réussies."
-        PYO_INSTALLED=1
+if [[ -n "$RELEASE_TARGET" && -f "$BUNDLED_LOCK" && -d "$BUNDLED_WHEELS" ]] && compgen -G "${BUNDLED_WHEELS}/*.whl" >/dev/null; then
+    log_info "Installation hors ligne depuis le wheelhouse ${RELEASE_TARGET}."
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "$VENV_PYTHON -m pip install --no-index --no-deps ${BUNDLED_WHEELS}/*.whl"
+        log_dry "$VENV_PYTHON -m pip install --no-index --require-hashes -r $BUNDLED_LOCK"
     else
-        log_warn "Échec de la compilation standard de pyo. Tentative sans OSC..."
-        if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-binary :all: --config-settings="--build-option=--no-osc" "pyo~=1.0.5" 2>/dev/null; then
-            log_success "Installation de pyo réussie (mode fallback sans OSC)."
-            PYO_INSTALLED=1
-        else
-            log_warn "pyo n'a pas pu être compilé (en-têtes C audio absents). Les fonctionnalités de son moteur seront inactives."
+        "$VENV_PYTHON" -m pip install --no-index --no-deps "${BUNDLED_WHEELS}"/*.whl
+        "$VENV_PYTHON" -m pip install --no-index --require-hashes -r "$BUNDLED_LOCK"
+        "$VENV_PYTHON" -m pip check
+        log_success "Wheelhouse ${RELEASE_TARGET} installé et vérifié."
+    fi
+else
+    # Le checkout de développement conserve le chemin PyPI historique. Les
+    # archives publiées passent toujours par le wheelhouse ci-dessus.
+    run_cmd "Mise à jour de pip, setuptools et wheel" "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
+    echo -e "\n${C_BOLD}Installation de la bibliothèque DSP Audio (pyo)...${C_RESET}"
+    BREW_CFLAGS=""
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        if [[ -d "/opt/homebrew/include" ]]; then
+            BREW_CFLAGS="-I/opt/homebrew/include -L/opt/homebrew/lib"
+        elif [[ -d "/usr/local/include" ]]; then
+            BREW_CFLAGS="-I/usr/local/include -L/usr/local/lib"
         fi
     fi
+    PYO_CFLAGS="${BREW_CFLAGS} -Wno-incompatible-pointer-types -Wno-error"
 
-    # Installation des autres dépendances depuis requirements.txt
-    log_info "Installation des dépendances depuis requirements.txt..."
-    if [[ $PYO_INSTALLED -eq 1 ]]; then
-        "$VENV_PYTHON" -m pip install -r "${PROJECT_DIR}/requirements.txt"
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "CFLAGS=\"${PYO_CFLAGS}\" $VENV_PYTHON -m pip install --no-build-isolation pyo~=1.0.5"
+        log_dry "$VENV_PYTHON -m pip install -r ${PROJECT_DIR}/requirements.txt"
     else
-        # Si pyo a échoué, on installe toutes les autres dépendances sans bloquer pip
-        grep -v '^pyo' "${PROJECT_DIR}/requirements.txt" | "$VENV_PYTHON" -m pip install -r /dev/stdin
+        PYO_INSTALLED=0
+        if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-build-isolation "pyo~=1.0.5" 2>/dev/null; then
+            log_success "Compilation et installation de pyo réussies."
+            PYO_INSTALLED=1
+        else
+            log_warn "Échec de la compilation standard de pyo. Tentative sans OSC..."
+            if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-binary :all: --config-settings="--build-option=--no-osc" "pyo~=1.0.5" 2>/dev/null; then
+                log_success "Installation de pyo réussie (mode fallback sans OSC)."
+                PYO_INSTALLED=1
+            else
+                log_warn "pyo n'a pas pu être compilé (en-têtes C audio absents). Les fonctionnalités de son moteur seront inactives."
+            fi
+        fi
+        log_info "Installation des dépendances depuis requirements.txt..."
+        if [[ $PYO_INSTALLED -eq 1 ]]; then
+            "$VENV_PYTHON" -m pip install -r "${PROJECT_DIR}/requirements.txt"
+        else
+            grep -v '^pyo' "${PROJECT_DIR}/requirements.txt" | "$VENV_PYTHON" -m pip install -r /dev/stdin
+        fi
+        log_success "Dépendances Python installées."
     fi
-    log_success "Dépendances Python installées."
+fi
 
-    # Validation rapide des imports critiques
+if [[ $DRY_RUN -eq 0 ]]; then
     log_info "Validation des modules Python critiques..."
     if "$VENV_PYTHON" -c "import PySide6; print(f'PySide6 version: {PySide6.__version__}')" &>/dev/null; then
         log_success "PySide6 opérationnel."
