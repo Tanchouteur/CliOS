@@ -15,8 +15,9 @@ réussissent, puis le smoke test valide 35 vues et 13 états en 1920×720.
 
 ## Publication
 
-`VERSION` cible désormais `2.0.1-rc.2`; RC.1 a été annulée avant publication
-après la qualification réelle sur un Pi 5 Trixie. Après fusion dans `main`, le tag correspondant
+`VERSION` cible désormais `2.0.1-rc.3`; RC.1 a été annulée avant publication et
+RC.2 a révélé sur Pi 5 une copie incorrecte du `.venv`, corrigée avant RC.3.
+Après fusion dans `main`, le tag correspondant
 déclenche la publication automatique de la RC. Le tag stable `v2.0.1` ne doit
 être créé qu'après la fiche `docs/qualification_v2.0.1.md` entièrement validée.
 
