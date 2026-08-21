@@ -212,7 +212,7 @@ do_uninstall() {
     log_step "DÉSINSTALLATION" "Suppression des services et configurations système"
 
     if prompt_confirm "Voulez-vous désactiver et supprimer les services CliOS de /etc/systemd et /etc/udev ?" "N"; then
-        local services=("clios.service" "can-usb.service" "can-wake.service" "slcan.service")
+        local services=("clios.service" "clios-updater.service" "clios-updater.socket" "can-usb.service" "can-wake.service" "slcan.service")
         for srv in "${services[@]}"; do
             if [[ -f "${SYSTEMD_DIR}/${srv}" ]]; then
                 log_info "Désactivation du service ${srv}..."
@@ -604,6 +604,13 @@ if [[ $VENV_ONLY -eq 1 || "$OS_NAME" != "Linux" ]]; then
 else
     echo -e "CliOS peut se lancer automatiquement en plein écran au démarrage via le compositeur Wayland ${C_BOLD}Cage${C_RESET} (sans nécessiter de bureau)."
     if prompt_confirm "Voulez-vous installer le service de démarrage Kiosk (clios.service) ?" "N"; then
+        if ! getent group clios >/dev/null 2>&1; then
+            run_sudo_cmd "Création du groupe système clios" groupadd --system clios
+        fi
+        if ! id clios >/dev/null 2>&1; then
+            run_sudo_cmd "Création de l'utilisateur de self-check clios" useradd --system --gid clios --home-dir /var/lib/clios --shell /usr/sbin/nologin clios
+        fi
+        run_sudo_cmd "Accès de ${CURRENT_USER} au socket updater" usermod -a -G clios "${CURRENT_USER}"
         RELEASE_VERSION="$(tr -d '[:space:]' < "${PROJECT_DIR}/VERSION")"
         RELEASE_DIR="/opt/clios/releases/${RELEASE_VERSION}"
         run_sudo_cmd "Création du répertoire de release" mkdir -p "${RELEASE_DIR}" /var/lib/clios /run/clios
@@ -645,8 +652,13 @@ RestartSec=3
 WantedBy=graphical.target
 EOF
 
-        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}"
+        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" /etc/clios /var/lib/clios /run/clios
+        run_sudo_cmd "Droits des données updater" chown root:clios /var/lib/clios /run/clios
+        run_sudo_cmd "Permissions des données updater" chmod 0770 /var/lib/clios /run/clios
         backup_system_file "${SYSTEMD_DIR}/clios.service"
+        backup_system_file "${SYSTEMD_DIR}/clios-updater.service"
+        backup_system_file "${SYSTEMD_DIR}/clios-updater.socket"
+        backup_system_file "/etc/clios/updater.json"
 
         if [[ $DRY_RUN -eq 1 ]]; then
             log_dry "Contenu du service généré (${TMP_SERVICE_FILE}) :"
@@ -654,7 +666,13 @@ EOF
         else
             run_sudo_cmd "Installation de clios.service" cp "$TMP_SERVICE_FILE" "${SYSTEMD_DIR}/clios.service"
             run_sudo_cmd "Permission sur clios.service" chmod 644 "${SYSTEMD_DIR}/clios.service"
+            run_sudo_cmd "Installation de clios-updater.service" cp "${INSTALL_ETC_DIR}/systemd/system/clios-updater.service" "${SYSTEMD_DIR}/clios-updater.service"
+            run_sudo_cmd "Installation de clios-updater.socket" cp "${INSTALL_ETC_DIR}/systemd/system/clios-updater.socket" "${SYSTEMD_DIR}/clios-updater.socket"
+            run_sudo_cmd "Installation de la source de confiance updater" cp "${INSTALL_ETC_DIR}/clios/updater.json" /etc/clios/updater.json
+            run_sudo_cmd "Droits de la source de confiance updater" chown root:root /etc/clios/updater.json
+            run_sudo_cmd "Permissions de la source de confiance updater" chmod 0644 /etc/clios/updater.json
             safe_systemctl "Rechargement daemon systemd" daemon-reload
+            safe_systemctl "Activation du socket updater" enable --now clios-updater.socket
             rm -f "$TMP_SERVICE_FILE"
 
             if prompt_confirm "Activer le lancement automatique de CliOS à chaque démarrage maintenant ?" "Y"; then

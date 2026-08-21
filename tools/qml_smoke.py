@@ -100,6 +100,7 @@ class FakeBridge(QObject):
             "telemetry": {"app_cpu_total_pct": 18.5, "app_ram_mb": 286.0},
             "health": health,
             "storage": storage,
+            "updater": {"state": "IDLE", "installed_version": "2.0.0", "available_version": "", "progress": 0},
         }
         self.commands = []
         self._update_channel = "stable"
@@ -247,6 +248,18 @@ class FakeBridge(QObject):
     def checkForUpdates(self):
         pass
 
+    @Slot(float)
+    def stageUpdate(self, _speed):
+        pass
+
+    @Slot(float)
+    def activateUpdate(self, _speed):
+        pass
+
+    @Slot(float, bool)
+    def rollbackUpdate(self, _speed, _stable):
+        pass
+
     @Slot(str, result=str)
     def getServiceParameters(self, _service):
         return "[]"
@@ -343,7 +356,8 @@ def main():
             if image.isNull() or not image.save(target):
                 failures.append(f"capture impossible: {target}")
 
-    specials = ["warnings", "paused", "missing-data", "confirmation", "legacy-dashboard"]
+    updater_states = ["IDLE", "CHECKING", "AVAILABLE", "DOWNLOADING", "STAGED", "ACTIVATING", "UP_TO_DATE", "ERROR"]
+    specials = ["warnings", "paused", "missing-data", "confirmation", "legacy-dashboard"] + ["updater-" + value for value in updater_states]
     special_index = {"value": 0}
 
     def run_special():
@@ -371,6 +385,31 @@ def main():
                 QTimer.singleShot(100, run_special)
 
             QTimer.singleShot(350, finish_legacy)
+            return
+
+        if name.startswith("updater-"):
+            update_state = name.split("-", 1)[1]
+            bridge._system_state["updater"] = {
+                "state": update_state,
+                "installed_version": "2.0.0",
+                "available_version": "2.0.1-rc.1" if update_state in {"AVAILABLE", "DOWNLOADING", "STAGED", "ACTIVATING"} else "",
+                "channel": "beta",
+                "progress": 62 if update_state in {"DOWNLOADING", "ACTIVATING"} else 100 if update_state in {"STAGED", "UP_TO_DATE"} else 0,
+                "message": "SHA-256 incorrect" if update_state == "ERROR" else "État updater de qualification",
+                "can_activate": update_state == "STAGED",
+                "error": {"code": "SHA256", "message": "SHA-256 incorrect"} if update_state == "ERROR" else {},
+            }
+            emit_runtime()
+            shell = window.findChild(QObject, "appShell")
+            if shell is not None:
+                shell.openRoute("system")
+
+            def finish_updater():
+                save_frame("state-" + name.lower())
+                special_index["value"] += 1
+                QTimer.singleShot(100, run_special)
+
+            QTimer.singleShot(220, finish_updater)
             return
 
         dashboard = window.findChild(QObject, "dashboardRoot")

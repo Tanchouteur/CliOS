@@ -29,6 +29,11 @@ QtObject {
     readonly property var serviceHealth: systemState.health || ({})
     readonly property var storageState: systemState.storage || ({})
     readonly property var telemetryState: systemState.telemetry || ({})
+    readonly property var updaterState: systemState.updater || ({
+        "state": "IDLE", "installed_version": systemVersion, "available_version": "",
+        "channel": "stable", "progress": 0, "message": "", "can_activate": false,
+        "last_manifest": ({}), "error": ({})
+    })
 
     // =========================================================================
     // 2. CONFIGURATION DU VÉHICULE & CALIBRATIONS

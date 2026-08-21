@@ -12,6 +12,33 @@ Item {
     property string logsText: ""
     property string exportPath: ""
     property string updateChannel: bridge.getUpdateChannel()
+    property string pendingUpdateAction: ""
+    readonly property var updater: S.UiState.updaterState
+
+    function updaterLabel(state) {
+        const labels = {
+            "IDLE": "PRÊT", "CHECKING": "RECHERCHE", "AVAILABLE": "DISPONIBLE",
+            "DOWNLOADING": "TÉLÉCHARGEMENT", "STAGED": "PRÉPARÉE",
+            "ACTIVATING": "ACTIVATION", "UP_TO_DATE": "À JOUR", "ERROR": "ERREUR"
+        }
+        return labels[state] || state
+    }
+
+    ConfirmDialog {
+        id: updateConfirm
+        z: 100
+        title: root.pendingUpdateAction === "activate" ? "Activer la mise à jour ?" : "Revenir à la version stable ?"
+        message: (S.UiState.speed > 5 ? "Véhicule en mouvement à " + S.UiState.fixed(S.UiState.speed, 1, "0,0") + " km/h. " : "")
+                 + "CliOS va redémarrer. Confirmez explicitement cette opération."
+        acceptText: root.pendingUpdateAction === "activate" ? "ACTIVER" : "ROLLBACK"
+        onAccepted: {
+            visible = false
+            if (root.pendingUpdateAction === "activate") bridge.activateUpdate(S.UiState.speed)
+            else bridge.rollbackUpdate(S.UiState.speed, root.updateChannel === "beta")
+            root.pendingUpdateAction = ""
+        }
+        onRejected: { visible = false; root.pendingUpdateAction = "" }
+    }
 
     Timer {
         interval: 1000; running: root.visible; repeat: true
@@ -61,6 +88,45 @@ Item {
             }
         }
         Card {
+            Layout.fillWidth: true; Layout.preferredHeight: 158
+            title: "Mise à jour — " + root.updaterLabel(root.updater.state || "IDLE")
+            highlighted: root.updater.state === "AVAILABLE" || root.updater.state === "STAGED"
+            RowLayout {
+                anchors.fill: parent; spacing: 16
+                ColumnLayout {
+                    Layout.fillWidth: true; spacing: 6
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.updater.available_version ? "Installée " + root.updater.installed_version + "  →  " + root.updater.available_version : "Version installée " + root.updater.installed_version
+                        color: T.StyleManager.text; font.pixelSize: 22; font.bold: true
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.updater.message || "Aucune opération en cours"
+                        color: root.updater.state === "ERROR" ? T.StyleManager.danger : T.StyleManager.textSecondary
+                        font.pixelSize: 16; elide: Text.ElideRight
+                    }
+                    Progress { Layout.fillWidth: true; value: Number(root.updater.progress || 0); visible: ["CHECKING", "DOWNLOADING", "STAGED", "ACTIVATING"].indexOf(root.updater.state) >= 0 }
+                    Text {
+                        Layout.fillWidth: true; visible: S.UiState.speed > 5
+                        text: "⚠ Véhicule en mouvement : confirmation obligatoire, vitesse journalisée"
+                        color: T.StyleManager.danger; font.pixelSize: 15; font.bold: true
+                    }
+                }
+                Button { Layout.preferredWidth: 190; text: "RECHERCHER"; subtext: "Recherche manuelle"; onClicked: bridge.checkForUpdates() }
+                Button { Layout.preferredWidth: 190; text: "TÉLÉCHARGER"; primary: true; enabled: root.updater.state === "AVAILABLE"; onClicked: bridge.stageUpdate(S.UiState.speed) }
+                Button {
+                    Layout.preferredWidth: 170; text: "ACTIVER"; destructive: true
+                    enabled: root.updater.state === "STAGED" || root.updater.can_activate === true
+                    onClicked: { root.pendingUpdateAction = "activate"; updateConfirm.visible = true }
+                }
+                Button {
+                    Layout.preferredWidth: 170; text: "ROLLBACK"; destructive: true
+                    onClicked: { root.pendingUpdateAction = "rollback"; updateConfirm.visible = true }
+                }
+            }
+        }
+        Card {
             Layout.fillWidth: true; Layout.fillHeight: true; title: "Journal système"
             ScrollView {
                 anchors.fill: parent; clip: true
@@ -71,7 +137,6 @@ Item {
             Layout.fillWidth: true; Layout.preferredHeight: 72; spacing: 12
             Button { Layout.fillWidth: true; text: "MAINTENANCE"; primary: true; subtext: "Menu système & OverlayFS"; onClicked: root.actionRequested("maintenance") }
             Button { Layout.fillWidth: true; text: "DIAGNOSTIC"; subtext: root.exportPath ? root.exportPath : "Exporter les logs"; onClicked: root.exportPath = bridge.exportDiagnosticBundle() }
-            Button { Layout.fillWidth: true; text: "MISES À JOUR"; subtext: "Canal " + (root.updateChannel === "beta" ? "bêta" : "stable"); onClicked: bridge.checkForUpdates() }
             Button { Layout.fillWidth: true; text: "QUITTER"; onClicked: root.actionRequested("quit") }
             Button { Layout.fillWidth: true; text: "REDÉMARRER"; destructive: true; onClicked: root.actionRequested("restart") }
             Button { Layout.fillWidth: true; text: "ÉTEINDRE"; destructive: true; onClicked: root.actionRequested("shutdown") }
