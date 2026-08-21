@@ -102,13 +102,20 @@ class UpdaterServiceTest(unittest.TestCase):
         engine.manager.mark_healthy("2.0.0")
         engine.stage("2.0.1-rc.1")
 
-        def healthy():
-            time.sleep(0.1)
-            (self.state / "health-2.0.1-rc.1").write_text("healthy", encoding="utf-8")
+        restart_requested = threading.Event()
+        engine.restart = restart_requested.set
 
-        threading.Thread(target=healthy).start()
+        def healthy():
+            if restart_requested.wait(timeout=1.0):
+                (self.state / "health-2.0.1-rc.1").write_text("healthy", encoding="utf-8")
+
+        health_writer = threading.Thread(target=healthy)
+        health_writer.start()
         engine.activate("2.0.1-rc.1")
-        time.sleep(0.3)
+        health_writer.join(timeout=1.0)
+        deadline = time.monotonic() + 2.0
+        while engine.manager._load_state().get("healthy") != "2.0.1-rc.1" and time.monotonic() < deadline:
+            time.sleep(0.02)
         self.assertEqual(engine.manager._load_state().get("healthy"), "2.0.1-rc.1")
 
         # Un second essai sans marqueur restaure N-1.
