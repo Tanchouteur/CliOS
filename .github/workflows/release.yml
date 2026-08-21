@@ -33,14 +33,47 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
           version="$(tr -d '[:space:]' < VERSION)"
-          test "${GITHUB_REF_NAME}" = "v${version}"
-          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
+          expected_tag="v${version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            fail "tag ${GITHUB_REF_NAME} différent de VERSION (${expected_tag})"
+          fi
+
+          tag_type="$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")"
+          if [[ "${tag_type}" != tag ]]; then
+            fail "${GITHUB_REF_NAME} est un tag léger (${tag_type}), pas un tag annoté signé"
+          fi
+
           tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq '.object.sha')"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.verified')" = true
-          git fetch --no-tags origin main
-          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
+          verified=false
+          reason=unknown
+          for attempt in 1 2 3 4 5 6; do
+            verified="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.verified')"
+            reason="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.reason')"
+            echo "Vérification de signature ${attempt}/6: verified=${verified}, reason=${reason}"
+            [[ "${verified}" == true ]] && break
+            sleep 5
+          done
+          if [[ "${verified}" != true ]]; then
+            fail "signature GitHub invalide pour ${GITHUB_REF_NAME}: ${reason}"
+          fi
+
+          commit_sha="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
+          if [[ "${commit_sha}" != "${GITHUB_SHA}" ]]; then
+            fail "le tag pointe sur ${commit_sha}, mais le workflow utilise ${GITHUB_SHA}"
+          fi
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          if ! git merge-base --is-ancestor "${commit_sha}" refs/remotes/origin/main; then
+            fail "le commit ${commit_sha} du tag n'appartient pas à main"
+          fi
+
           python3 -c 'from src.release_contract import SemVer; import pathlib; SemVer.parse(pathlib.Path("VERSION").read_text().strip())'
+          echo "Tag ${GITHUB_REF_NAME} validé sur ${commit_sha}"
 
   build:
     needs: validate-tag
