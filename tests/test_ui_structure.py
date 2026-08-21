@@ -122,7 +122,7 @@ class UiStructureTest(unittest.TestCase):
 
         expected_styles = {
             "gt_modern": ["Dashboard.qml", "components", "pages", "style.json"],
-            "legacy_dashboard": ["Dashboard.qml", "components", "pages", "style.json"],
+            "legacy_dashboard": ["Dashboard.qml", "components", "style.json"],
             "apex": ["Dashboard.qml", "components", "pages", "style.json"],
             "atelier_luxe": ["Dashboard.qml", "components", "style.json"],
             "jdm_mugen": ["Dashboard.qml", "components", "style.json"],

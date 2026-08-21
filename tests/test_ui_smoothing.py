@@ -1,3 +1,4 @@
+import os
 import sys
 import unittest
 from PySide6.QtCore import QUrl, QCoreApplication
@@ -14,7 +15,9 @@ class UiSmoothingTest(unittest.TestCase):
         cls.engine = QQmlEngine()
         cls.bridge = MockBridge()
         cls.engine.rootContext().setContextProperty("bridge", cls.bridge)
-        url = QUrl.fromLocalFile("/Users/louis/PycharmProjects/CliOS/frontend/state/UiState.qml")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ui_state_path = os.path.join(base_dir, "frontend", "state", "UiState.qml")
+        url = QUrl.fromLocalFile(ui_state_path)
         cls.comp = QQmlComponent(cls.engine, url)
         if cls.comp.isError():
             raise RuntimeError(f"UiState error: {[e.toString() for e in cls.comp.errors()]}")
