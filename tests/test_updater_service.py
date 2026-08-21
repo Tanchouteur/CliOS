@@ -114,10 +114,11 @@ class UpdaterServiceTest(unittest.TestCase):
         engine.stage("2.0.1-rc.2")
         engine.health_timeout = 0.1
         engine.activate("2.0.1-rc.2")
-        deadline = time.monotonic() + 1.0
-        while engine.manager.current_link.resolve().name == "2.0.1-rc.2" and time.monotonic() < deadline:
-            time.sleep(0.03)
+        deadline = time.monotonic() + 2.0
+        while (engine.manager.current_link.resolve().name == "2.0.1-rc.2" or engine.status().get("error") is None) and time.monotonic() < deadline:
+            time.sleep(0.02)
         self.assertEqual(engine.manager.current_link.resolve().name, "2.0.1-rc.1")
+        self.assertIsNotNone(engine.status().get("error"))
         self.assertEqual(engine.status()["error"]["code"], "HEALTH_TIMEOUT")
 
 

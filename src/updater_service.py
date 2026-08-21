@@ -185,7 +185,7 @@ class UpdaterEngine:
                     self._write_status({"state": "IDLE", "version": version, "progress": 100,
                                         "message": "Premier démarrage validé", "error": None})
                 return
-            time.sleep(0.25)
+            time.sleep(min(0.05, max(0.01, self.health_timeout)))
         with self._lock:
             state = self.manager._load_state()
             if state.get("pending_health") != version or state.get("active") != version:
