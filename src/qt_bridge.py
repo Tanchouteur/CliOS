@@ -1,12 +1,19 @@
 import json
 import os
 import threading
+import time
 
 from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
+try:
+    from PySide6.QtNetwork import QNetworkInformation
+except ImportError:  # Qt < 6.4 ou backend réseau non fourni
+    QNetworkInformation = None
 from src.logging_runtime import get_logger, get_recent_events
 from src.diagnostic_bundle import create_diagnostic_bundle
 from src.state_store import VEHICLE_DOMAINS
 from src.release_manager import ReleaseManager, ReleaseError
+from src.release_catalog import CatalogError, ReleaseCatalog
+from src.updater_client import UpdaterClient, UpdaterClientError
 
 
 class DashboardBridge(QObject):
@@ -49,8 +56,11 @@ class DashboardBridge(QObject):
         self._theme_diagnostics = []
         try:
             with open(os.path.join(project_root, "VERSION"), encoding="utf-8") as stream:
-                self._clios_version = tuple(int(part) for part in stream.read().strip().split("."))
+                self._clios_version_text = stream.read().strip()
+                core = self._clios_version_text.split("-", 1)[0].split("+", 1)[0]
+                self._clios_version = tuple(int(part) for part in core.split("."))
         except (OSError, ValueError):
+            self._clios_version_text = "0.0.0"
             self._clios_version = (0, 0, 0)
 
         self._config_path = config_path
@@ -62,6 +72,14 @@ class DashboardBridge(QObject):
         self._calibration_state = {}
         self._presentation_state = {}
         self._data_quality = {}
+        self._updater_state = {
+            "state": "IDLE", "installed_version": self._clios_version_text,
+            "available_version": "", "channel": "stable", "progress": 0,
+            "message": "", "can_activate": False, "last_manifest": {}, "error": {},
+        }
+        self._updater_poll_running = False
+        self._network_was_online = False
+        self._network_information = None
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
@@ -82,6 +100,8 @@ class DashboardBridge(QObject):
         self.timer_slow = QTimer()
         self.timer_slow.timeout.connect(self._update_health)
         self.timer_slow.start(1000)
+
+        self._setup_network_information()
 
         self.needs_restart = False
         self.requested_power_action = ""
@@ -135,6 +155,7 @@ class DashboardBridge(QObject):
                 "active": bool(self.profile_manager and self.profile_manager.recovery_mode),
                 "message": self.profile_manager.error_message if self.profile_manager else "",
             },
+            "updater": self._updater_state,
         })
         if new_system != self._system_state:
             self._system_state = new_system
@@ -143,6 +164,67 @@ class DashboardBridge(QObject):
         if new_quality != self._data_quality:
             self._data_quality = new_quality
             self.dataQualityChanged.emit()
+        if int(time.monotonic()) % 5 == 0:
+            self._poll_updater_status()
+
+    def _setup_network_information(self):
+        if QNetworkInformation is None:
+            return
+        try:
+            QNetworkInformation.loadDefaultBackend()
+            self._network_information = QNetworkInformation.instance()
+            if self._network_information is None:
+                return
+            self._network_information.reachabilityChanged.connect(self._on_reachability_changed)
+            QTimer.singleShot(0, lambda: self._on_reachability_changed(self._network_information.reachability()))
+        except Exception as exc:
+            self.logger.warning(f"Détection réseau indisponible: {exc}", extra={"error_code": "NETWORK_INFO_UNAVAILABLE"})
+
+    def _on_reachability_changed(self, reachability):
+        try:
+            online = reachability == QNetworkInformation.Reachability.Online
+        except Exception:
+            online = str(reachability).lower().endswith("online")
+        became_online = online and not self._network_was_online
+        self._network_was_online = online
+        if became_online:
+            last_success = int(self._config.get("updates", {}).get("last_success_epoch", 0) or 0)
+            if time.time() - last_success >= 24 * 60 * 60:
+                self._check_for_updates(force=False)
+
+    def _set_updater_state(self, **changes):
+        updated = dict(self._updater_state)
+        updated.update(changes)
+        updated["installed_version"] = self._clios_version_text
+        updated["channel"] = self.getUpdateChannel()
+        self._updater_state = self._sanitize_for_qml(updated)
+
+    def _poll_updater_status(self):
+        if self._updater_poll_running:
+            return
+        self._updater_poll_running = True
+
+        def task():
+            try:
+                response = UpdaterClient(timeout=2).status()
+                status = response.get("result", response)
+                state = str(status.get("state", "IDLE"))
+                if state in {"DOWNLOADING", "STAGED", "ACTIVATING", "ERROR"}:
+                    self._set_updater_state(
+                        state=state,
+                        available_version=str(status.get("version", self._updater_state.get("available_version", "")) or ""),
+                        progress=int(status.get("progress", 0) or 0),
+                        message=str(status.get("message", "")),
+                        can_activate=state == "STAGED",
+                        last_manifest=status.get("last_manifest", self._updater_state.get("last_manifest", {})),
+                        error=status.get("error") or {},
+                    )
+            except UpdaterClientError:
+                pass
+            finally:
+                self._updater_poll_running = False
+
+        threading.Thread(target=task, daemon=True, name="UpdaterStatusThread").start()
 
     def _read_storage_status(self):
         if not self._storage_manager:
@@ -563,7 +645,7 @@ class DashboardBridge(QObject):
                 log_dir=log_dir,
                 config_path=self._config_path,
                 system_health=self.orchestrator.get_system_health(),
-                extra={"active_profile": self.getActiveProfile()},
+                extra={"active_profile": self.getActiveProfile(), "updater": self._updater_state},
             )
             self.logger.info(f"Bundle diagnostic exporte: {bundle_path}", extra={"error_code": "DIAG_BUNDLE_EXPORTED"})
             return bundle_path
@@ -609,6 +691,7 @@ class DashboardBridge(QObject):
             self.send_notification("ERROR", "Canal de mise à jour inconnu", 3500)
             return False
         self.save_setting("updates.channel", channel)
+        self._set_updater_state(channel=channel)
         try:
             ReleaseManager().set_channel(channel)
         except OSError as exc:
@@ -628,24 +711,108 @@ class DashboardBridge(QObject):
 
     @Slot()
     def checkForUpdates(self):
-        feed = str(self._config.get("updates", {}).get("feed", ""))
+        self._check_for_updates(force=True)
+
+    def _check_for_updates(self, force: bool):
         channel = self.getUpdateChannel()
-        if not feed:
-            self.send_notification("WARNING", "Aucun catalogue de releases configuré", 4000)
+        if self._updater_state.get("state") in {"CHECKING", "DOWNLOADING", "ACTIVATING"}:
             return
+        self._set_updater_state(state="CHECKING", progress=0, message="Recherche sur GitHub…", error={})
 
         def task():
             try:
-                release = ReleaseManager().check(feed, channel)
+                release = ReleaseCatalog().check(channel, self._clios_version_text)
                 if release:
+                    self._set_updater_state(
+                        state="AVAILABLE", available_version=release["version"], progress=0,
+                        message=f"CliOS {release['version']} est disponible", can_activate=False,
+                        last_manifest=release, error={},
+                    )
                     self.send_notification("INFO", f"Release {release['version']} disponible", 5000)
                 else:
+                    self._set_updater_state(
+                        state="UP_TO_DATE", available_version="", progress=100,
+                        message="CliOS est à jour", can_activate=False, error={},
+                    )
                     self.send_notification("SUCCESS", "CliOS est à jour", 3500)
-            except (ReleaseError, OSError, ValueError) as exc:
+                self.save_setting("updates.last_success_epoch", str(int(time.time())))
+            except (CatalogError, OSError, ValueError) as exc:
+                code = getattr(exc, "code", "NETWORK")
+                self._set_updater_state(
+                    state="ERROR", progress=0, message=str(exc), can_activate=False,
+                    error={"code": code, "message": str(exc)},
+                )
                 self.logger.error(f"Recherche de release impossible: {exc}", extra={"error_code": "RELEASE_CHECK_ERROR"})
                 self.send_notification("ERROR", f"Recherche impossible: {str(exc)[:70]}", 5000)
 
         threading.Thread(target=task, daemon=True, name="ReleaseCheckThread").start()
+
+    @Slot(float)
+    def stageUpdate(self, speed_kmh: float = 0.0):
+        version = str(self._updater_state.get("available_version", ""))
+        if not version:
+            self.send_notification("WARNING", "Aucune mise à jour sélectionnée", 3500)
+            return
+        self.logger.info(
+            f"Staging de {version} demandé à {speed_kmh:.1f} km/h",
+            extra={"error_code": "UPDATE_STAGE_REQUEST", "speed_kmh": speed_kmh, "version": version},
+        )
+        self._set_updater_state(state="DOWNLOADING", progress=0, message="Téléchargement demandé", error={})
+        self._run_updater_operation(lambda client: client.stage(version), "STAGED", version)
+
+    @Slot(float)
+    def activateUpdate(self, speed_kmh: float = 0.0):
+        version = str(self._updater_state.get("available_version", ""))
+        self.logger.warning(
+            f"Activation de {version} confirmée à {speed_kmh:.1f} km/h",
+            extra={"error_code": "UPDATE_ACTIVATE_CONFIRMED", "speed_kmh": speed_kmh, "version": version},
+        )
+        self._set_updater_state(state="ACTIVATING", progress=100, message="Activation en cours", error={})
+        self._run_updater_operation(lambda client: client.activate(version), "ACTIVATING", version)
+
+    @Slot(float, bool)
+    def rollbackUpdate(self, speed_kmh: float = 0.0, stable_only: bool = False):
+        self.logger.warning(
+            f"Rollback confirmé à {speed_kmh:.1f} km/h (stable={stable_only})",
+            extra={"error_code": "UPDATE_ROLLBACK_CONFIRMED", "speed_kmh": speed_kmh, "stable_only": stable_only},
+        )
+        self._set_updater_state(state="ACTIVATING", progress=100, message="Rollback en cours", error={})
+        self._run_updater_operation(lambda client: client.rollback(stable_only), "ACTIVATING", "")
+
+    def _run_updater_operation(self, operation, success_state: str, version: str):
+        def task():
+            try:
+                operation(UpdaterClient(timeout=900))
+                self._set_updater_state(
+                    state=success_state, available_version=version, progress=100,
+                    message="Release préparée" if success_state == "STAGED" else "Redémarrage en cours",
+                    can_activate=success_state == "STAGED", error={},
+                )
+            except UpdaterClientError as exc:
+                message = str(exc)
+                lowered = message.lower()
+                if getattr(exc, "code", "") not in {"", "UPDATER_CLIENT", "UPDATE_ERROR"}:
+                    code = exc.code
+                elif "sha-256" in lowered or "sha256" in lowered:
+                    code = "SHA256"
+                elif "espace disque" in lowered or "no space" in lowered:
+                    code = "DISK_SPACE"
+                elif "self-check" in lowered:
+                    code = "SELF_CHECK"
+                elif "permission" in lowered or "privil" in lowered or "indisponible" in lowered:
+                    code = "PRIVILEGE"
+                elif "réseau" in lowered or "github" in lowered:
+                    code = "NETWORK"
+                else:
+                    code = "UPDATE_ERROR"
+                self._set_updater_state(
+                    state="ERROR", message=message, can_activate=False,
+                    error={"code": code, "message": message},
+                )
+                self.logger.error(message, extra={"error_code": "UPDATER_HELPER_ERROR"})
+                self.send_notification("ERROR", message[:90], 6000)
+
+        threading.Thread(target=task, daemon=True, name="UpdaterOperationThread").start()
 
     @Slot(result=str)
     def getSystemMaintenanceStatus(self) -> str:

@@ -30,7 +30,7 @@ class MockBridge(QObject):
         }
         self._trip = {"distance_km": 10.0, "session_fuel_l": 0.8, "session_cost": 1.5, "autonomy": 600.0, "trip_b": 50.0, "avg_cons_b": 6.2}
         self._config = {"theme": {"main": "#48B8FF"}, "ui": {"visual_style": "gt_modern"}}
-        self._system = {"version": "1.0.0", "telemetry": {}, "health": {"service1": {"status": "OK"}}, "storage": {"usb_connected": True, "free_space_mb": 15000.0}}
+        self._system = {"version": "1.0.0", "telemetry": {}, "health": {"service1": {"status": "OK"}}, "storage": {"usb_connected": True, "free_space_mb": 15000.0}, "updater": {"state": "IDLE", "installed_version": "1.0.0", "progress": 0}}
 
     @Property("QVariantMap", notify=vehicleStateChanged)
     def vehicleState(self): return self._vehicle
@@ -83,6 +83,12 @@ class MockBridge(QObject):
     def setUpdateChannel(self, channel): return channel in {"stable", "beta"}
     @Slot()
     def checkForUpdates(self): pass
+    @Slot(float)
+    def stageUpdate(self, _speed): pass
+    @Slot(float)
+    def activateUpdate(self, _speed): pass
+    @Slot(float, bool)
+    def rollbackUpdate(self, _speed, _stable): pass
     @Slot(result=str)
     def getSystemMaintenanceStatus(self): return "{}"
     @Slot()
