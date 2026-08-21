@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 import tarfile
 import tempfile
 import unittest

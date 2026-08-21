@@ -2,6 +2,7 @@ import os
 import glob
 import threading
 import time
+from src.can_activity import CanActivitySource
 from src.parser import DbcParser
 from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
@@ -13,7 +14,8 @@ from src.state_store import StatePatch
 class CanService(BaseService):
     """Service autonome gerant le bus CAN via SocketCAN."""
 
-    def __init__(self, name: str, runtime, storage, dbc_path: str, provider, obd_callback=None):
+    def __init__(self, name: str, runtime, storage, dbc_path: str, provider, obd_callback=None,
+                 activity_source: CanActivitySource | None = None):
         super().__init__(name, storage)
         self.name = name
         self.runtime = runtime
@@ -23,6 +25,7 @@ class CanService(BaseService):
         self.parser = DbcParser(dbc_path)
         self.processor = SignalProcessor()
         self.provider = provider
+        self.activity_source = activity_source or CanActivitySource()
         if hasattr(self.provider, "register_obd_callback") and self.obd_callback:
             self.provider.register_obd_callback(self.obd_callback)
         self._last_frame_ts = None
@@ -73,20 +76,25 @@ class CanService(BaseService):
 
         while not stop_event.is_set():
             if not self.provider.is_connected:
+                self.activity_source.set_provider_connected(False)
                 try:
                     self.provider.connect()
+                    self.activity_source.set_provider_connected(bool(self.provider.is_connected))
                     self._last_frame_ts = None
                     self.set_warning(f"Connecté sur {self.provider.channel}, en attente de trames CAN.")
                 except Exception as e:
                     self.set_error(f"Échec : {str(e)}")
                     stop_event.wait(2.0)
                     continue
+            else:
+                self.activity_source.set_provider_connected(True)
 
             # Lecture CAN et gestion des erreurs d'interface.
             try:
                 frame = self.provider.read_frame(timeout=0.01)
                 now = time.time()
             except Exception as e:
+                self.activity_source.set_provider_connected(False)
                 self.set_error(f"Perte de l'interface reseau : {str(e)}")
                 self.provider.close()
                 stop_event.wait(1.0)
@@ -94,6 +102,7 @@ class CanService(BaseService):
 
             # Décodage de trame et agrégation des signaux.
             if frame is not None:
+                self.activity_source.record_frame()
                 self._last_frame_ts = now
                 msg_id = frame.arbitration_id
 
@@ -157,4 +166,5 @@ class CanService(BaseService):
         if self._stop_event is not None:
             self._stop_event.set()
         self.provider.close()
+        self.activity_source.set_provider_connected(False)
         super().stop()

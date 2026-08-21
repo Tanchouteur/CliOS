@@ -2,6 +2,7 @@ import pathlib
 import unittest
 
 from tools.clios_launcher import application_args
+from tools.generate_systemd import render_service
 
 
 ROOT = pathlib.Path(__file__).parents[1]
@@ -13,12 +14,23 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertEqual(application_args(["--ui", "gui"]), ["--ui", "gui"])
 
     def test_headless_service_starts_from_multi_user_target(self):
-        service = (ROOT / "installation/etc/systemd/system/clios.service").read_text(encoding="utf-8")
+        service = render_service("clios", 1000)
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("WantedBy=multi-user.target", service)
         for payload in (service, installer):
-            self.assertIn("WantedBy=multi-user.target", payload)
             self.assertNotIn("WantedBy=graphical.target", payload)
             self.assertNotIn("After=graphical.target", payload)
+
+    def test_installer_and_tests_use_the_authoritative_unit_generator(self):
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        template = (ROOT / "installation/systemd/clios.service.in").read_text(encoding="utf-8")
+        rendered = render_service("dashboard", 1234)
+        self.assertIn('tools/generate_systemd.py', installer)
+        self.assertIn("User=dashboard", rendered)
+        self.assertIn("SupplementaryGroups=clios", rendered)
+        self.assertIn("XDG_RUNTIME_DIR=/run/user/1234", rendered)
+        self.assertIn("@USER@", template)
+        self.assertFalse((ROOT / "installation/etc/systemd/system/clios.service").exists())
 
     def test_installer_has_offline_targets_for_both_supported_distributions(self):
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import threading
 from typing import Dict, List, Optional, Tuple
 
@@ -184,7 +183,7 @@ class BleLedController(BaseService):
                 await client.connect(timeout=4.0)
                 self._clients[mac] = client
                 self.set_ok(f"Connecté à {mac}")
-            except Exception as e:
+            except Exception:
                 self.set_warning(f"Connexion échouée: {mac[:8]}")
                 return
 
@@ -199,7 +198,7 @@ class BleLedController(BaseService):
             try:
                 await client.write_gatt_char(write_char, payload, response=False)
                 await asyncio.sleep(0.04)
-            except Exception as e:
+            except Exception:
                 self.set_error(f"Échec envoi sur {mac[:8]}")
                 self._clients.pop(mac, None)
                 self._char_cache.pop(mac, None)

@@ -18,7 +18,8 @@ class ExportService(BaseService):
         super().__init__("Export", storage)
         self._notifier = notifier
         self.data_dir = data_dir
-        self.config_filename = "clos_export.json"
+        self.config_filename = "clios_export.json"
+        self.legacy_config_filename = "clos_export.json"
         self.usb_history_filename = ".clios_export_history.json"
         self.is_exporting = False
         self._force_reexport_all = False
@@ -49,7 +50,7 @@ class ExportService(BaseService):
         self.print_message("Ré-export complet demandé pour le prochain cycle USB.")
         self._notifier("INFO", "Re-export total programme", 3000)
 
-    def start(self, stop_event: threading.Event):
+    def start(self, stop_event: threading.Event, implemented=False):
         super().start(stop_event, implemented=True)
         self._thread = threading.Thread(
             target=self._run, args=(stop_event,), daemon=True, name=self.service_name
@@ -73,21 +74,39 @@ class ExportService(BaseService):
     def _check_usb_drives(self):
         """Recherche le fichier de configuration sur les partitions externes."""
         try:
-            partitions = psutil.disk_partitions(all=False)
+            # Les clés NTFS montées par ntfs-3g apparaissent comme fuseblk et
+            # disparaissent de disk_partitions(all=False).
+            partitions = psutil.disk_partitions(all=True)
+            seen = set()
             for p in partitions:
-                if p.mountpoint.startswith(('/snap', '/boot', '/efi', '/dev')):
+                mountpoint = os.path.abspath(str(p.mountpoint))
+                if mountpoint in seen:
                     continue
-                if os.path.isdir(os.path.join(p.mountpoint, "clios")):
+                seen.add(mountpoint)
+                if mountpoint.startswith(('/snap', '/boot', '/efi', '/dev')):
+                    continue
+                # Ne recopie pas les trajets sur la clé qui les stocke déjà.
+                # La seule présence du dossier clios n'est pas suffisante : le
+                # helper de montage le crée désormais sur chaque clé USB.
+                try:
+                    if os.path.commonpath((os.path.realpath(self.data_dir), os.path.realpath(mountpoint))) == os.path.realpath(mountpoint):
+                        continue
+                except ValueError:
                     continue
 
-                config_path = os.path.join(p.mountpoint, self.config_filename)
-
-                if os.path.exists(config_path):
-                    self._process_usb_export(p.mountpoint, config_path)
+                config_path = next(
+                    (
+                        os.path.join(mountpoint, filename)
+                        for filename in (self.config_filename, self.legacy_config_filename)
+                        if os.path.isfile(os.path.join(mountpoint, filename))
+                    ),
+                    None,
+                )
+                if config_path:
+                    self._process_usb_export(mountpoint, config_path)
                     break
-
-        except Exception as e:
-            self.set_error(f"Erreur d'analyse des partitions : {e}")
+        except (OSError, RuntimeError, TypeError) as exc:
+            self.set_error(f"Erreur d'analyse des partitions : {exc}")
 
     def update_data_dir(self, data_dir: str):
         """Suit le répertoire des trajets après une transition de stockage."""
@@ -101,7 +120,8 @@ class ExportService(BaseService):
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
 
-            target_folder = config.get("target_folder", "ClOS_Exports")
+            # Existing user values remain honored; only the default is canonicalized.
+            target_folder = config.get("target_folder", "CliOS_Exports")
             export_dest = self._resolve_export_destination(mountpoint, target_folder)
             os.makedirs(export_dest, exist_ok=True)
             usb_history = self._load_usb_history(export_dest)
@@ -161,8 +181,8 @@ class ExportService(BaseService):
             self._notifier("OK", msg, 5000)
             self._force_reexport_all = False
 
-        except Exception as e:
-            self.set_error(f"Echec du transfert : {e}")
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.set_error(f"Echec du transfert : {exc}")
             self._notifier("ERROR", "Échec de l'exportation", 5000)
         finally:
             self.is_exporting = False
@@ -186,8 +206,12 @@ class ExportService(BaseService):
                 entries = data.get("entries", [])
                 if isinstance(entries, list):
                     return self._normalize_history_entries(entries)
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.logger.warning(
+                "Historique USB illisible: %s",
+                exc,
+                extra={"error_code": "USB_EXPORT_HISTORY_INVALID"},
+            )
         return set()
 
     def _save_usb_history(self, export_dest: str, history: set):
@@ -213,14 +237,14 @@ class ExportService(BaseService):
         return normalized
 
     def _resolve_export_destination(self, mountpoint: str, target_folder: str) -> str:
-        folder = str(target_folder or "ClOS_Exports").strip()
+        folder = str(target_folder or "CliOS_Exports").strip()
         if not folder:
-            folder = "ClOS_Exports"
+            folder = "CliOS_Exports"
 
         # Refuse les chemins absolus ou traversées de répertoire.
         candidate = os.path.normpath(folder)
         if os.path.isabs(candidate) or candidate.startswith("..") or "/.." in candidate:
-            raise ValueError("target_folder invalide dans clos_export.json")
+            raise ValueError("target_folder invalide dans clios_export.json")
 
         export_dest = os.path.normpath(os.path.join(mountpoint, candidate))
         mount_abs = os.path.abspath(mountpoint)

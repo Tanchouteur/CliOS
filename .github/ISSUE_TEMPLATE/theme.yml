@@ -1,0 +1,23 @@
+name: Theme proposal
+description: Propose a QML theme based on Theme API v1
+title: "[Theme]: "
+labels: [theme]
+body:
+  - type: input
+    id: theme
+    attributes:
+      label: Theme name and identifier
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 1920×720 screenshots and tested interactions
+    validations:
+      required: true
+  - type: textarea
+    id: assets
+    attributes:
+      label: Asset provenance, authors/owners, and licences
+    validations:
+      required: true

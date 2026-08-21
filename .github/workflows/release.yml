@@ -2,51 +2,46 @@ name: Release ARM64
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  validate:
+  quality:
+    uses: ./.github/workflows/ci.yml
+
+  validate-tag:
+    needs: quality
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
-    env:
-      QT_QPA_PLATFORM: offscreen
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-
-      - name: Vérifier tag, VERSION et appartenance à main
-        shell: bash
+      - name: Verify annotated signed tag, VERSION, and main ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version="$(tr -d '[:space:]' < VERSION)"
           test "${GITHUB_REF_NAME}" = "v${version}"
+          test "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = tag
+          tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq '.object.sha')"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.verification.verified')" = true
           git fetch --no-tags origin main
           git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
           python3 -c 'from src.release_contract import SemVer; import pathlib; SemVer.parse(pathlib.Path("VERSION").read_text().strip())'
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0
-      - run: python -m pip install --upgrade pip
-      - run: python -m pip install PySide6 jsonschema psutil python-can pyserial
-
-      - name: Portes CI complètes
-        run: |
-          python -m compileall -q main.py src tools tests
-          python tools/validate_data.py --all
-          python -m unittest discover -s tests -v
-          python tools/qml_smoke.py
-          bash -n install.sh update.sh tools/*.sh
-          tools/test_install_docker.sh
-
   build:
-    needs: validate
+    needs: validate-tag
+    timeout-minutes: 60
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -59,40 +54,31 @@ jobs:
             image: debian:trixie
             lock: requirements-trixie-arm64.lock
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
         with:
           platforms: arm64
-
-      - name: Restaurer le wheelhouse en cache
-        id: wheel-cache
-        uses: actions/cache/restore@v4
+      - id: wheel-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: wheelhouses/${{ matrix.target }}
-          key: wheelhouse-v1-${{ matrix.target }}-${{ hashFiles(matrix.lock, 'tools/build_wheelhouse.sh') }}
-
-      - name: Construire le wheelhouse ARM64
+          key: wheelhouse-v2-${{ matrix.target }}-${{ hashFiles(matrix.lock, 'tools/build_wheelhouse.sh') }}
+      - name: Build ARM64 wheelhouse
         if: steps.wheel-cache.outputs.cache-hit != 'true'
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${GITHUB_WORKSPACE}:/work" -w /work "${{ matrix.image }}" \
             bash -ceu 'apt-get update; apt-get install -y python3 python3-pip python3-venv python3-wheel build-essential libjack-jackd2-dev portaudio19-dev libsndfile1-dev liblo-dev libportmidi-dev; ./tools/build_wheelhouse.sh "${{ matrix.target }}"'
-
-      - name: Vérifier le wheelhouse
+      - name: Verify wheelhouse
         run: python3 tools/verify_wheelhouse.py "${{ matrix.lock }}" "wheelhouses/${{ matrix.target }}"
-
-      - name: Sauvegarder le wheelhouse vérifié
-        if: steps.wheel-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+      - if: steps.wheel-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: wheelhouses/${{ matrix.target }}
-          key: wheelhouse-v1-${{ matrix.target }}-${{ hashFiles(matrix.lock, 'tools/build_wheelhouse.sh') }}
-
-      - name: Construire les assets de plateforme
-        shell: bash
+          key: wheelhouse-v2-${{ matrix.target }}-${{ hashFiles(matrix.lock, 'tools/build_wheelhouse.sh') }}
+      - name: Build platform assets
         run: |
           set -euo pipefail
           version="$(tr -d '[:space:]' < VERSION)"
@@ -103,15 +89,13 @@ jobs:
           sha256sum --check "SHA256SUMS-${{ matrix.target }}"
           test -f "clios-${version}-${{ matrix.target }}.tar.gz"
           test -f "clios-${version}-${{ matrix.target }}-${channel}.json"
-
-      - name: Self-check de l'archive sous ARM64
-        shell: bash
+      - name: ARM64 archive self-check
+        timeout-minutes: 25
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${GITHUB_WORKSPACE}:/work" -w /work "${{ matrix.image }}" \
-            bash -ceu 'apt-get update; apt-get install -y python3 python3-venv libegl1 libgl1 libxkbcommon-x11-0 libglib2.0-0 libfontconfig1 libdbus-1-3 libportaudio2 libportmidi0 libjack-jackd2-0 libsndfile1 liblo7; version=$(tr -d "[:space:]" < VERSION); mkdir /stage; tar -xzf "dist/clios-${version}-${{ matrix.target }}.tar.gz" -C /stage; cd "/stage/clios-${version}"; ./install.sh --venv-only --yes; .venv/bin/pip check; .venv/bin/python -c "import PySide6, numpy, psutil, can, serial, pyudev, bleak, sounddevice, pyo, aifc, audioop"; .venv/bin/python -m compileall -q main.py src tools; .venv/bin/python tools/validate_data.py --all; QT_QPA_PLATFORM=offscreen .venv/bin/python tools/qml_smoke.py'
-
-      - uses: actions/upload-artifact@v4
+            bash -ceu 'apt-get update; apt-get install -y python3 python3-venv libegl1 libgl1 libxkbcommon-x11-0 libglib2.0-0 libfontconfig1 libdbus-1-3 libportaudio2 libportmidi0 libjack-jackd2-0 libsndfile1 liblo7; version=$(tr -d "[:space:]" < VERSION); mkdir /stage; tar -xzf "dist/clios-${version}-${{ matrix.target }}.tar.gz" -C /stage; cd "/stage/clios-${version}"; ./install.sh --venv-only --yes; .venv/bin/pip check; .venv/bin/python -c "import PySide6, numpy, psutil, can, serial, pyudev, bleak, sounddevice, pyo, jsonschema, aifc, audioop"; .venv/bin/python -m compileall -q main.py src tools; .venv/bin/python tools/validate_data.py --all; QT_QPA_PLATFORM=offscreen .venv/bin/python tools/qml_smoke.py'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-${{ matrix.target }}
           path: |
@@ -122,27 +106,47 @@ jobs:
 
   publish:
     needs: build
+    timeout-minutes: 15
     runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: release-*
           path: dist
           merge-multiple: true
-
-      - name: Consolider et vérifier SHA256SUMS
-        shell: bash
+      - name: Consolidate and sign SHA256SUMS
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail
+          test -n "${RELEASE_SIGNING_KEY}"
           cat dist/SHA256SUMS-* > dist/SHA256SUMS
           cd dist
           sha256sum --check SHA256SUMS
-
-      - name: Publier seulement après succès des deux plateformes
+          umask 077
+          printf '%s\n' "${RELEASE_SIGNING_KEY}" > release-private.pem
+          openssl pkey -in release-private.pem -pubout -out release-public.pem
+          python3 -c 'import json, pathlib; data=json.loads(pathlib.Path("../installation/etc/clios/release-keys.json").read_text()); print(data["keys"][0]["public_key"], end="")' > trusted-public.pem
+          cmp release-public.pem trusted-public.pem
+          openssl pkeyutl -sign -inkey release-private.pem -rawin -in SHA256SUMS -out SHA256SUMS.sig
+          rm release-private.pem release-public.pem trusted-public.pem
+      - name: Attest archives and manifests
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: |
+            dist/clios-*.tar.gz
+            dist/clios-*.json
+            dist/SHA256SUMS
+            dist/SHA256SUMS.sig
+      - name: Publish only after both platforms succeed
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
         run: |
           set -euo pipefail
           version="$(tr -d '[:space:]' < VERSION)"
@@ -150,7 +154,5 @@ jobs:
           prerelease=()
           if test "${channel}" = beta; then prerelease=(--prerelease); fi
           gh release create "${GITHUB_REF_NAME}" \
-            dist/clios-*.tar.gz \
-            dist/clios-*.json \
-            dist/SHA256SUMS \
+            dist/clios-*.tar.gz dist/clios-*.json dist/SHA256SUMS dist/SHA256SUMS.sig \
             --verify-tag --generate-notes "${prerelease[@]}"

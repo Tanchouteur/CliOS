@@ -11,7 +11,7 @@ class UsbStorageService(BaseService):
         self.runtime = runtime
         self._storage_manager = storage_manager
 
-    def start(self, stop_event: threading.Event):
+    def start(self, stop_event: threading.Event, implemented=False):
         super().start(stop_event, implemented=True)
         self._thread = threading.Thread(
             target=self._run,
@@ -31,7 +31,8 @@ class UsbStorageService(BaseService):
                 else:
                     self.set_ok(f"USB OK — {free_mb:.0f} MB libres")
             else:
-                self.set_warning("Mode dégradé — données temporaires en RAM")
+                diagnostic = str(status.get("usb_diagnostic", "Stockage USB indisponible"))
+                self.set_warning(f"{status.get('mode', 'RAM')} — {diagnostic}")
 
             self.runtime.publish("system", {
                 "storage_mode": status.get("mode", "RAM"),

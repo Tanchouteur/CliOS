@@ -1,5 +1,3 @@
-import time
-import os
 from driver import Slcan
 
 

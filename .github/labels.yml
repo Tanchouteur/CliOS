@@ -1,0 +1,16 @@
+- name: good first issue
+  color: "7057ff"
+- name: help wanted
+  color: "008672"
+- name: vehicle-profile
+  color: "1d76db"
+- name: theme
+  color: "5319e7"
+- name: hardware
+  color: "d4c5f9"
+- name: documentation
+  color: "0075ca"
+- name: security
+  color: "b60205"
+- name: breaking-change
+  color: "d93f0b"

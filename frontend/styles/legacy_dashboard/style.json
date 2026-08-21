@@ -4,7 +4,7 @@
     "supportedResolutions": ["1920x720"],
     "capabilities": ["settings", "commands", "vehicle-state"],
     "id": "legacy_dashboard",
-    "label": "BMW Renault",
+    "label": "Legacy",
     "description": "Ancien cockpit et ses compteurs circulaires",
     "order": 20,
     "dashboard": "Dashboard.qml",

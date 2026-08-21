@@ -31,6 +31,7 @@ fi
 SYSTEMD_DIR="/etc/systemd/system"
 UDEV_RULES_DIR="/etc/udev/rules.d"
 LOCAL_LIBEXEC_DIR="/usr/local/libexec"
+POLKIT_RULES_DIR="/etc/polkit-1/rules.d"
 
 # Flags d'exécution
 DRY_RUN=0
@@ -784,30 +785,11 @@ else
 
         USER_UID="$(id -u "$CURRENT_USER" 2>/dev/null || echo 1000)"
         TMP_SERVICE_FILE="/tmp/clios.service"
-        cat << EOF > "$TMP_SERVICE_FILE"
-[Unit]
-Description=CliOS Automotive Dashboard (Wayland Kiosk via Cage)
-After=sound.target can0.service systemd-user-sessions.service
-Wants=can0.service
-
-[Service]
-Type=simple
-User=${CURRENT_USER}
-StateDirectory=clios
-RuntimeDirectory=clios
-PAMName=login
-WorkingDirectory=/opt/clios/current
-Environment=XDG_RUNTIME_DIR=/run/user/${USER_UID}
-Environment=QT_QPA_PLATFORM=wayland
-ExecStart=/usr/bin/cage -s -- /usr/bin/python3 -u /opt/clios/current/tools/clios_launcher.py -- --ui gui
-Restart=on-failure
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
+        python3 "${PROJECT_DIR}/tools/generate_systemd.py" \
+            --user "${CURRENT_USER}" --uid "${USER_UID}" --output "${TMP_SERVICE_FILE}"
 
         run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" "${UDEV_RULES_DIR}" "${LOCAL_LIBEXEC_DIR}" /etc/clios /var/lib/clios /run/clios /media/clios
+        run_sudo_cmd "Création du répertoire Polkit" mkdir -p "${POLKIT_RULES_DIR}"
         run_sudo_cmd "Droits des données updater" chown root:clios /var/lib/clios /run/clios
         run_sudo_cmd "Permissions des données updater" chmod 0770 /var/lib/clios /run/clios
         backup_system_file "${SYSTEMD_DIR}/clios.service"
@@ -817,6 +799,8 @@ EOF
         backup_system_file "${UDEV_RULES_DIR}/90-clios-usb-storage.rules"
         backup_system_file "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
         backup_system_file "/etc/clios/updater.json"
+        backup_system_file "/etc/clios/release-keys.json"
+        backup_system_file "${POLKIT_RULES_DIR}/49-clios-power.rules"
 
         if [[ $DRY_RUN -eq 1 ]]; then
             log_dry "Contenu du service généré (${TMP_SERVICE_FILE}) :"
@@ -833,6 +817,14 @@ EOF
             run_sudo_cmd "Installation de la source de confiance updater" cp "${INSTALL_ETC_DIR}/clios/updater.json" /etc/clios/updater.json
             run_sudo_cmd "Droits de la source de confiance updater" chown root:root /etc/clios/updater.json
             run_sudo_cmd "Permissions de la source de confiance updater" chmod 0644 /etc/clios/updater.json
+            run_sudo_cmd "Installation du trousseau de publication" cp "${INSTALL_ETC_DIR}/clios/release-keys.json" /etc/clios/release-keys.json
+            run_sudo_cmd "Droits du trousseau de publication" chown root:root /etc/clios/release-keys.json
+            run_sudo_cmd "Permissions du trousseau de publication" chmod 0644 /etc/clios/release-keys.json
+            sed "s/@CLIOS_USER@/${CURRENT_USER}/g" \
+                "${INSTALL_ETC_DIR}/polkit-1/rules.d/49-clios-power.rules.in" > /tmp/49-clios-power.rules
+            run_sudo_cmd "Installation de la règle Polkit CliOS" cp /tmp/49-clios-power.rules "${POLKIT_RULES_DIR}/49-clios-power.rules"
+            run_sudo_cmd "Permissions de la règle Polkit CliOS" chmod 0644 "${POLKIT_RULES_DIR}/49-clios-power.rules"
+            rm -f /tmp/49-clios-power.rules
             safe_systemctl "Rechargement daemon systemd" daemon-reload
             safe_udevadm "Rechargement des règles de stockage USB" control --reload-rules
             safe_udevadm "Détection des stockages USB déjà branchés" trigger --subsystem-match=block --action=add

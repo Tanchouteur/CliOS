@@ -10,6 +10,7 @@ import subprocess
 import tarfile
 import tempfile
 import urllib.request
+import re
 from pathlib import Path
 
 from src.release_contract import ReleaseContractError, SemVer, validate_manifest
@@ -26,10 +27,11 @@ class ReleaseError(RuntimeError):
 
 class ReleaseManager:
     VALID_CHANNELS = {"stable", "beta"}
+    SIGNATURE_BOOTSTRAP_VERSION = SemVer.parse("2.0.1-rc.4")
 
     def __init__(self, install_root: str = "/opt/clios", state_root: str = "/var/lib/clios",
                  downloader=None, progress_callback=None, self_check_user: str | None = None,
-                 platform_id: str | None = None):
+                 platform_id: str | None = None, trusted_keys_path: str | None = None):
         self.install_root = Path(install_root)
         self.releases_dir = self.install_root / "releases"
         self.current_link = self.install_root / "current"
@@ -40,6 +42,11 @@ class ReleaseManager:
         self.progress_callback = progress_callback
         self.self_check_user = self_check_user
         self.platform = get_release_platform(platform_id) if platform_id else None
+        packaged_keys = Path(__file__).resolve().parent.parent / "installation/etc/clios/release-keys.json"
+        system_keys = Path("/etc/clios/release-keys.json")
+        self.trusted_keys_path = Path(trusted_keys_path) if trusted_keys_path else (
+            system_keys if system_keys.exists() else packaged_keys
+        )
 
     @staticmethod
     def _read_json(path_or_url: str) -> dict:
@@ -75,8 +82,17 @@ class ReleaseManager:
         return sorted(candidates, key=lambda item: self._version_tuple(item.get("version", "0.0.0")))[-1]
 
     def stage(self, manifest_source: str | dict, *, strict: bool = False) -> Path:
-        manifest = manifest_source if isinstance(manifest_source, dict) else self._read_json(manifest_source)
+        manifest_location = None
+        if isinstance(manifest_source, dict):
+            manifest = dict(manifest_source)
+            manifest_location = manifest.pop("_manifest_url", None)
+        else:
+            manifest_location = str(manifest_source)
+            manifest = self._read_json(manifest_location)
         version = self._validate_manifest(manifest, strict=strict)
+        signed_hashes = None
+        if strict and SemVer.parse(version) > self.SIGNATURE_BOOTSTRAP_VERSION:
+            signed_hashes = self._verify_signed_metadata(manifest, manifest_location)
         target = self.releases_dir / version
         if target.exists():
             raise ReleaseError(f"release déjà préparée: {version}")
@@ -103,6 +119,10 @@ class ReleaseManager:
                 raise ReleaseError("espace disque insuffisant pour extraire la release")
             if self.sha256(archive_part) != manifest["archive_sha256"].lower():
                 raise ReleaseError("SHA-256 de l'archive incorrect")
+            if signed_hashes is not None:
+                archive_name = Path(str(manifest["archive_url"])).name
+                if self.sha256(archive_part) != signed_hashes[archive_name]:
+                    raise ReleaseError("hash signé de l'archive incorrect")
             unpacked = work / "unpacked"
             unpacked.mkdir()
             self._safe_extract(archive_part, unpacked)
@@ -121,6 +141,87 @@ class ReleaseManager:
         finally:
             if work.exists():
                 shutil.rmtree(work, ignore_errors=True)
+
+    def _verify_signed_metadata(self, manifest: dict, manifest_location: str | None) -> dict[str, str]:
+        """Verify SHA256SUMS before trusting a future manifest or archive."""
+        version = str(manifest["version"])
+        platform = str(manifest["platform"]).removeprefix("raspberry-pi-os-")
+        manifest_name = f"clios-{version}-{platform}-{manifest['channel']}.json"
+        archive_name = Path(str(manifest["archive_url"])).name
+        base = str(manifest_location or manifest["archive_url"]).rsplit("/", 1)[0]
+        manifest_ref = str(manifest_location or f"{base}/{manifest_name}")
+        sums_ref = f"{base}/SHA256SUMS"
+        signature_ref = f"{base}/SHA256SUMS.sig"
+
+        with tempfile.TemporaryDirectory(prefix="clios-signature-") as temp_dir:
+            temp = Path(temp_dir)
+            sums_path, signature_path, manifest_path = temp / "SHA256SUMS", temp / "SHA256SUMS.sig", temp / manifest_name
+            self._download(sums_ref, sums_path)
+            self._download(signature_ref, signature_path)
+            self._download(manifest_ref, manifest_path)
+            self._verify_ed25519(sums_path, signature_path)
+            signed = self._parse_sha256sums(sums_path)
+            for required in (manifest_name, archive_name):
+                if required not in signed:
+                    raise ReleaseError(f"artefact absent du manifeste signé: {required}")
+            if self.sha256(manifest_path) != signed[manifest_name]:
+                raise ReleaseError("hash signé du manifeste incorrect")
+            try:
+                downloaded = validate_manifest(json.loads(manifest_path.read_text(encoding="utf-8")))
+                current = validate_manifest(manifest)
+            except (OSError, json.JSONDecodeError, ReleaseContractError) as exc:
+                raise ReleaseError(f"manifeste signé invalide: {exc}") from exc
+            if downloaded != current:
+                raise ReleaseError("le manifeste résolu diffère du manifeste signé")
+            if signed[archive_name] != str(manifest["archive_sha256"]).lower():
+                raise ReleaseError("hash d'archive contradictoire dans le manifeste signé")
+            return signed
+
+    def _download(self, source: str, destination: Path) -> None:
+        if self._default_downloader:
+            self.downloader(source, str(destination))
+        else:
+            self.downloader(source, str(destination))
+
+    def _verify_ed25519(self, sums_path: Path, signature_path: Path) -> None:
+        try:
+            keyring = json.loads(self.trusted_keys_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ReleaseError(f"trousseau de publication indisponible: {exc}") from exc
+        keys = keyring.get("keys") if isinstance(keyring, dict) else None
+        if keyring.get("schema_version") != 1 or not isinstance(keys, list) or not keys:
+            raise ReleaseError("trousseau de publication invalide")
+        for index, entry in enumerate(keys):
+            if not isinstance(entry, dict) or not isinstance(entry.get("public_key"), str):
+                continue
+            key_path = sums_path.parent / f"release-key-{index}.pem"
+            key_path.write_text(entry["public_key"], encoding="utf-8")
+            try:
+                result = subprocess.run(
+                    ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(key_path),
+                     "-rawin", "-in", str(sums_path), "-sigfile", str(signature_path)],
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise ReleaseError(f"vérification Ed25519 impossible: {exc}") from exc
+            if result.returncode == 0:
+                return
+        raise ReleaseError("signature Ed25519 de SHA256SUMS invalide")
+
+    @staticmethod
+    def _parse_sha256sums(path: Path) -> dict[str, str]:
+        entries = {}
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            match = re.fullmatch(r"([0-9a-fA-F]{64})  ([A-Za-z0-9][A-Za-z0-9_.-]*)", line)
+            if not match:
+                raise ReleaseError(f"SHA256SUMS invalide à la ligne {line_number}")
+            name = match.group(2)
+            if name in entries:
+                raise ReleaseError(f"artefact dupliqué dans SHA256SUMS: {name}")
+            entries[name] = match.group(1).lower()
+        if not entries:
+            raise ReleaseError("SHA256SUMS vide")
+        return entries
 
     def activate(self, version: str) -> Path:
         target = self.releases_dir / version

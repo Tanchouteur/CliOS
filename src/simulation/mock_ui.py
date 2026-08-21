@@ -1,6 +1,5 @@
 """Panneau de contrôle graphique complet pour la simulation et le moteur physique de CliOS."""
 
-import time
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSlider,

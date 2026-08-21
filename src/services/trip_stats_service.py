@@ -162,7 +162,8 @@ class TripStatsService(BaseService):
     def reset_trip_a(self):
         current_odo = self.runtime.snapshot().domain("motion").get("odometer", self.last_saved_odo)
         self.trip_a_marker = current_odo
-        if self.storage: self.storage.set("trips.a.marker", current_odo)
+        if self.storage:
+            self.storage.set("trips.a.marker", current_odo)
         with self._stats_lock:
             self._stats["trip_a"] = 0.0
         self._publish_stats()
@@ -208,7 +209,8 @@ class TripStatsService(BaseService):
     def reset_maintenance(self):
         current_odo = self.runtime.snapshot().domain("motion").get("odometer", self.last_saved_odo)
         self.last_revision_odo = current_odo
-        if self.storage: self.storage.set("vehicle.last_revision_odo", current_odo)
+        if self.storage:
+            self.storage.set("vehicle.last_revision_odo", current_odo)
         with self._stats_lock:
             self._stats["km_before_service"] = self._params["revision_interval"]["value"]
             self._stats["service_warning"] = False
@@ -216,7 +218,8 @@ class TripStatsService(BaseService):
 
     def set_fuel_price(self, new_price: float):
         self.fuel_price = new_price
-        if self.storage: self.storage.set("settings.last_fuel_price", new_price)
+        if self.storage:
+            self.storage.set("settings.last_fuel_price", new_price)
         with self._stats_lock:
             self._stats["fuel_price"] = new_price
         self._publish_stats()

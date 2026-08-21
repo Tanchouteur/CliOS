@@ -3,19 +3,25 @@ import os
 import threading
 
 from src.logging_runtime import get_logger
-from src.schema_validation import migrate_to_v1, validate_can_dictionary, validate_profile_catalog, validate_vehicle_config
+from src.schema_validation import (
+    migrate_to_v1,
+    validate_profile_catalog,
+    validate_profile_references,
+    validate_vehicle_config,
+)
 
 
 class ProfileManager:
     """Gère les profils de véhicules, la validation des fichiers et l'exposition pour l'UI."""
 
     def __init__(self, config_dir: str, can_dir: str, save_dash_dir: str, is_mock: bool = False,
-                 fallback_config_dir: str | None = None):
+                 fallback_config_dir: str | None = None, styles_dir: str | None = None):
         self.config_dir = config_dir
         self.can_dir = can_dir
         self.save_dash_dir = save_dash_dir
         self.is_mock = is_mock
         self.fallback_config_dir = fallback_config_dir
+        self.styles_dir = styles_dir or os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "styles")
         self._lock = threading.RLock()
         self.logger = get_logger("ProfileManager")
 
@@ -107,45 +113,11 @@ class ProfileManager:
             self.recovery_mode = True
             self.error_message = "Catalogue de profils invalide : " + " | ".join(catalog_errors)
             return
-        active_id = self.data.get("active_profile", "default")
-
-        # Vérifie que le profil actif existe dans la configuration.
-        if active_id not in self.data.get("profiles", {}):
-            self.has_error = True
-            self.recovery_mode = True
-            self.error_message = f"Le profil '{active_id}' n'existe pas. Mode récupération actif."
-            return
-
-        # Vérifie l'existence des fichiers associés au profil.
-        info = self.data["profiles"][active_id]
-        can_path = self.get_can_path()
-        config_path = self.get_config_path()
-
-        errors = []
-        if not os.path.exists(can_path) and not self.is_mock:
-            errors.append(f"CAN manquant ({info.get('can_file')})")
-        if not os.path.exists(config_path):
-            errors.append(f"Config manquante ({info.get('config_file')})")
-
+        errors = validate_profile_references(self.data, self.config_dir, self.can_dir, self.styles_dir)
         if errors:
             self.has_error = True
             self.recovery_mode = True
-            self.error_message = f"Erreur Profil '{info.get('name')}' : " + " | ".join(errors) + ". Mode récupération actif."
-            return
-
-        try:
-            config_errors = validate_vehicle_config(self.load_active_config())
-            errors.extend(f"Config: {error}" for error in config_errors)
-            if not self.is_mock:
-                with open(can_path, encoding="utf-8") as stream:
-                    can_errors = validate_can_dictionary(json.load(stream))
-                errors.extend(f"CAN: {error}" for error in can_errors)
-        except (OSError, json.JSONDecodeError, RuntimeError) as exc:
-            errors.append(str(exc))
-        if errors:
-            self.has_error = True
-            self.recovery_mode = True
-            self.error_message = f"Profil '{info.get('name')}' invalide : " + " | ".join(errors)
+            self.error_message = "Profils invalides : " + " | ".join(errors) + ". Mode récupération actif."
 
     def get_available_profiles(self) -> list:
         """Retourne la liste des identifiants (clés) des profils disponibles."""
@@ -213,12 +185,14 @@ class ProfileManager:
     # Méthodes exposées à l'interface.
     def get_available_can_files(self) -> list:
         """Retourne la liste des fichiers CAN disponibles."""
-        if not os.path.exists(self.can_dir): return []
+        if not os.path.exists(self.can_dir):
+            return []
         return [f for f in os.listdir(self.can_dir) if f.endswith('.json')]
 
     def get_available_config_files(self) -> list:
         """Retourne la liste des fichiers de configuration (en ignorant profiles.json)."""
-        if not os.path.exists(self.config_dir): return []
+        if not os.path.exists(self.config_dir):
+            return []
         return [f for f in os.listdir(self.config_dir) if f.endswith('.json') and f != "profiles.json"]
 
     def create_new_config(self, new_filename: str) -> bool:

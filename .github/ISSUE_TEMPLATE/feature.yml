@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose a focused enhancement
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and alternatives
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Vehicle, compatibility, and safety impact

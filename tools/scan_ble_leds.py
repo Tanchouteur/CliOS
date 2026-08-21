@@ -11,7 +11,6 @@ Usage sur Raspberry Pi:
 
 import asyncio
 import sys
-import time
 
 try:
     from bleak import BleakScanner, BleakClient

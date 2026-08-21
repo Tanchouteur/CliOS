@@ -1,6 +1,6 @@
 # CliOS
 
-> CliOS 2.0 cible officiellement Raspberry Pi OS Bookworm 64 bits sur Raspberry Pi 4/5 avec un écran 1920×720. Les autres résolutions et les postes desktop restent des cibles expérimentales de développement.
+> CliOS 2.0.1 supporte Raspberry Pi 5 avec Raspberry Pi OS Bookworm ou Trixie 64 bits et un écran 1920×720. Raspberry Pi 4 reste expérimental ; macOS, Windows et x86 servent uniquement au développement et au mode mock.
 
 <div align="center">
 
@@ -12,7 +12,7 @@
 [![Wayland / Cage](https://img.shields.io/badge/Affichage-Cage_Wayland-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/cage-kiosk/cage)
 [![Licence: GPL v3](https://img.shields.io/badge/Licence-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 
-[Read in English](readme.md) • [Signaler un bug](../../issues) • [Proposer une idee](../../issues)
+[Read in English](README.md) • [Signaler un bug](../../issues) • [Proposer une idee](../../issues)
 
 <br/>
 
@@ -33,7 +33,7 @@
 - **Analyse de trajets et export USB** : Calcul de la consommation, du cout des trajets, score de conduite et export automatique sur cle USB.
 - **DSP Audio et Eclairage d'ambiance** : Synthese sonore dynamique du moteur / filtrage du bruit d'habitacle (`pyo`) et synchronisation de bandeaux LED BLE.
 - **Mode simulation sans materiel** : Moteur de simulation physique et CAN interactif pour tester et developper sur macOS, Linux ou Windows sans vehicule.
-- **Demarrage rapide Raspberry Pi 5** : Lancement automatique en mode Kiosk Wayland (`cage`) en moins de 5 secondes au contact.
+- **Kiosque Raspberry Pi 5** : Lancement automatique en mode Kiosk Wayland (`cage`).
 - **Releases sûres** : préparation vérifiée par SHA-256, activation atomique de `/opt/clios/current`, contrôle de santé au premier démarrage et rollback N-1 automatique.
 
 ## Compatibilité CliOS 2.x
@@ -57,14 +57,14 @@ Parcours communauté : [créer un thème, adapter un véhicule et développer un
 
 ---
 
-## Demarrage rapide (Tester sur son PC en 30 secondes)
+## Démarrage rapide (développement/mock)
 
 Aucun materiel ni vehicule n'est requis pour tester ou developper sur CliOS :
 
 ```bash
 # 1. Cloner le depot
-git clone https://github.com/Tanchouteur/ClOS.git
-cd ClOS
+git clone https://github.com/Tanchouteur/CliOS.git
+cd CliOS
 
 # 2. Lancer en mode simulation (configure automatiquement le .venv)
 ./clios --mock
@@ -81,7 +81,8 @@ cd ClOS
 Pour faire fonctionner CliOS dans une vraie voiture, les elements suivants sont necessaires :
 
 1. **Ordinateur monocarte (SBC)** :
-   - Raspberry Pi 5 (recommande) ou Raspberry Pi 4 sous Raspberry Pi OS 64-bit / Debian.
+   - Raspberry Pi 5 avec Raspberry Pi OS Bookworm/Trixie 64 bits (supporté).
+   - Raspberry Pi 4 (expérimental jusqu’à la fin de sa qualification matérielle).
 2. **Ecran** :
    - Écran bandeau ultra-large 1920×720 (HDMI ou DSI). C’est le seul format garanti ; les autres sont expérimentaux.
 3. **Adaptateur / Modem CAN** :
@@ -130,8 +131,8 @@ Il contient les caracteristiques physiques et mecaniques du moteur pour le calcu
 CliOS integre un script d'installation interactif automatise :
 
 ```bash
-git clone https://github.com/Tanchouteur/ClOS.git
-cd ClOS
+git clone https://github.com/Tanchouteur/CliOS.git
+cd CliOS
 ./install.sh
 ```
 
@@ -188,8 +189,12 @@ Les contributions sont les bienvenues :
 
 Consultez [CONTRIBUTING.md](CONTRIBUTING.md) pour les regles de developpement et les tests.
 
+Les bundles de diagnostic peuvent contenir des logs, profils, informations réseau/système et informations véhicule. Relisez l’archive avant de la partager ; utilisez le canal privé décrit dans [SECURITY.md](SECURITY.md) pour tout contenu sensible.
+
 ---
 
 ## Licence
 
 Distribue sous licence **GNU General Public License v3.0** (GPLv3). Voir [LICENSE](LICENSE).
+
+CliOS est un écran d’information accessoire, non homologué pour remplacer les instruments obligatoires du véhicule. Le projet n’est affilié ni approuvé par aucun constructeur automobile ou titulaire de marque. Voir [ASSETS.md](ASSETS.md) pour la provenance et les licences des assets.

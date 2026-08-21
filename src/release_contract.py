@@ -56,6 +56,7 @@ class SemVer:
 
     def _precedence(self) -> tuple:
         # Les métadonnées de build ne participent pas à l'ordre SemVer.
+        pre: tuple[tuple[int, int | str], ...]
         if not self.prerelease:
             pre = ((2, ""),)
         else:

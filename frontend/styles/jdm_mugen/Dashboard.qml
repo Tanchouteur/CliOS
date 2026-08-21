@@ -186,7 +186,7 @@ Item {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                        text: "CLI-OS MUGEN POWER"
+                        text: "CliOS MUGEN POWER"
                         color: T.StyleManager.accent
                         font.family: "Arial, sans-serif"
                         font.pixelSize: 15

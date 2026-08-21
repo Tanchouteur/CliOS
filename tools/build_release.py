@@ -13,9 +13,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.release_contract import ReleaseContractError, channel_for_version, validate_manifest
-from src.release_platform import PLATFORMS_BY_TARGET, get_target_platform
-from tools.verify_wheelhouse import locked_names, wheel_names
+from src.release_contract import ReleaseContractError, channel_for_version, validate_manifest  # noqa: E402
+from src.release_platform import PLATFORMS_BY_TARGET, get_target_platform  # noqa: E402
+from tools.verify_wheelhouse import locked_names, wheel_names  # noqa: E402
 
 EXCLUDED_PARTS = {".git", ".venv", "__pycache__", ".idea", ".pytest_cache", ".portfolio", "dist", "wheelhouses"}
 EXCLUDED_PREFIXES = {

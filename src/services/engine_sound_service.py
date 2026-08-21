@@ -357,7 +357,8 @@ class EngineSoundService(BaseService):
                     v_mid = max(0.0, 1.0 - (abs(rpm - self.RPM_MID) / (self.RPM_HIGH - self.RPM_MID)))
 
                 v_high = max(0.0, 1.0 - (abs(rpm - self.RPM_HIGH) / (self.RPM_HIGH - self.RPM_MID)))
-                if rpm > self.RPM_HIGH: v_high = 1.0
+                if rpm > self.RPM_HIGH:
+                    v_high = 1.0
 
                 self.vol_idle.value = v_idle
                 self.vol_mid.value = v_mid

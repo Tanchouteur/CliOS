@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.release_manager import ReleaseManager, ReleaseError  # noqa: E402
+from src.release_manager import ReleaseManager  # noqa: E402
 from src.updater_client import UpdaterClient, UpdaterClientError  # noqa: E402
 
 
