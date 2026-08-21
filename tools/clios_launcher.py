@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from src.release_manager import ReleaseManager, ReleaseError  # noqa: E402
+from src.updater_client import UpdaterClient, UpdaterClientError  # noqa: E402
 
 
 def main() -> int:
@@ -45,11 +46,11 @@ def main() -> int:
     except subprocess.TimeoutExpired:
         process.kill()
     try:
-        previous = manager.rollback()
-    except ReleaseError as exc:
-        print(f"Rollback impossible: {exc}", file=sys.stderr)
+        UpdaterClient(timeout=10).rollback()
+    except UpdaterClientError as exc:
+        print(f"Rollback privilégié impossible: {exc}", file=sys.stderr)
         return 1
-    os.execv(sys.executable, [sys.executable, __file__, "--install-root", opts.install_root, "--state-root", opts.state_root, "--health-timeout", str(opts.health_timeout), "--", *opts.args])
+    # Le helper redémarre clios.service après avoir restauré N-1.
     return 0
 
 

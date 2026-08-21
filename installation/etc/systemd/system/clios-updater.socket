@@ -1,0 +1,13 @@
+[Unit]
+Description=Socket du helper de mise à jour CliOS
+
+[Socket]
+ListenStream=/run/clios/updater.sock
+SocketUser=root
+SocketGroup=clios
+SocketMode=0660
+DirectoryMode=0750
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
