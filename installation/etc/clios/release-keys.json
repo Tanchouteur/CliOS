@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "keys": [
+    {
+      "id": "release-2026-primary",
+      "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAsH7ia/pZRt8gpi64HgrmIMZkowXtw8V97/qDkRewIIw=\n-----END PUBLIC KEY-----\n"
+    }
+  ]
+}

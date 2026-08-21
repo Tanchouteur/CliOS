@@ -9,6 +9,14 @@ from typing import Any
 from src.logging_runtime import get_dropped_count, get_recent_events
 
 
+PRIVACY_NOTICE = """CliOS diagnostic bundle privacy notice
+
+This archive may contain logs, the active vehicle profile, network or platform
+details, vehicle information, and recent runtime events. Review it before sharing.
+Send security-sensitive content only through GitHub Private Vulnerability Reporting.
+"""
+
+
 def create_diagnostic_bundle(
     output_dir: str,
     log_dir: str,
@@ -37,6 +45,7 @@ def create_diagnostic_bundle(
 
     try:
         with zipfile.ZipFile(tmp_bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("PRIVACY.txt", PRIVACY_NOTICE)
             # Snapshot runtime
             zf.writestr("runtime_snapshot.json", json.dumps(runtime_info, indent=2, ensure_ascii=True))
 
@@ -65,4 +74,3 @@ def create_diagnostic_bundle(
         raise
 
     return bundle_path
-

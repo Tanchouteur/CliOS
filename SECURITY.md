@@ -1,33 +1,26 @@
 # Politique de sécurité
 
-Ce document définit les protocoles de signalement et les engagements de maintenance concernant la sécurité de ce logiciel.
+## Versions prises en charge
 
-## 1. Versions supportées
+Les correctifs de sécurité ciblent la dernière version stable et la release candidate active. Les anciennes versions ne reçoivent pas de correctifs garantis.
 
-La maintenance de sécurité est assurée exclusivement sur la branche principale (`main`). Les versions obsolètes ou de développement ne font pas l'objet d'un suivi actif.
+| Canal | Support |
+| --- | --- |
+| Dernière stable | Oui |
+| Release candidate active | Oui |
+| Versions antérieures | Non |
 
-| Version | Supportée |
-| ------- | --------- |
-| Latest  | ✅ Oui    |
-| < 1.0   | ❌ Non    |
+## Signaler une vulnérabilité
 
-## 2. Signalement d'une vulnérabilité
+N’ouvrez pas d’issue publique et n’envoyez pas de rapport par courriel. Utilisez exclusivement **Security → Report a vulnerability** dans ce dépôt GitHub (Private Vulnerability Reporting). Ce canal privé permet de partager des détails et pièces jointes avec le mainteneur sans exposer les utilisateurs.
 
-La divulgation publique d'une faille de sécurité est proscrite afin de protéger les utilisateurs du système. Pour signaler une vulnérabilité, veuillez suivre la procédure suivante :
+Le rapport devrait préciser :
 
-1. Ne pas ouvrir d'Issue publique.
-2. Envoyer un rapport détaillé par courriel à : **louis.tanchouøgmail.com**
-3. Inclure dans le rapport :
-   - La nature de la faille (Injection, élévation de privilèges, déni de service, etc.).
-   - Le vecteur d'attaque et les composants affectés (ex: API, service CAN).
-   - Un exemple de preuve de concept (PoC) ou les étapes de reproduction.
+- le composant et les versions concernés ;
+- l’impact et les conditions d’exploitation ;
+- les étapes de reproduction ou une preuve de concept minimale ;
+- les mesures temporaires connues, le cas échéant.
 
-## 3. Processus de traitement
+Le mainteneur accusera réception dès que possible, analysera l’impact, préparera un correctif privé et coordonnera la divulgation. Aucun délai de résolution fixe n’est promis avant qualification de la vulnérabilité.
 
-Dès réception d'un signalement valide :
-- Un accusé de réception est envoyé sous 48 heures ouvrées.
-- Une analyse d'impact est réalisée pour évaluer la criticité du risque.
-- Un correctif est développé et déployé sur la branche `main`.
-- Une annonce officielle est publiée dans l'onglet "Announcements" une fois le risque neutralisé.
-
-Nous sollicitons la patience de la communauté pendant le cycle de correction avant toute divulgation publique.
+Les bundles CliOS peuvent contenir des logs, profils, informations réseau/système et informations véhicule. Relisez-les avant envoi et joignez-les uniquement au rapport privé.

@@ -150,7 +150,8 @@ class ReleaseCatalog:
                 if not asset:
                     break
                 self._validate_asset_url(str(asset["browser_download_url"]))
-                manifest = validate_manifest(self._fetch_json(str(asset["browser_download_url"]), use_cache=False))
+                manifest_url = str(asset["browser_download_url"])
+                manifest = validate_manifest(self._fetch_json(manifest_url, use_cache=False))
                 if manifest["version"] != version:
                     break
                 if manifest["platform"] != self.platform.identifier:
@@ -163,6 +164,7 @@ class ReleaseCatalog:
                 ), None)
                 if not archive or archive.get("browser_download_url") != manifest["archive_url"]:
                     break
+                manifest["_manifest_url"] = manifest_url
                 return manifest
             raise CatalogResponseError(f"release introuvable: {version}")
         except CatalogError as exc:
