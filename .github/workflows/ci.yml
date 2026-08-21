@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  python-qml:
+  python_qml_matrix:
     timeout-minutes: 30
     runs-on: ubuntu-24.04
     strategy:
@@ -58,6 +58,18 @@ jobs:
         run: |
           bash -n install.sh update.sh tools/*.sh
           shellcheck -S error install.sh update.sh tools/*.sh
+
+  python-qml:
+    name: python-qml
+    needs: python_qml_matrix
+    if: always()
+    timeout-minutes: 5
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every supported Python version
+        env:
+          MATRIX_RESULT: ${{ needs.python_qml_matrix.result }}
+        run: test "${MATRIX_RESULT}" = success
 
   installer:
     timeout-minutes: 40
