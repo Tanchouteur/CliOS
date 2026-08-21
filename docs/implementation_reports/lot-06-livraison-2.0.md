@@ -2,7 +2,8 @@
 
 ## Ce qui change concrètement pour toi
 
-La cible garantie est désormais explicite : Raspberry Pi OS Bookworm 64 bits,
+La cible v2.0.0 était Raspberry Pi OS Bookworm 64 bits ; v2.0.1 étend le même
+contrat de livraison à Raspberry Pi OS Trixie 64 bits,
 Pi 4/5 et écran 1920×720. Les autres plateformes et résolutions restent utiles
 au développement, mais sont expérimentales pour le déploiement automobile.
 
