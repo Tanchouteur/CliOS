@@ -1,4 +1,4 @@
-bleak~=0.22.3
+bleak~=3.0.2
 numpy~=2.2.6
 sounddevice~=0.5.2
 pyo~=1.0.5
