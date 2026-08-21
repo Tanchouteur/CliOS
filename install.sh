@@ -134,6 +134,21 @@ run_sudo_cmd() {
     fi
 }
 
+run_target_cmd() {
+    local cmd_desc="$1"
+    shift
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "Commande utilisateur simulée : $*"
+        return 0
+    fi
+    log_info "$cmd_desc"
+    if [[ $EUID -eq 0 && "$(id -un)" != "$CURRENT_USER" ]]; then
+        runuser -u "$CURRENT_USER" -- "$@"
+    else
+        "$@"
+    fi
+}
+
 safe_systemctl() {
     local action_desc="$1"
     shift
@@ -172,6 +187,91 @@ backup_system_file() {
             log_success "Sauvegarde créée : ${backup_path}"
         fi
     fi
+}
+
+install_release_tree() {
+    local release_dir="$1"
+    local release_parent staging_dir previous_dir source_archive
+    local source_device target_device
+
+    release_parent="$(dirname "$release_dir")"
+    staging_dir="${release_dir}.installing"
+    previous_dir="${release_dir}.previous-install"
+
+    source_device="$(stat -c %d "$VENV_DIR")"
+    target_device="$(stat -c %d "$release_parent")"
+    if [[ "$source_device" != "$target_device" ]]; then
+        log_error "Le projet et ${release_parent} doivent être sur le même système de fichiers pour transférer le .venv sans copie."
+        log_error "Copiez d'abord CliOS dans /home/${CURRENT_USER}, puis relancez install.sh."
+        return 1
+    fi
+
+    source_archive="$(mktemp /tmp/clios-release-tree.XXXXXX.tar)"
+    if ! tar \
+        --exclude='./.git' \
+        --exclude='./.venv' \
+        --exclude='./__pycache__' \
+        --exclude='*/__pycache__' \
+        --exclude='./.idea' \
+        --exclude='./.pytest_cache' \
+        --exclude='./.portfolio' \
+        --exclude='./dist' \
+        --exclude='./wheelhouses' \
+        --exclude='.DS_Store' \
+        -C "$PROJECT_DIR" -cf "$source_archive" .; then
+        rm -f "$source_archive"
+        log_error "Impossible de préparer les fichiers de la release."
+        return 1
+    fi
+
+    run_sudo_cmd "Nettoyage du staging de release" rm -rf "$staging_dir" "$previous_dir"
+    run_sudo_cmd "Création du staging de release" mkdir -p "$staging_dir"
+    if ! run_sudo_cmd "Installation du code de la release" tar -C "$staging_dir" -xf "$source_archive"; then
+        rm -f "$source_archive"
+        run_sudo_cmd "Nettoyage du staging incomplet" rm -rf "$staging_dir"
+        return 1
+    fi
+    rm -f "$source_archive"
+
+    # /home et /opt partagent normalement la partition racine. Un renommage ne
+    # relit pas les gros fichiers Qt et conserve un environnement isolé par release.
+    if ! run_sudo_cmd "Transfert de l'environnement Python vers la release" mv "$VENV_DIR" "${staging_dir}/.venv"; then
+        run_sudo_cmd "Nettoyage du staging incomplet" rm -rf "$staging_dir"
+        return 1
+    fi
+
+    # Actualise pyvenv.cfg et les lanceurs standards après le changement de chemin.
+    if ! run_sudo_cmd "Actualisation du chemin de l'environnement Python" \
+        "$PYTHON_BIN" -m venv --upgrade "${staging_dir}/.venv"; then
+        run_sudo_cmd "Restauration de l'environnement Python source" mv "${staging_dir}/.venv" "$VENV_DIR"
+        run_sudo_cmd "Nettoyage du staging incomplet" rm -rf "$staging_dir"
+        return 1
+    fi
+
+    if ! run_target_cmd "Self-check Python de la release" \
+        "${staging_dir}/.venv/bin/python3" -c "import PySide6, numpy, psutil, can, serial, pyudev"; then
+        run_sudo_cmd "Restauration de l'environnement Python source" mv "${staging_dir}/.venv" "$VENV_DIR"
+        run_sudo_cmd "Nettoyage du staging incomplet" rm -rf "$staging_dir"
+        return 1
+    fi
+    if [[ -f "${staging_dir}/tools/qml_smoke.py" ]] && ! run_target_cmd "Self-check QML de la release" \
+        env QT_QPA_PLATFORM=offscreen "${staging_dir}/.venv/bin/python3" "${staging_dir}/tools/qml_smoke.py"; then
+        run_sudo_cmd "Restauration de l'environnement Python source" mv "${staging_dir}/.venv" "$VENV_DIR"
+        run_sudo_cmd "Nettoyage du staging incomplet" rm -rf "$staging_dir"
+        return 1
+    fi
+
+    if [[ -e "$release_dir" || -L "$release_dir" ]]; then
+        run_sudo_cmd "Mise à l'écart de la release incomplète ou précédente" mv "$release_dir" "$previous_dir"
+    fi
+    if ! run_sudo_cmd "Validation atomique de la release" mv "$staging_dir" "$release_dir"; then
+        if [[ -e "$previous_dir" || -L "$previous_dir" ]]; then
+            run_sudo_cmd "Restauration de la release précédente" mv "$previous_dir" "$release_dir"
+        fi
+        return 1
+    fi
+    run_sudo_cmd "Nettoyage de l'installation précédente" rm -rf "$previous_dir" \
+        || log_warn "L'ancien staging ${previous_dir} devra être supprimé manuellement."
 }
 
 prompt_confirm() {
@@ -667,11 +767,12 @@ else
         run_sudo_cmd "Accès de ${CURRENT_USER} au socket updater" usermod -a -G clios "${CURRENT_USER}"
         RELEASE_VERSION="$(tr -d '[:space:]' < "${PROJECT_DIR}/VERSION")"
         RELEASE_DIR="/opt/clios/releases/${RELEASE_VERSION}"
-        run_sudo_cmd "Création du répertoire de release" mkdir -p "${RELEASE_DIR}" /var/lib/clios /run/clios
+        run_sudo_cmd "Création des répertoires de release" mkdir -p "$(dirname "$RELEASE_DIR")" /var/lib/clios /run/clios
         if [[ $DRY_RUN -eq 1 ]]; then
-            log_dry "Copie de ${PROJECT_DIR} vers ${RELEASE_DIR} puis lien /opt/clios/current"
+            log_dry "Staging de ${PROJECT_DIR} sans .venv, transfert du .venv, puis lien /opt/clios/current"
         else
-            run_sudo_cmd "Installation de la release ${RELEASE_VERSION}" cp -a "${PROJECT_DIR}/." "${RELEASE_DIR}/"
+            safe_systemctl "Arrêt de CliOS avant remplacement de la release" stop clios.service 2>/dev/null || true
+            install_release_tree "$RELEASE_DIR"
             run_sudo_cmd "Activation initiale de la release" ln -sfn "${RELEASE_DIR}" /opt/clios/current
             for legacy_dir in dash_save trips trips_mock logs; do
                 if [[ -d "${PROJECT_DIR}/data/${legacy_dir}" ]]; then
