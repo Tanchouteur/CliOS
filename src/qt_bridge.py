@@ -598,10 +598,38 @@ class DashboardBridge(QObject):
         self.logger.warning("triggerGitUpdate obsolète", extra={"error_code": "GIT_UPDATE_DISABLED"})
         self.send_notification("WARNING", "Mise à jour Git désactivée en production", 4000)
 
+    @Slot(result=str)
+    def getUpdateChannel(self) -> str:
+        channel = str(self._config.get("updates", {}).get("channel", "stable"))
+        return channel if channel in ReleaseManager.VALID_CHANNELS else "stable"
+
+    @Slot(str, result=bool)
+    def setUpdateChannel(self, channel: str) -> bool:
+        if channel not in ReleaseManager.VALID_CHANNELS:
+            self.send_notification("ERROR", "Canal de mise à jour inconnu", 3500)
+            return False
+        self.save_setting("updates.channel", channel)
+        try:
+            ReleaseManager().set_channel(channel)
+        except OSError as exc:
+            # La configuration véhicule reste la source persistante de l'UI en
+            # développement, où /var/lib/clios n'est pas forcément accessible.
+            self.logger.warning(
+                f"Canal non synchronisé avec le gestionnaire système: {exc}",
+                extra={"error_code": "RELEASE_CHANNEL_STATE_WARNING"},
+            )
+        label = "Bêta" if channel == "beta" else "Stable"
+        self.logger.info(
+            f"Canal de mise à jour sélectionné: {channel}",
+            extra={"error_code": "RELEASE_CHANNEL_CHANGED"},
+        )
+        self.send_notification("WARNING" if channel == "beta" else "SUCCESS", f"Canal {label} sélectionné", 3500)
+        return True
+
     @Slot()
     def checkForUpdates(self):
         feed = str(self._config.get("updates", {}).get("feed", ""))
-        channel = str(self._config.get("updates", {}).get("channel", "stable"))
+        channel = self.getUpdateChannel()
         if not feed:
             self.send_notification("WARNING", "Aucun catalogue de releases configuré", 4000)
             return

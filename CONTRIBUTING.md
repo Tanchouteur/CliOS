@@ -58,6 +58,17 @@ bash -n install.sh update.sh tools/*.sh
 Les tests de contrat contrôlent notamment la surface publique du bridge, le
 catalogue CAN et l’absence des anciennes propriétés plates dans les styles.
 
+## Compte rendu de lot
+
+Chaque lot fonctionnel terminé ajoute un fichier dans
+`docs/implementation_reports/`, construit depuis `TEMPLATE.md`. Ce document
+traduit les changements techniques en effets concrets pour l’utilisateur et le
+mainteneur : nouveau parcours, commandes, impact sur les branches et releases,
+compatibilité, points d’attention et vérifications réalisées.
+
+Le processus CI, les branches, les releases et les canaux sont détaillés dans
+[`docs/ci_branches_releases_fr.md`](docs/ci_branches_releases_fr.md).
+
 ## English summary
 
 Every pull request must keep Python compilation, unit tests, the offscreen QML route smoke test, JSON/schema validation, and shell syntax checks green. Theme API v1 and schemas v1 are stable for CliOS 2.x. External Python code is never dynamically loaded: new services must be added to the static registry after review. See [the English community guide](docs/community_en.md).

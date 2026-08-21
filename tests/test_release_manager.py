@@ -25,7 +25,7 @@ class ReleaseManagerTest(unittest.TestCase):
         Path(destination).write_bytes(Path(source).read_bytes())
         return destination, None
 
-    def make_release(self, version):
+    def make_release(self, version, channel="stable"):
         source = self.root / f"src-{version}"
         (source / "frontend").mkdir(parents=True)
         (source / "data/config").mkdir(parents=True)
@@ -41,7 +41,7 @@ class ReleaseManagerTest(unittest.TestCase):
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
         manifest = self.root / f"manifest-{version}.json"
         manifest.write_text(json.dumps({
-            "version": version, "channel": "stable",
+            "version": version, "channel": channel,
             "archive_url": str(archive), "archive_sha256": digest,
         }), encoding="utf-8")
         return manifest
@@ -80,6 +80,38 @@ class ReleaseManagerTest(unittest.TestCase):
         with self.assertRaises(OSError):
             manager.stage(str(self.make_release("2.1.0")))
         self.assertFalse((self.install / "releases/2.1.0").exists())
+
+    def test_channel_is_stable_by_default_and_persists(self):
+        self.assertEqual(self.manager.get_channel(), "stable")
+        self.assertEqual(self.manager.set_channel("beta"), "beta")
+
+        reloaded = ReleaseManager(str(self.install), str(self.state))
+        self.assertEqual(reloaded.get_channel(), "beta")
+        with self.assertRaises(ReleaseError):
+            self.manager.set_channel("nightly")
+
+    def test_check_uses_persisted_channel_unless_overridden(self):
+        feed = self.root / "feed.json"
+        feed.write_text(json.dumps({"releases": [
+            {"version": "2.0.1", "channel": "stable"},
+            {"version": "2.1.0", "channel": "beta"},
+        ]}), encoding="utf-8")
+        self.manager.set_channel("beta")
+
+        self.assertEqual(self.manager.check(str(feed))["version"], "2.1.0")
+        self.assertEqual(self.manager.check(str(feed), "stable")["version"], "2.0.1")
+
+    def test_beta_can_rollback_directly_to_last_stable(self):
+        stable = self.manager.stage(str(self.make_release("2.0.0")))
+        # Simule l'installation initiale, créée avant release-state.json.
+        self.manager._atomic_symlink(stable, self.manager.current_link)
+        self.manager.stage(str(self.make_release("2.1.0", channel="beta")))
+        self.manager.activate("2.1.0")
+
+        restored = self.manager.rollback(stable_only=True)
+
+        self.assertEqual(restored.resolve(), stable.resolve())
+        self.assertEqual(self.manager.current_link.resolve(), stable.resolve())
 
 
 if __name__ == "__main__":

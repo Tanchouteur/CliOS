@@ -102,6 +102,7 @@ class FakeBridge(QObject):
             "storage": storage,
         }
         self.commands = []
+        self._update_channel = "stable"
 
     @Property("QVariant", notify=vehicleStateChanged)
     def vehicleState(self):
@@ -230,6 +231,21 @@ class FakeBridge(QObject):
     @Slot(result=str)
     def exportDiagnosticBundle(self):
         return "/tmp/clios-diagnostic.zip"
+
+    @Slot(result=str)
+    def getUpdateChannel(self):
+        return self._update_channel
+
+    @Slot(str, result=bool)
+    def setUpdateChannel(self, channel):
+        if channel not in {"stable", "beta"}:
+            return False
+        self._update_channel = channel
+        return True
+
+    @Slot()
+    def checkForUpdates(self):
+        pass
 
     @Slot(str, result=str)
     def getServiceParameters(self, _service):

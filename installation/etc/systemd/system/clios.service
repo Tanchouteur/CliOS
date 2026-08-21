@@ -6,6 +6,8 @@ Wants=can0.service
 [Service]
 Type=simple
 User=clios
+StateDirectory=clios
+RuntimeDirectory=clios
 PAMName=login
 WorkingDirectory=/opt/clios/current
 Environment=QT_QPA_PLATFORM=wayland

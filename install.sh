@@ -631,6 +631,8 @@ Wants=can0.service
 [Service]
 Type=simple
 User=${CURRENT_USER}
+StateDirectory=clios
+RuntimeDirectory=clios
 PAMName=login
 WorkingDirectory=/opt/clios/current
 Environment=XDG_RUNTIME_DIR=/run/user/${USER_UID}

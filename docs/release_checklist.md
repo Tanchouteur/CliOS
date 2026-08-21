@@ -8,7 +8,18 @@
 - [ ] Compatibilité de lecture N-1 et sauvegardes de migration vérifiées.
 - [ ] Installation Debian Bookworm validée dans Docker.
 - [ ] Test matériel Pi 4 et Pi 5, écran 1920×720 et interface CAN réelle effectué.
+- [ ] Le compte rendu du lot est ajouté dans `docs/implementation_reports/`.
+- [ ] Le canal du manifeste est correct : `stable` pour une livraison validée, `beta` pour une préversion.
 
 English: verify matching SemVer metadata, all CI gates, SHA-256 artifacts, isolated staging, first-boot rollback, N-1 data reads, Docker Bookworm installation, and real Pi 4/5 hardware before a stable release.
 
 Production locale : `python3 tools/build_release.py --channel stable --base-url https://releases.example/`.
+
+Gestion du canal installé :
+
+```bash
+python3 tools/release_cli.py channel          # affiche le canal courant
+python3 tools/release_cli.py channel beta     # reçoit les préversions
+python3 tools/release_cli.py channel stable   # revient aux versions validées
+python3 tools/release_cli.py rollback --stable
+```

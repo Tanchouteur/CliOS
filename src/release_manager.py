@@ -18,6 +18,8 @@ class ReleaseError(RuntimeError):
 
 
 class ReleaseManager:
+    VALID_CHANNELS = {"stable", "beta"}
+
     def __init__(self, install_root: str = "/opt/clios", state_root: str = "/var/lib/clios",
                  downloader=None):
         self.install_root = Path(install_root)
@@ -35,8 +37,23 @@ class ReleaseManager:
         with open(path_or_url, encoding="utf-8") as stream:
             return json.load(stream)
 
-    def check(self, feed: str, channel: str = "stable") -> dict | None:
-        if channel not in {"stable", "beta"}:
+    def get_channel(self) -> str:
+        """Retourne le canal persistant, avec repli sûr sur stable."""
+        channel = self._load_state().get("channel", "stable")
+        return channel if channel in self.VALID_CHANNELS else "stable"
+
+    def set_channel(self, channel: str) -> str:
+        """Enregistre le canal utilisé par les prochaines recherches de release."""
+        if channel not in self.VALID_CHANNELS:
+            raise ReleaseError("canal inconnu")
+        state = self._load_state()
+        state["channel"] = channel
+        self._write_json_atomic(self.state_path, state)
+        return channel
+
+    def check(self, feed: str, channel: str | None = None) -> dict | None:
+        channel = channel or self.get_channel()
+        if channel not in self.VALID_CHANNELS:
             raise ReleaseError("canal inconnu")
         payload = self._read_json(feed)
         releases = payload.get("releases", [])
@@ -83,21 +100,28 @@ class ReleaseManager:
         previous = self.current_link.resolve() if self.current_link.is_symlink() else None
         self._atomic_symlink(target, self.current_link)
         state = self._load_state()
+        last_stable = state.get("last_stable")
+        if self._channel(target) == "stable":
+            last_stable = version
+        elif not last_stable and previous and self._channel(previous) == "stable":
+            # L'installation initiale peut précéder release-state.json.
+            last_stable = previous.name
         state.update({
             "active": version,
             "previous": previous.name if previous else state.get("active"),
             "pending_health": version,
-            "last_stable": version if self._channel(target) == "stable" else state.get("last_stable"),
+            "last_stable": last_stable,
         })
         self._write_json_atomic(self.state_path, state)
         self.cleanup()
         return target
 
-    def rollback(self) -> Path:
+    def rollback(self, stable_only: bool = False) -> Path:
         state = self._load_state()
-        previous = state.get("previous") or state.get("last_stable")
+        previous = state.get("last_stable") if stable_only else state.get("previous") or state.get("last_stable")
         if not previous:
-            raise ReleaseError("aucune release précédente")
+            message = "aucune release stable connue" if stable_only else "aucune release précédente"
+            raise ReleaseError(message)
         target = self.releases_dir / previous
         if not target.is_dir():
             raise ReleaseError(f"release précédente absente: {previous}")
@@ -217,7 +241,7 @@ class ReleaseManager:
             if not manifest.get(key):
                 raise ReleaseError(f"manifeste incomplet: {key}")
         ReleaseManager._version_tuple(manifest["version"])
-        if manifest["channel"] not in {"stable", "beta"}:
+        if manifest["channel"] not in ReleaseManager.VALID_CHANNELS:
             raise ReleaseError("canal invalide")
         if len(manifest["archive_sha256"]) != 64:
             raise ReleaseError("SHA-256 invalide")

@@ -14,17 +14,30 @@ def main() -> int:
     parser.add_argument("--install-root", default="/opt/clios")
     parser.add_argument("--state-root", default="/var/lib/clios")
     sub = parser.add_subparsers(dest="operation", required=True)
-    check = sub.add_parser("check"); check.add_argument("feed"); check.add_argument("--channel", choices=["stable", "beta"], default="stable")
-    stage = sub.add_parser("stage"); stage.add_argument("manifest")
-    activate = sub.add_parser("activate"); activate.add_argument("version")
-    sub.add_parser("rollback")
+    check = sub.add_parser("check")
+    check.add_argument("feed")
+    check.add_argument("--channel", choices=["stable", "beta"], help="surcharge ponctuelle du canal enregistré")
+    channel = sub.add_parser("channel")
+    channel.add_argument("value", nargs="?", choices=["stable", "beta"])
+    stage = sub.add_parser("stage")
+    stage.add_argument("manifest")
+    activate = sub.add_parser("activate")
+    activate.add_argument("version")
+    rollback = sub.add_parser("rollback")
+    rollback.add_argument("--stable", action="store_true", help="revenir à la dernière release stable")
     args = parser.parse_args()
     manager = ReleaseManager(args.install_root, args.state_root)
     try:
-        if args.operation == "check": result = manager.check(args.feed, args.channel)
-        elif args.operation == "stage": result = str(manager.stage(args.manifest))
-        elif args.operation == "activate": result = str(manager.activate(args.version))
-        else: result = str(manager.rollback())
+        if args.operation == "check":
+            result = manager.check(args.feed, args.channel)
+        elif args.operation == "channel":
+            result = manager.set_channel(args.value) if args.value else manager.get_channel()
+        elif args.operation == "stage":
+            result = str(manager.stage(args.manifest))
+        elif args.operation == "activate":
+            result = str(manager.activate(args.version))
+        else:
+            result = str(manager.rollback(stable_only=args.stable))
         print(json.dumps(result, ensure_ascii=False))
         return 0
     except ReleaseError as exc:

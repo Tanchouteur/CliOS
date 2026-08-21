@@ -43,6 +43,8 @@ Theme API v1 and the v1 theme, vehicle, CAN, and profile schemas remain stable t
 
 Community guides: [create a theme, adapt a vehicle, and develop a service](docs/community_en.md). Validate contributions with `python3 tools/validate_data.py --all`.
 
+Maintainer workflow: [CI, branches, releases and update channels (French)](docs/ci_branches_releases_fr.md). Concrete implementation summaries are kept in [docs/implementation_reports](docs/implementation_reports/README.md).
+
 ---
 
 ## Screenshots

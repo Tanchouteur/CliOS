@@ -78,6 +78,12 @@ class MockBridge(QObject):
     @Slot()
     def triggerGitUpdate(self): pass
     @Slot(result=str)
+    def getUpdateChannel(self): return "stable"
+    @Slot(str, result=bool)
+    def setUpdateChannel(self, channel): return channel in {"stable", "beta"}
+    @Slot()
+    def checkForUpdates(self): pass
+    @Slot(result=str)
     def getSystemMaintenanceStatus(self): return "{}"
     @Slot()
     def toggleOverlayFs(self): pass

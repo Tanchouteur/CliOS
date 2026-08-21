@@ -11,6 +11,7 @@ Item {
     signal actionRequested(string action)
     property string logsText: ""
     property string exportPath: ""
+    property string updateChannel: bridge.getUpdateChannel()
 
     Timer {
         interval: 1000; running: root.visible; repeat: true
@@ -42,6 +43,22 @@ Item {
                 }
             }
             Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "CAN"; Metric { anchors.centerIn: parent; width: parent.width; label: "Service moteur"; value: S.UiState.serviceHealth.CAN_Moteur ? S.UiState.serviceHealth.CAN_Moteur.status : "—"; alignment: Text.AlignHCenter; valueSize: 26 } }
+            Card {
+                Layout.fillWidth: true; Layout.fillHeight: true; title: "Canal de mise à jour"; highlighted: root.updateChannel === "beta"
+                RowLayout {
+                    anchors.fill: parent; spacing: 8
+                    Button {
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        text: "STABLE"; subtext: "Recommandé"; primary: root.updateChannel === "stable"
+                        onClicked: if (bridge.setUpdateChannel("stable")) root.updateChannel = "stable"
+                    }
+                    Button {
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        text: "BÊTA"; subtext: "Préversions"; destructive: root.updateChannel === "beta"
+                        onClicked: if (bridge.setUpdateChannel("beta")) root.updateChannel = "beta"
+                    }
+                }
+            }
         }
         Card {
             Layout.fillWidth: true; Layout.fillHeight: true; title: "Journal système"
@@ -54,6 +71,7 @@ Item {
             Layout.fillWidth: true; Layout.preferredHeight: 72; spacing: 12
             Button { Layout.fillWidth: true; text: "MAINTENANCE"; primary: true; subtext: "Menu système & OverlayFS"; onClicked: root.actionRequested("maintenance") }
             Button { Layout.fillWidth: true; text: "DIAGNOSTIC"; subtext: root.exportPath ? root.exportPath : "Exporter les logs"; onClicked: root.exportPath = bridge.exportDiagnosticBundle() }
+            Button { Layout.fillWidth: true; text: "MISES À JOUR"; subtext: "Canal " + (root.updateChannel === "beta" ? "bêta" : "stable"); onClicked: bridge.checkForUpdates() }
             Button { Layout.fillWidth: true; text: "QUITTER"; onClicked: root.actionRequested("quit") }
             Button { Layout.fillWidth: true; text: "REDÉMARRER"; destructive: true; onClicked: root.actionRequested("restart") }
             Button { Layout.fillWidth: true; text: "ÉTEINDRE"; destructive: true; onClicked: root.actionRequested("shutdown") }
