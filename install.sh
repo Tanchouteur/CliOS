@@ -632,7 +632,7 @@ else
         cat << EOF > "$TMP_SERVICE_FILE"
 [Unit]
 Description=CliOS Automotive Dashboard (Wayland Kiosk via Cage)
-After=graphical.target sound.target can0.service systemd-user-sessions.service
+After=sound.target can0.service systemd-user-sessions.service
 Wants=can0.service
 
 [Service]
@@ -649,7 +649,7 @@ Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
 EOF
 
         run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" /etc/clios /var/lib/clios /run/clios

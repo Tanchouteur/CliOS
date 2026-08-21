@@ -14,6 +14,11 @@ from src.release_manager import ReleaseManager, ReleaseError  # noqa: E402
 from src.updater_client import UpdaterClient, UpdaterClientError  # noqa: E402
 
 
+def application_args(arguments: list[str]) -> list[str]:
+    """Retire le séparateur argparse avant de transmettre les options à main."""
+    return arguments[1:] if arguments[:1] == ["--"] else list(arguments)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install-root", default="/opt/clios")
@@ -30,7 +35,11 @@ def main() -> int:
     python = current / ".venv/bin/python3"
     if not python.exists():
         python = Path(sys.executable)
-    process = subprocess.Popen([str(python), "-u", str(current / "main.py"), *opts.args], cwd=current, env=env)
+    process = subprocess.Popen(
+        [str(python), "-u", str(current / "main.py"), *application_args(opts.args)],
+        cwd=current,
+        env=env,
+    )
     deadline = time.monotonic() + opts.health_timeout
     while time.monotonic() < deadline and process.poll() is None:
         if marker.exists():
