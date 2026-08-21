@@ -8,12 +8,12 @@ try:
     from PySide6.QtNetwork import QNetworkInformation
 except ImportError:  # Qt < 6.4 ou backend réseau non fourni
     QNetworkInformation = None
-from src.logging_runtime import get_logger, get_recent_events
-from src.diagnostic_bundle import create_diagnostic_bundle
+from src.logging_runtime import get_logger
 from src.state_store import VEHICLE_DOMAINS
-from src.release_manager import ReleaseManager, ReleaseError
-from src.release_catalog import CatalogError, ReleaseCatalog
-from src.updater_client import UpdaterClient, UpdaterClientError
+from src.bridge.profile_theme_controller import ProfileThemeController
+from src.bridge.system_controller import SystemController
+from src.bridge.updater_controller import UpdaterController
+from src.bridge.ui_command_router import UiCommandRouter
 
 
 class DashboardBridge(QObject):
@@ -83,6 +83,11 @@ class DashboardBridge(QObject):
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
+
+        self._profile_theme_controller = ProfileThemeController(self)
+        self._system_controller = SystemController(self)
+        self._updater_controller = UpdaterController(self)
+        self._command_router = UiCommandRouter(self, self.logger)
 
         self._config_writer_thread = threading.Thread(
             target=self._config_writer_loop, daemon=True, name="ConfigWriter"
@@ -177,13 +182,13 @@ class DashboardBridge(QObject):
                 return
             self._network_information.reachabilityChanged.connect(self._on_reachability_changed)
             QTimer.singleShot(0, lambda: self._on_reachability_changed(self._network_information.reachability()))
-        except Exception as exc:
+        except (RuntimeError, TypeError, AttributeError) as exc:
             self.logger.warning(f"Détection réseau indisponible: {exc}", extra={"error_code": "NETWORK_INFO_UNAVAILABLE"})
 
     def _on_reachability_changed(self, reachability):
         try:
             online = reachability == QNetworkInformation.Reachability.Online
-        except Exception:
+        except (AttributeError, TypeError):
             online = str(reachability).lower().endswith("online")
         became_online = online and not self._network_was_online
         self._network_was_online = online
@@ -200,31 +205,7 @@ class DashboardBridge(QObject):
         self._updater_state = self._sanitize_for_qml(updated)
 
     def _poll_updater_status(self):
-        if self._updater_poll_running:
-            return
-        self._updater_poll_running = True
-
-        def task():
-            try:
-                response = UpdaterClient(timeout=2).status()
-                status = response.get("result", response)
-                state = str(status.get("state", "IDLE"))
-                if state in {"DOWNLOADING", "STAGED", "ACTIVATING", "ERROR"}:
-                    self._set_updater_state(
-                        state=state,
-                        available_version=str(status.get("version", self._updater_state.get("available_version", "")) or ""),
-                        progress=int(status.get("progress", 0) or 0),
-                        message=str(status.get("message", "")),
-                        can_activate=state == "STAGED",
-                        last_manifest=status.get("last_manifest", self._updater_state.get("last_manifest", {})),
-                        error=status.get("error") or {},
-                    )
-            except UpdaterClientError:
-                pass
-            finally:
-                self._updater_poll_running = False
-
-        threading.Thread(target=task, daemon=True, name="UpdaterStatusThread").start()
+        self._updater_controller.poll_status()
 
     def _read_storage_status(self):
         if not self._storage_manager:
@@ -245,7 +226,7 @@ class DashboardBridge(QObject):
         if hasattr(value, "item"):
             try:
                 return self._sanitize_for_qml(value.item())
-            except Exception:
+            except (TypeError, ValueError, OverflowError):
                 pass
 
         if isinstance(value, (bytes, bytearray)):
@@ -292,84 +273,9 @@ class DashboardBridge(QObject):
     @Slot(result='QVariantList')
     def getAvailableUiStyles(self):
         """Découvre uniquement les thèmes conformes à Theme API v1."""
-        required_colors = {
-            "background", "surface", "surfaceRaised", "surfaceSoft",
-            "text", "textSecondary", "outline", "gaugeTrack",
-        }
-        styles = []
-        diagnostics = []
-        official_ids = set()
-        developer_enabled = bool(self._config.get("developer", {}).get("enabled", False))
-        roots = [(self._ui_styles_dir, "styles", False)]
-        if developer_enabled:
-            roots.append((self._dev_styles_dir, "dev_styles", True))
-
-        for styles_root, qml_prefix, is_local in roots:
-            try:
-                entries = sorted(os.scandir(styles_root), key=lambda entry: entry.name)
-            except OSError as exc:
-                if not is_local:
-                    diagnostics.append(f"Catalogue officiel illisible: {exc}")
-                continue
-            for entry in entries:
-                if not entry.is_dir() or entry.name.startswith("_") or not entry.name.replace("_", "").isalnum():
-                    continue
-                manifest_path = os.path.join(entry.path, "style.json")
-                try:
-                    with open(manifest_path, "r", encoding="utf-8") as manifest_file:
-                        manifest = json.load(manifest_file)
-                    style_id = str(manifest.get("id", ""))
-                    dashboard_file = os.path.basename(str(manifest.get("dashboard", "Dashboard.qml")))
-                    palette = manifest.get("palette", {})
-                    problems = []
-                    if style_id != entry.name:
-                        problems.append("id différent du dossier")
-                    if manifest.get("apiVersion") != 1:
-                        problems.append("apiVersion doit valoir 1")
-                    try:
-                        minimum = tuple(int(part) for part in str(manifest.get("minCliOSVersion", "")).split("."))
-                        if len(minimum) != 3 or minimum > self._clios_version:
-                            problems.append(f"requiert CliOS {manifest.get('minCliOSVersion')}")
-                    except ValueError:
-                        problems.append("minCliOSVersion invalide")
-                    if "1920x720" not in manifest.get("supportedResolutions", []):
-                        problems.append("résolution 1920x720 non déclarée")
-                    if not isinstance(manifest.get("capabilities"), list):
-                        problems.append("capabilities manquant")
-                    if not dashboard_file.endswith(".qml") or not os.path.isfile(os.path.join(entry.path, dashboard_file)):
-                        problems.append("dashboard QML manquant")
-                    if not isinstance(palette, dict) or not required_colors.issubset(palette):
-                        problems.append("palette incomplète")
-                    if is_local and style_id in official_ids:
-                        problems.append("un thème local ne peut pas remplacer un thème officiel")
-                    if problems:
-                        diagnostics.append(f"{entry.name}: " + "; ".join(problems))
-                        continue
-                except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
-                    diagnostics.append(f"{entry.name}: manifeste invalide ({exc})")
-                    continue
-
-                if not is_local:
-                    official_ids.add(style_id)
-                styles.append({
-                    "id": style_id,
-                    "label": str(manifest.get("label", style_id)),
-                    "description": str(manifest.get("description", "")),
-                    "order": int(manifest.get("order", 100)),
-                    "dashboard": f"{qml_prefix}/{style_id}/{dashboard_file}",
-                    "palette": {key: str(palette[key]) for key in required_colors},
-                    "metrics": self._sanitize_for_qml(manifest.get("metrics", {})),
-                    "apiVersion": 1,
-                    "capabilities": self._sanitize_for_qml(manifest.get("capabilities", [])),
-                    "local": is_local,
-                    "trustedCodeWarning": "Code QML local de confiance, non sandboxé" if is_local else "",
-                })
-
-        self._theme_diagnostics = diagnostics
-        for message in diagnostics:
-            self.logger.error(message, extra={"error_code": "UI_THEME_INVALID"})
-        styles.sort(key=lambda item: (item["order"], item["label"].lower()))
-        return styles
+        if not hasattr(self, "_profile_theme_controller"):
+            self._profile_theme_controller = ProfileThemeController(self)
+        return self._profile_theme_controller.available_ui_styles()
 
     @Slot()
     def requestDiagnosticScan(self):
@@ -415,20 +321,7 @@ class DashboardBridge(QObject):
 
     @Slot(str, str)
     def save_setting(self, key_path, value):
-        if key_path == "theme.main" and self.led_service:
-            self.led_service.set_color(value)
-
-        keys = key_path.split('.')
-        with self._config_lock:
-            current_dict = self._config
-            for k in keys[:-1]:
-                if k not in current_dict:
-                    current_dict[k] = {}
-                current_dict = current_dict[k]
-            current_dict[keys[-1]] = value
-        self.configChanged.emit()
-
-        self._config_write_requested.set()
+        self._profile_theme_controller.save_setting(key_path, value)
 
     def _config_writer_loop(self):
         """Écrivain unique avec debounce : aucun fichier .tmp partagé entre threads."""
@@ -510,43 +403,7 @@ class DashboardBridge(QObject):
     @Slot(str, float, result=bool)
     def executeUiCommand(self, command: str, speed_kmh: float = 0.0) -> bool:
         """Point d'entrée unique des commandes émises par l'AppShell."""
-        self.logger.warning(
-            f"Commande UI '{command}' à {speed_kmh:.1f} km/h",
-            extra={"error_code": "UI_COMMAND", "speed_kmh": speed_kmh, "command": command},
-        )
-        actions = {
-            "reset_a": self.resetTripA,
-            "reset_b": self.resetTripB,
-            "reset_maintenance": self.resetMaintenance,
-            "end_trip": self.endTripSession,
-            "resume_trip": self.resumeTripSession,
-            "pause_trip": lambda: self.setSessionState("PAUSED"),
-            "quit": self.quitApplication,
-            "restart": self.restartApplication,
-            "reboot": self.rebootSystem,
-            "shutdown": self.shutdownSystem,
-            "diagnostic_scan": self.requestDiagnosticScan,
-            "gear_calibration_start": self.startGearCalibration,
-            "gear_calibration_stop": self.stopGearCalibration,
-            "toggle_overlayfs": self.toggleOverlayFs,
-        }
-        action = actions.get(command)
-        if action is not None:
-            action()
-            return True
-        for prefix, setter in {
-            "set_fuel_price:": self.updateFuelPrice,
-            "set_trip_b_fuel:": self.updateTripBFuel,
-            "set_trip_b_distance:": self.updateTripBDistance,
-        }.items():
-            if command.startswith(prefix):
-                try:
-                    setter(float(command[len(prefix):]))
-                    return True
-                except ValueError:
-                    break
-        self.logger.error(f"Commande UI inconnue: {command}", extra={"error_code": "UI_COMMAND_UNKNOWN"})
-        return False
+        return self._command_router.execute(command, speed_kmh)
 
     def _get_service_obj(self, service_name: str):
         for srv in self.orchestrator.services.keys():
@@ -569,48 +426,27 @@ class DashboardBridge(QObject):
 
     @Slot(result='QVariantList')
     def getAvailableProfiles(self):
-        if self.profile_manager:
-            return self.profile_manager.get_available_profiles()
-        return []
+        return self._profile_theme_controller.available_profiles()
 
     @Slot(result=str)
     def getActiveProfile(self):
-        if self.profile_manager:
-            return self.profile_manager.active_profile_id
-        return ""
+        return self._profile_theme_controller.active_profile()
 
     @Slot(result='QVariantList')
     def getAvailableCanFiles(self):
-        if self.profile_manager:
-            return self.profile_manager.get_available_can_files()
-        return []
+        return self._profile_theme_controller.available_can_files()
 
     @Slot(result='QVariantList')
     def getAvailableConfigFiles(self):
-        if self.profile_manager:
-            return self.profile_manager.get_available_config_files()
-        return []
+        return self._profile_theme_controller.available_config_files()
 
     @Slot(str, str, str, str, str, result=bool)
     def createNewProfile(self, profile_id: str, name: str, can_file: str, config_file: str, save_file: str):
-        if not self.profile_manager:
-            return False
-        self.profile_manager.create_new_config(config_file)
-        if not self.profile_manager.add_profile(profile_id, name, can_file, config_file, save_file):
-            return False
-        self.logger.info(f"Nouveau profil cree: {profile_id}", extra={"error_code": "PROFILE_CREATED"})
-        return True
+        return self._profile_theme_controller.create_profile(profile_id, name, can_file, config_file, save_file)
 
     @Slot(str, result=bool)
     def setActiveProfile(self, profile_id: str):
-        if not self.profile_manager:
-            return False
-        success = self.profile_manager.set_active_profile(profile_id)
-        if success:
-            self.logger.info(f"Changement profil programme: {profile_id}", extra={"error_code": "PROFILE_CHANGED"})
-            self.send_notification("info", f"Profil '{profile_id}' sélectionné. Veuillez redémarrer l'application.",
-                                   4000)
-        return success
+        return self._profile_theme_controller.set_active_profile(profile_id)
 
     @Slot()
     def restartApplication(self):
@@ -627,31 +463,11 @@ class DashboardBridge(QObject):
 
     @Slot(int, result=str)
     def getRecentLogs(self, limit: int = 100) -> str:
-        limit = max(1, min(limit, 300))
-        return json.dumps(get_recent_events(limit=limit))
+        return self._system_controller.recent_logs(limit)
 
     @Slot(result=str)
     def exportDiagnosticBundle(self) -> str:
-        try:
-            if self._storage_manager:
-                log_dir = self._storage_manager.resolve_path("logs")
-                output_dir = self._storage_manager.resolve_path("diagnostics")
-            else:
-                data_dir = os.path.dirname(os.path.dirname(self._config_path))
-                log_dir = os.path.join(data_dir, "logs")
-                output_dir = os.path.join(data_dir, "diagnostics")
-            bundle_path = create_diagnostic_bundle(
-                output_dir=output_dir,
-                log_dir=log_dir,
-                config_path=self._config_path,
-                system_health=self.orchestrator.get_system_health(),
-                extra={"active_profile": self.getActiveProfile(), "updater": self._updater_state},
-            )
-            self.logger.info(f"Bundle diagnostic exporte: {bundle_path}", extra={"error_code": "DIAG_BUNDLE_EXPORTED"})
-            return bundle_path
-        except Exception as e:
-            self.logger.error(f"Echec export bundle: {e}", extra={"error_code": "DIAG_BUNDLE_ERROR"})
-            return ""
+        return self._system_controller.export_diagnostic_bundle()
 
     @Slot()
     def startGearCalibration(self):
@@ -682,362 +498,57 @@ class DashboardBridge(QObject):
 
     @Slot(result=str)
     def getUpdateChannel(self) -> str:
-        channel = str(self._config.get("updates", {}).get("channel", "stable"))
-        return channel if channel in ReleaseManager.VALID_CHANNELS else "stable"
+        return self._updater_controller.channel()
 
     @Slot(str, result=bool)
     def setUpdateChannel(self, channel: str) -> bool:
-        if channel not in ReleaseManager.VALID_CHANNELS:
-            self.send_notification("ERROR", "Canal de mise à jour inconnu", 3500)
-            return False
-        self.save_setting("updates.channel", channel)
-        self._set_updater_state(channel=channel)
-        try:
-            ReleaseManager().set_channel(channel)
-        except OSError as exc:
-            # La configuration véhicule reste la source persistante de l'UI en
-            # développement, où /var/lib/clios n'est pas forcément accessible.
-            self.logger.warning(
-                f"Canal non synchronisé avec le gestionnaire système: {exc}",
-                extra={"error_code": "RELEASE_CHANNEL_STATE_WARNING"},
-            )
-        label = "Bêta" if channel == "beta" else "Stable"
-        self.logger.info(
-            f"Canal de mise à jour sélectionné: {channel}",
-            extra={"error_code": "RELEASE_CHANNEL_CHANGED"},
-        )
-        self.send_notification("WARNING" if channel == "beta" else "SUCCESS", f"Canal {label} sélectionné", 3500)
-        return True
+        return self._updater_controller.set_channel(channel)
 
     @Slot()
     def checkForUpdates(self):
         self._check_for_updates(force=True)
 
     def _check_for_updates(self, force: bool):
-        channel = self.getUpdateChannel()
-        if self._updater_state.get("state") in {"CHECKING", "DOWNLOADING", "ACTIVATING"}:
-            return
-        self._set_updater_state(state="CHECKING", progress=0, message="Recherche sur GitHub…", error={})
-
-        def task():
-            try:
-                release = ReleaseCatalog().check(channel, self._clios_version_text)
-                if release:
-                    self._set_updater_state(
-                        state="AVAILABLE", available_version=release["version"], progress=0,
-                        message=f"CliOS {release['version']} est disponible", can_activate=False,
-                        last_manifest=release, error={},
-                    )
-                    self.send_notification("INFO", f"Release {release['version']} disponible", 5000)
-                else:
-                    self._set_updater_state(
-                        state="UP_TO_DATE", available_version="", progress=100,
-                        message="CliOS est à jour", can_activate=False, error={},
-                    )
-                    self.send_notification("SUCCESS", "CliOS est à jour", 3500)
-                self.save_setting("updates.last_success_epoch", str(int(time.time())))
-            except (CatalogError, OSError, ValueError) as exc:
-                code = getattr(exc, "code", "NETWORK")
-                self._set_updater_state(
-                    state="ERROR", progress=0, message=str(exc), can_activate=False,
-                    error={"code": code, "message": str(exc)},
-                )
-                self.logger.error(f"Recherche de release impossible: {exc}", extra={"error_code": "RELEASE_CHECK_ERROR"})
-                self.send_notification("ERROR", f"Recherche impossible: {str(exc)[:70]}", 5000)
-
-        threading.Thread(target=task, daemon=True, name="ReleaseCheckThread").start()
+        self._updater_controller.check(force)
 
     @Slot(float)
     def stageUpdate(self, speed_kmh: float = 0.0):
-        version = str(self._updater_state.get("available_version", ""))
-        if not version:
-            self.send_notification("WARNING", "Aucune mise à jour sélectionnée", 3500)
-            return
-        self.logger.info(
-            f"Staging de {version} demandé à {speed_kmh:.1f} km/h",
-            extra={"error_code": "UPDATE_STAGE_REQUEST", "speed_kmh": speed_kmh, "version": version},
-        )
-        self._set_updater_state(state="DOWNLOADING", progress=0, message="Téléchargement demandé", error={})
-        self._run_updater_operation(lambda client: client.stage(version), "STAGED", version)
+        self._updater_controller.stage(speed_kmh)
 
     @Slot(float)
     def activateUpdate(self, speed_kmh: float = 0.0):
-        version = str(self._updater_state.get("available_version", ""))
-        self.logger.warning(
-            f"Activation de {version} confirmée à {speed_kmh:.1f} km/h",
-            extra={"error_code": "UPDATE_ACTIVATE_CONFIRMED", "speed_kmh": speed_kmh, "version": version},
-        )
-        self._set_updater_state(state="ACTIVATING", progress=100, message="Activation en cours", error={})
-        self._run_updater_operation(lambda client: client.activate(version), "ACTIVATING", version)
+        self._updater_controller.activate(speed_kmh)
 
     @Slot(float, bool)
     def rollbackUpdate(self, speed_kmh: float = 0.0, stable_only: bool = False):
-        self.logger.warning(
-            f"Rollback confirmé à {speed_kmh:.1f} km/h (stable={stable_only})",
-            extra={"error_code": "UPDATE_ROLLBACK_CONFIRMED", "speed_kmh": speed_kmh, "stable_only": stable_only},
-        )
-        self._set_updater_state(state="ACTIVATING", progress=100, message="Rollback en cours", error={})
-        self._run_updater_operation(lambda client: client.rollback(stable_only), "ACTIVATING", "")
-
-    def _run_updater_operation(self, operation, success_state: str, version: str):
-        def task():
-            try:
-                operation(UpdaterClient(timeout=900))
-                self._set_updater_state(
-                    state=success_state, available_version=version, progress=100,
-                    message="Release préparée" if success_state == "STAGED" else "Redémarrage en cours",
-                    can_activate=success_state == "STAGED", error={},
-                )
-            except UpdaterClientError as exc:
-                message = str(exc)
-                lowered = message.lower()
-                if getattr(exc, "code", "") not in {"", "UPDATER_CLIENT", "UPDATE_ERROR"}:
-                    code = exc.code
-                elif "sha-256" in lowered or "sha256" in lowered:
-                    code = "SHA256"
-                elif "espace disque" in lowered or "no space" in lowered:
-                    code = "DISK_SPACE"
-                elif "self-check" in lowered:
-                    code = "SELF_CHECK"
-                elif "permission" in lowered or "privil" in lowered or "indisponible" in lowered:
-                    code = "PRIVILEGE"
-                elif "réseau" in lowered or "github" in lowered:
-                    code = "NETWORK"
-                else:
-                    code = "UPDATE_ERROR"
-                self._set_updater_state(
-                    state="ERROR", message=message, can_activate=False,
-                    error={"code": code, "message": message},
-                )
-                self.logger.error(message, extra={"error_code": "UPDATER_HELPER_ERROR"})
-                self.send_notification("ERROR", message[:90], 6000)
-
-        threading.Thread(target=task, daemon=True, name="UpdaterOperationThread").start()
+        self._updater_controller.rollback(speed_kmh, stable_only)
 
     @Slot(result=str)
     def getSystemMaintenanceStatus(self) -> str:
         """Retourne les infos système pour le menu de maintenance (JSON)."""
-        import socket
-        import subprocess
-        import platform
-
-        # 1. IP locale réelle (Socket UDP en priorité, avec fallback hostname -I et ifconfig)
-        ip_addr = ""
-        for target in ["8.8.8.8", "1.1.1.1", "192.168.1.1", "10.0.0.1"]:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.connect((target, 80))
-                ip = s.getsockname()[0]
-                s.close()
-                if ip and not ip.startswith("127."):
-                    ip_addr = ip
-                    break
-            except Exception:
-                pass
-
-        if not ip_addr:
-            try:
-                out = subprocess.check_output(["hostname", "-I"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
-                ips = [ip for ip in out.split() if not ip.startswith("127.") and not ip.startswith("169.254.")]
-                if ips:
-                    ip_addr = ips[0]
-            except Exception:
-                pass
-
-        if not ip_addr:
-            try:
-                out = subprocess.check_output(["ifconfig"], stderr=subprocess.DEVNULL, text=True, timeout=1)
-                for line in out.splitlines():
-                    line = line.strip()
-                    if line.startswith("inet ") and not line.startswith("inet 127."):
-                        parts = line.split()
-                        if len(parts) >= 2 and not parts[1].startswith("169.254."):
-                            ip_addr = parts[1]
-                            break
-            except Exception:
-                pass
-
-        if not ip_addr:
-            ip_addr = "Hors-ligne"
-
-        overlay_status = "READ_WRITE"
-        try:
-            with open("/proc/mounts", "r") as f:
-                mounts = f.read()
-                if "overlay on / " in mounts or ("/dev/root" not in mounts and "overlay" in mounts):
-                    overlay_status = "READ_ONLY"
-        except Exception:
-            overlay_status = "READ_WRITE"
-
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        git_info = "main"
-        try:
-            branch = subprocess.check_output(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=project_root, stderr=subprocess.DEVNULL, text=True, timeout=2
-            ).strip()
-            commit = subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"],
-                cwd=project_root, stderr=subprocess.DEVNULL, text=True, timeout=2
-            ).strip()
-            git_info = f"{branch} ({commit})"
-        except Exception:
-            pass
-
-        cpu_temp = ""
-        try:
-            with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
-                t = float(f.read().strip()) / 1000.0
-                cpu_temp = f"{t:.1f}°C"
-        except Exception:
-            pass
-
-        # 2. SSID Wi-Fi connecté
-        wifi_ssid = ""
-        try:
-            out = subprocess.check_output(
-                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
-                stderr=subprocess.DEVNULL, text=True, timeout=1
-            )
-            for line in out.splitlines():
-                if ":" in line:
-                    name, ctype = line.rsplit(":", 1)
-                    if any(k in ctype.lower() for k in ["wireless", "wifi", "802-11"]):
-                        wifi_ssid = name.strip()
-                        break
-        except Exception:
-            pass
-
-        if not wifi_ssid:
-            try:
-                out = subprocess.check_output(
-                    ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
-                    stderr=subprocess.DEVNULL, text=True, timeout=1
-                )
-                for line in out.splitlines():
-                    if line.startswith("yes:"):
-                        wifi_ssid = line.split("yes:", 1)[1].strip()
-                        break
-            except Exception:
-                pass
-
-        if not wifi_ssid:
-            for cmd in ["iwgetid", "/usr/sbin/iwgetid", "/sbin/iwgetid"]:
-                try:
-                    res = subprocess.check_output([cmd, "-r"], stderr=subprocess.DEVNULL, text=True, timeout=1).strip()
-                    if res:
-                        wifi_ssid = res
-                        break
-                except Exception:
-                    pass
-
-        if not wifi_ssid:
-            for dev in ["wlan0", "wlan1"]:
-                try:
-                    out = subprocess.check_output(["iw", "dev", dev, "link"], stderr=subprocess.DEVNULL, text=True, timeout=1)
-                    for line in out.splitlines():
-                        if "SSID:" in line:
-                            wifi_ssid = line.split("SSID:", 1)[1].strip()
-                            break
-                    if wifi_ssid:
-                        break
-                except Exception:
-                    pass
-
-        if not wifi_ssid:
-            try:
-                out = subprocess.check_output(["wpa_cli", "status"], stderr=subprocess.DEVNULL, text=True, timeout=1)
-                for line in out.splitlines():
-                    if line.startswith("ssid="):
-                        wifi_ssid = line.split("ssid=", 1)[1].strip()
-                        break
-            except Exception:
-                pass
-
-        if not wifi_ssid and platform.system() == "Darwin":
-            try:
-                out = subprocess.check_output(["ipconfig", "getsummary", "en0"], stderr=subprocess.DEVNULL, text=True, timeout=1)
-                for line in out.splitlines():
-                    if "SSID :" in line:
-                        wifi_ssid = line.split("SSID :", 1)[1].strip()
-                        break
-            except Exception:
-                pass
-
-        system = self.runtime.snapshot().domain("system")
-        version = system.get("system_version", "unknown")
-
-        return json.dumps({
-            "version": version,
-            "ip_address": ip_addr,
-            "wifi_ssid": wifi_ssid,
-            "overlay_status": overlay_status,
-            "git_info": git_info,
-            "cpu_temp": cpu_temp,
-        })
+        return self._system_controller.maintenance_status()
 
     @Slot()
     def toggleOverlayFs(self):
         """Bascule la protection SD (OverlayFS)."""
-        self.logger.info("Bascule protection SD demandée", extra={"error_code": "MAINT_SD_TOGGLE"})
-
-        def _toggle_task():
-            import subprocess
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            overlay_script = os.path.join(project_root, "tools", "toggle_overlayfs.sh")
-
-            try:
-                if os.path.isfile(overlay_script):
-                    res = subprocess.run(["bash", overlay_script], cwd=project_root, capture_output=True, text=True, timeout=30)
-                    if res.returncode == 0:
-                        self.send_notification("WARNING", "Protection SD basculée ! Redémarrez le système.", 5000)
-                    else:
-                        self.send_notification("ERROR", f"Erreur SD : {res.stderr.strip()[:50]}", 4000)
-                else:
-                    check = subprocess.run(["sudo", "raspi-config", "nonint", "get_overlay_now"], capture_output=True, text=True)
-                    is_enabled = check.stdout.strip() == "0"
-                    if is_enabled:
-                        subprocess.run(["sudo", "raspi-config", "nonint", "disable_overlayfs"], timeout=30)
-                        self.send_notification("WARNING", "Protection SD désactivée (Mode RW). Redémarrez pour valider.", 5000)
-                    else:
-                        subprocess.run(["sudo", "raspi-config", "nonint", "enable_overlayfs"], timeout=30)
-                        self.send_notification("SUCCESS", "Protection SD activée (Lecture Seule). Redémarrez pour valider.", 5000)
-            except Exception as e:
-                self.logger.error(f"Erreur bascule SD: {e}", extra={"error_code": "SD_TOGGLE_ERROR"})
-                self.send_notification("ERROR", f"Erreur SD: {str(e)[:50]}", 4000)
-
-        threading.Thread(target=_toggle_task, daemon=True, name="SdToggleThread").start()
+        self._system_controller.toggle_overlay()
 
     @Slot()
     def rebootSystem(self):
         """Arrête proprement les services et redémarre le Raspberry Pi."""
-        self.logger.warning("Redémarrage matériel demandé", extra={"error_code": "SYS_REBOOT"})
-        self.send_notification("WARNING", "Redémarrage du système...", 3000)
-        threading.Thread(target=self._handle_exit, args=(False, True), daemon=True).start()
+        self._system_controller.request_exit("reboot")
 
     @Slot()
     def quitApplication(self):
         """Arrête proprement les services et ferme l'application."""
-        self.logger.info("Fermeture manuelle de l'application", extra={"error_code": "APP_QUIT"})
-        self.send_notification("INFO", "Fermeture de l'application...", 2000)
-        threading.Thread(target=self._handle_exit, args=(False, False), daemon=True).start()
+        self._system_controller.request_exit("quit")
 
     @Slot()
     def shutdownSystem(self):
         """Arrête proprement les services et éteint le Raspberry Pi."""
-        self.logger.warning("Extinction système demandée", extra={"error_code": "SYS_SHUTDOWN"})
-        self.send_notification("WARNING", "Extinction du système...", 3000)
-        threading.Thread(target=self._handle_exit, args=(True, False), daemon=True).start()
+        self._system_controller.request_exit("poweroff")
 
     @Slot()
     def openMaintenanceMenu(self):
         """Ouvre le menu de maintenance système."""
         self.openMaintenanceRequested.emit()
-
-    def _handle_exit(self, poweroff=False, reboot=False):
-        import time
-
-        # Temps pour laisser l'UI afficher la notification
-        time.sleep(1.0)
-        self.requested_power_action = "poweroff" if poweroff else ("reboot" if reboot else "quit")
-        self.exitRequested.emit()

@@ -1,7 +1,6 @@
 import json
 import os
 import threading
-import time
 
 from src.logging_runtime import get_logger
 

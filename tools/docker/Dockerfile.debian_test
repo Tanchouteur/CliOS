@@ -1,5 +1,6 @@
-# Dockerfile de test pour simuler l'installation de CliOS sur un environnement Debian / Raspberry Pi OS Bookworm
-FROM debian:bookworm-slim
+# Dockerfile de test pour simuler l'installation de CliOS sur Debian/Raspberry Pi OS.
+ARG DEBIAN_SUITE=bookworm
+FROM debian:${DEBIAN_SUITE}-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 

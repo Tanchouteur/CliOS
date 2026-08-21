@@ -1,7 +1,6 @@
 import os
-import sys
 import unittest
-from PySide6.QtCore import QUrl, QCoreApplication
+from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlEngine, QQmlComponent
 

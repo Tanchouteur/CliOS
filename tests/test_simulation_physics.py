@@ -1,7 +1,7 @@
 """Tests unitaires pour le moteur physique de simulation de véhicule."""
 
 import unittest
-from src.simulation.models import VehicleParameters, SimulatedVehicleState
+from src.simulation.models import VehicleParameters
 from src.simulation.physics_engine import PhysicsEngine
 
 

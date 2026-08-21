@@ -8,7 +8,7 @@ import time
 import threading
 import can
 from src.state_store import StatePatch
-from src.simulation.models import VehicleParameters, SimulatedVehicleState
+from src.simulation.models import VehicleParameters
 from src.simulation.physics_engine import PhysicsEngine
 from src.simulation.can_encoder import CanFrameEncoder
 from src.simulation.scenarios import ScenarioRunner, get_builtin_scenarios

@@ -12,3 +12,7 @@ __pycache__
 dist/
 wheelhouses/
 wheels/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
