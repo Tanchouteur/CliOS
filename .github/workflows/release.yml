@@ -1,0 +1,91 @@
+name: Release ARM64
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  validate-build-publish:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Vérifier tag, VERSION et appartenance à main
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
+          python3 -c 'from src.release_contract import SemVer; import pathlib; SemVer.parse(pathlib.Path("VERSION").read_text().strip())'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install PySide6 jsonschema psutil python-can pyserial
+      - name: Portes CI complètes
+        run: |
+          python -m compileall -q main.py src tools tests
+          python tools/validate_data.py --all
+          python -m unittest discover -s tests -v
+          python tools/qml_smoke.py
+          bash -n install.sh update.sh tools/*.sh
+          tools/test_install_docker.sh
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Construire le wheelhouse sous Bookworm ARM64
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "${GITHUB_WORKSPACE}:/work" -w /work debian:bookworm \
+            bash -ceu 'apt-get update; apt-get install -y python3 python3-pip python3-venv build-essential libjack-jackd2-dev portaudio19-dev libsndfile1-dev liblo-dev; ./tools/build_wheelhouse.sh'
+
+      - name: Construire et contrôler les assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          channel="$(python3 -c 'from src.release_contract import channel_for_version; import pathlib; print(channel_for_version(pathlib.Path("VERSION").read_text().strip()))')"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          python3 tools/build_release.py --output dist --channel "${channel}" --base-url "${base}"
+          cd dist
+          sha256sum --check SHA256SUMS
+          test -f "clios-${version}-bookworm-arm64.tar.gz"
+          test -f "clios-${version}-${channel}.json"
+
+      - name: Self-check de l'archive sous ARM64
+        shell: bash
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "${GITHUB_WORKSPACE}:/work" -w /work debian:bookworm \
+            bash -ceu 'apt-get update; apt-get install -y python3 python3-venv libegl1 libgl1 libxkbcommon-x11-0 libportaudio2 libjack-jackd2-0 libsndfile1 liblo7; version=$(tr -d "[:space:]" < VERSION); mkdir /stage; tar -xzf "dist/clios-${version}-bookworm-arm64.tar.gz" -C /stage; cd "/stage/clios-${version}"; python3 -m venv .venv; .venv/bin/pip install --no-index --no-deps wheels/*.whl; .venv/bin/pip check; .venv/bin/python -m compileall -q main.py src tools; .venv/bin/python tools/validate_data.py --all; QT_QPA_PLATFORM=offscreen .venv/bin/python tools/qml_smoke.py'
+
+      - name: Publier la release seulement après succès complet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          channel="$(python3 -c 'from src.release_contract import channel_for_version; import pathlib; print(channel_for_version(pathlib.Path("VERSION").read_text().strip()))')"
+          prerelease=()
+          if test "${channel}" = beta; then prerelease=(--prerelease); fi
+          gh release create "${GITHUB_REF_NAME}" \
+            "dist/clios-${version}-bookworm-arm64.tar.gz" \
+            "dist/clios-${version}-${channel}.json" \
+            "dist/SHA256SUMS" \
+            --verify-tag --generate-notes "${prerelease[@]}"
