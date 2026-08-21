@@ -13,22 +13,24 @@ class ReleaseBuildContractTest(unittest.TestCase):
             build_release.build(pathlib.Path("/tmp/clios-invalid-channel-test"), "stable", "https://github.com")
 
     def test_every_locked_requirement_has_at_least_one_hash(self):
-        lock = (pathlib.Path(__file__).parents[1] / "requirements-bookworm-arm64.lock").read_text(encoding="utf-8")
-        blocks = []
-        current = ""
-        for line in lock.splitlines():
-            if line and not line[0].isspace() and not line.startswith("#"):
+        for target in ("bookworm-arm64", "trixie-arm64"):
+            with self.subTest(target=target):
+                lock = (pathlib.Path(__file__).parents[1] / f"requirements-{target}.lock").read_text(encoding="utf-8")
+                blocks = []
+                current = ""
+                for line in lock.splitlines():
+                    if line and not line[0].isspace() and not line.startswith("#"):
+                        if current:
+                            blocks.append(current)
+                        current = line
+                    elif current:
+                        current += " " + line.strip()
                 if current:
                     blocks.append(current)
-                current = line
-            elif current:
-                current += " " + line.strip()
-        if current:
-            blocks.append(current)
-        self.assertGreater(len(blocks), 10)
-        for block in blocks:
-            self.assertIn("==", block)
-            self.assertIn("--hash=sha256:", block)
+                self.assertGreater(len(blocks), 10)
+                for block in blocks:
+                    self.assertIn("==", block)
+                    self.assertIn("--hash=sha256:", block)
 
 
 if __name__ == "__main__":

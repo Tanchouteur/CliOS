@@ -30,6 +30,7 @@ fi
 
 SYSTEMD_DIR="/etc/systemd/system"
 UDEV_RULES_DIR="/etc/udev/rules.d"
+LOCAL_LIBEXEC_DIR="/usr/local/libexec"
 
 # Flags d'exécution
 DRY_RUN=0
@@ -212,7 +213,8 @@ do_uninstall() {
     log_step "DÉSINSTALLATION" "Suppression des services et configurations système"
 
     if prompt_confirm "Voulez-vous désactiver et supprimer les services CliOS de /etc/systemd et /etc/udev ?" "N"; then
-        local services=("clios.service" "clios-updater.service" "clios-updater.socket" "can-usb.service" "can-wake.service" "slcan.service")
+        safe_systemctl "Arrêt des montages USB CliOS" stop "clios-usb-mount@*.service" 2>/dev/null || true
+        local services=("clios.service" "clios-updater.service" "clios-updater.socket" "clios-usb-mount@.service" "can-usb.service" "can-wake.service" "slcan.service")
         for srv in "${services[@]}"; do
             if [[ -f "${SYSTEMD_DIR}/${srv}" ]]; then
                 log_info "Désactivation du service ${srv}..."
@@ -225,6 +227,15 @@ do_uninstall() {
         if [[ -f "${UDEV_RULES_DIR}/99-slcan.rules" ]]; then
             run_sudo_cmd "Suppression de ${UDEV_RULES_DIR}/99-slcan.rules" rm -f "${UDEV_RULES_DIR}/99-slcan.rules"
             log_success "Règles udev supprimées."
+        fi
+
+        if [[ -f "${UDEV_RULES_DIR}/90-clios-usb-storage.rules" ]]; then
+            run_sudo_cmd "Suppression de ${UDEV_RULES_DIR}/90-clios-usb-storage.rules" rm -f "${UDEV_RULES_DIR}/90-clios-usb-storage.rules"
+            log_success "Règle de stockage USB supprimée."
+        fi
+
+        if [[ -f "${LOCAL_LIBEXEC_DIR}/clios-usb-mount" ]]; then
+            run_sudo_cmd "Suppression du helper de montage USB" rm -f "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
         fi
 
         safe_systemctl "Rechargement de systemd et udev" daemon-reload
@@ -314,6 +325,8 @@ log_step "1/6" "Analyse de l'environnement système"
 OS_NAME="$(uname -s)"
 ARCH_NAME="$(uname -m)"
 DISTRO="Inconnue"
+RELEASE_TARGET=""
+EXPECTED_PYTHON_MINOR=""
 
 if [[ "$OS_NAME" == "Linux" ]]; then
     if [[ -f /etc/os-release ]]; then
@@ -325,13 +338,34 @@ elif [[ "$OS_NAME" == "Darwin" ]]; then
     DISTRO="macOS $(sw_vers -productVersion 2>/dev/null || true)"
 fi
 
+if [[ "$OS_NAME" == "Linux" && "$ARCH_NAME" == "aarch64" && -f /etc/debian_version ]]; then
+    case "${VERSION_CODENAME:-}" in
+        bookworm)
+            RELEASE_TARGET="bookworm-arm64"
+            EXPECTED_PYTHON_MINOR="3.11"
+            ;;
+        trixie)
+            RELEASE_TARGET="trixie-arm64"
+            EXPECTED_PYTHON_MINOR="3.13"
+            ;;
+        *)
+            log_error "Version Debian ARM64 non prise en charge : ${VERSION_CODENAME:-inconnue}. Utilisez Bookworm ou Trixie."
+            exit 1
+            ;;
+    esac
+fi
+
 log_info "Système d'exploitation : ${C_BOLD}${DISTRO}${C_RESET} (${OS_NAME} ${ARCH_NAME})"
 log_info "Utilisateur cible     : ${C_BOLD}${CURRENT_USER}${C_RESET}"
 log_info "Répertoire du projet  : ${C_BOLD}${PROJECT_DIR}${C_RESET}"
 
 # Détection de Python 3
 find_python_bin() {
-    local candidates=(
+    local candidates=()
+    if [[ -n "$EXPECTED_PYTHON_MINOR" ]]; then
+        candidates+=("/usr/bin/python${EXPECTED_PYTHON_MINOR}" "python${EXPECTED_PYTHON_MINOR}")
+    fi
+    candidates+=(
         /opt/homebrew/bin/python3.13
         /opt/homebrew/bin/python3.12
         /opt/homebrew/bin/python3.11
@@ -369,7 +403,15 @@ PYTHON_BIN="$(find_python_bin || true)"
 
 if [[ -n "$PYTHON_BIN" ]]; then
     PY_VER="$($PYTHON_BIN --version 2>&1 | awk '{print $2}')"
+    PY_MINOR="$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    if [[ -n "$EXPECTED_PYTHON_MINOR" && "$PY_MINOR" != "$EXPECTED_PYTHON_MINOR" ]]; then
+        log_error "${RELEASE_TARGET} exige Python ${EXPECTED_PYTHON_MINOR}, mais ${PYTHON_BIN} fournit ${PY_MINOR}."
+        exit 1
+    fi
     log_info "Binaire Python détecté : ${C_BOLD}${PYTHON_BIN}${C_RESET} (version ${PY_VER})"
+    if [[ -n "$RELEASE_TARGET" ]]; then
+        log_info "Cible de release      : ${C_BOLD}${RELEASE_TARGET}${C_RESET}"
+    fi
     log_success "Environnement identifié avec succès."
 else
     if [[ "$OS_NAME" == "Linux" && -f /etc/debian_version && $VENV_ONLY -eq 0 ]]; then
@@ -411,6 +453,8 @@ elif [[ "$OS_NAME" == "Linux" && -f /etc/debian_version ]]; then
         libglib2.0-0
         libfontconfig1
         libdbus-1-3
+        exfatprogs
+        ntfs-3g
     )
 
     echo -e "\n Paquets système requis pour l'audio (pyo), le bus CAN et le rendu graphique Qt / Cage (OpenGL/Wayland) :"
@@ -464,53 +508,63 @@ else
 fi
 
 VENV_PYTHON="${VENV_DIR}/bin/python3"
+BUNDLED_LOCK="${PROJECT_DIR}/requirements-${RELEASE_TARGET}.lock"
+BUNDLED_WHEELS="${PROJECT_DIR}/wheels"
 
-# Mise à niveau des outils de packaging
-run_cmd "Mise à jour de pip, setuptools et wheel" "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
-
-# Compilation sécurisée de pyo
-echo -e "\n${C_BOLD}Installation de la bibliothèque DSP Audio (pyo)...${C_RESET}"
-
-BREW_CFLAGS=""
-if [[ "$OS_NAME" == "Darwin" ]]; then
-    if [[ -d "/opt/homebrew/include" ]]; then
-        BREW_CFLAGS="-I/opt/homebrew/include -L/opt/homebrew/lib"
-    elif [[ -d "/usr/local/include" ]]; then
-        BREW_CFLAGS="-I/usr/local/include -L/usr/local/lib"
-    fi
-fi
-PYO_CFLAGS="${BREW_CFLAGS} -Wno-incompatible-pointer-types -Wno-error"
-
-if [[ $DRY_RUN -eq 1 ]]; then
-    log_dry "CFLAGS=\"${PYO_CFLAGS}\" $VENV_PYTHON -m pip install --no-build-isolation pyo~=1.0.5"
-    log_dry "$VENV_PYTHON -m pip install -r ${PROJECT_DIR}/requirements.txt"
-else
-    PYO_INSTALLED=0
-    # Tentative d'installation de pyo avec CFLAGS
-    if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-build-isolation "pyo~=1.0.5" 2>/dev/null; then
-        log_success "Compilation et installation de pyo réussies."
-        PYO_INSTALLED=1
+if [[ -n "$RELEASE_TARGET" && -f "$BUNDLED_LOCK" && -d "$BUNDLED_WHEELS" ]] && compgen -G "${BUNDLED_WHEELS}/*.whl" >/dev/null; then
+    log_info "Installation hors ligne depuis le wheelhouse ${RELEASE_TARGET}."
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "$VENV_PYTHON -m pip install --no-index --no-deps ${BUNDLED_WHEELS}/*.whl"
+        log_dry "$VENV_PYTHON -m pip install --no-index --require-hashes -r $BUNDLED_LOCK"
     else
-        log_warn "Échec de la compilation standard de pyo. Tentative sans OSC..."
-        if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-binary :all: --config-settings="--build-option=--no-osc" "pyo~=1.0.5" 2>/dev/null; then
-            log_success "Installation de pyo réussie (mode fallback sans OSC)."
-            PYO_INSTALLED=1
-        else
-            log_warn "pyo n'a pas pu être compilé (en-têtes C audio absents). Les fonctionnalités de son moteur seront inactives."
+        "$VENV_PYTHON" -m pip install --no-index --no-deps "${BUNDLED_WHEELS}"/*.whl
+        "$VENV_PYTHON" -m pip install --no-index --require-hashes -r "$BUNDLED_LOCK"
+        "$VENV_PYTHON" -m pip check
+        log_success "Wheelhouse ${RELEASE_TARGET} installé et vérifié."
+    fi
+else
+    # Le checkout de développement conserve le chemin PyPI historique. Les
+    # archives publiées passent toujours par le wheelhouse ci-dessus.
+    run_cmd "Mise à jour de pip, setuptools et wheel" "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
+    echo -e "\n${C_BOLD}Installation de la bibliothèque DSP Audio (pyo)...${C_RESET}"
+    BREW_CFLAGS=""
+    if [[ "$OS_NAME" == "Darwin" ]]; then
+        if [[ -d "/opt/homebrew/include" ]]; then
+            BREW_CFLAGS="-I/opt/homebrew/include -L/opt/homebrew/lib"
+        elif [[ -d "/usr/local/include" ]]; then
+            BREW_CFLAGS="-I/usr/local/include -L/usr/local/lib"
         fi
     fi
+    PYO_CFLAGS="${BREW_CFLAGS} -Wno-incompatible-pointer-types -Wno-error"
 
-    # Installation des autres dépendances depuis requirements.txt
-    log_info "Installation des dépendances depuis requirements.txt..."
-    if [[ $PYO_INSTALLED -eq 1 ]]; then
-        "$VENV_PYTHON" -m pip install -r "${PROJECT_DIR}/requirements.txt"
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_dry "CFLAGS=\"${PYO_CFLAGS}\" $VENV_PYTHON -m pip install --no-build-isolation pyo~=1.0.5"
+        log_dry "$VENV_PYTHON -m pip install -r ${PROJECT_DIR}/requirements.txt"
     else
-        # Si pyo a échoué, on installe toutes les autres dépendances sans bloquer pip
-        grep -v '^pyo' "${PROJECT_DIR}/requirements.txt" | "$VENV_PYTHON" -m pip install -r /dev/stdin
+        PYO_INSTALLED=0
+        if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-build-isolation "pyo~=1.0.5" 2>/dev/null; then
+            log_success "Compilation et installation de pyo réussies."
+            PYO_INSTALLED=1
+        else
+            log_warn "Échec de la compilation standard de pyo. Tentative sans OSC..."
+            if CFLAGS="${PYO_CFLAGS}" "$VENV_PYTHON" -m pip install --no-binary :all: --config-settings="--build-option=--no-osc" "pyo~=1.0.5" 2>/dev/null; then
+                log_success "Installation de pyo réussie (mode fallback sans OSC)."
+                PYO_INSTALLED=1
+            else
+                log_warn "pyo n'a pas pu être compilé (en-têtes C audio absents). Les fonctionnalités de son moteur seront inactives."
+            fi
+        fi
+        log_info "Installation des dépendances depuis requirements.txt..."
+        if [[ $PYO_INSTALLED -eq 1 ]]; then
+            "$VENV_PYTHON" -m pip install -r "${PROJECT_DIR}/requirements.txt"
+        else
+            grep -v '^pyo' "${PROJECT_DIR}/requirements.txt" | "$VENV_PYTHON" -m pip install -r /dev/stdin
+        fi
+        log_success "Dépendances Python installées."
     fi
-    log_success "Dépendances Python installées."
+fi
 
-    # Validation rapide des imports critiques
+if [[ $DRY_RUN -eq 0 ]]; then
     log_info "Validation des modules Python critiques..."
     if "$VENV_PYTHON" -c "import PySide6; print(f'PySide6 version: {PySide6.__version__}')" &>/dev/null; then
         log_success "PySide6 opérationnel."
@@ -632,7 +686,7 @@ else
         cat << EOF > "$TMP_SERVICE_FILE"
 [Unit]
 Description=CliOS Automotive Dashboard (Wayland Kiosk via Cage)
-After=graphical.target sound.target can0.service systemd-user-sessions.service
+After=sound.target can0.service systemd-user-sessions.service
 Wants=can0.service
 
 [Service]
@@ -649,15 +703,18 @@ Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
 EOF
 
-        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" /etc/clios /var/lib/clios /run/clios
+        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" "${UDEV_RULES_DIR}" "${LOCAL_LIBEXEC_DIR}" /etc/clios /var/lib/clios /run/clios /media/clios
         run_sudo_cmd "Droits des données updater" chown root:clios /var/lib/clios /run/clios
         run_sudo_cmd "Permissions des données updater" chmod 0770 /var/lib/clios /run/clios
         backup_system_file "${SYSTEMD_DIR}/clios.service"
         backup_system_file "${SYSTEMD_DIR}/clios-updater.service"
         backup_system_file "${SYSTEMD_DIR}/clios-updater.socket"
+        backup_system_file "${SYSTEMD_DIR}/clios-usb-mount@.service"
+        backup_system_file "${UDEV_RULES_DIR}/90-clios-usb-storage.rules"
+        backup_system_file "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
         backup_system_file "/etc/clios/updater.json"
 
         if [[ $DRY_RUN -eq 1 ]]; then
@@ -668,10 +725,16 @@ EOF
             run_sudo_cmd "Permission sur clios.service" chmod 644 "${SYSTEMD_DIR}/clios.service"
             run_sudo_cmd "Installation de clios-updater.service" cp "${INSTALL_ETC_DIR}/systemd/system/clios-updater.service" "${SYSTEMD_DIR}/clios-updater.service"
             run_sudo_cmd "Installation de clios-updater.socket" cp "${INSTALL_ETC_DIR}/systemd/system/clios-updater.socket" "${SYSTEMD_DIR}/clios-updater.socket"
+            run_sudo_cmd "Installation du service de montage USB" cp "${INSTALL_ETC_DIR}/systemd/system/clios-usb-mount@.service" "${SYSTEMD_DIR}/clios-usb-mount@.service"
+            run_sudo_cmd "Installation de la règle de stockage USB" cp "${INSTALL_ETC_DIR}/udev/rules.d/90-clios-usb-storage.rules" "${UDEV_RULES_DIR}/90-clios-usb-storage.rules"
+            run_sudo_cmd "Installation du helper de montage USB" cp "${PROJECT_DIR}/installation/usr/local/libexec/clios-usb-mount" "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
+            run_sudo_cmd "Permissions du helper de montage USB" chmod 0755 "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
             run_sudo_cmd "Installation de la source de confiance updater" cp "${INSTALL_ETC_DIR}/clios/updater.json" /etc/clios/updater.json
             run_sudo_cmd "Droits de la source de confiance updater" chown root:root /etc/clios/updater.json
             run_sudo_cmd "Permissions de la source de confiance updater" chmod 0644 /etc/clios/updater.json
             safe_systemctl "Rechargement daemon systemd" daemon-reload
+            safe_udevadm "Rechargement des règles de stockage USB" control --reload-rules
+            safe_udevadm "Détection des stockages USB déjà branchés" trigger --subsystem-match=block --action=add
             safe_systemctl "Activation du socket updater" enable --now clios-updater.socket
             rm -f "$TMP_SERVICE_FILE"
 

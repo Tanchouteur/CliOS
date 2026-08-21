@@ -31,6 +31,15 @@ class ReleaseContractTest(unittest.TestCase):
         with self.assertRaises(ReleaseContractError):
             validate_manifest(manifest)
 
+    def test_manifest_accepts_trixie_arm64(self):
+        manifest = {
+            "schema_version": 1, "version": "2.0.1-rc.2", "channel": "beta",
+            "platform": "raspberry-pi-os-trixie-arm64",
+            "archive_url": "https://github.com/Tanchouteur/CliOS/releases/download/v2.0.1-rc.2/archive.tar.gz",
+            "archive_sha256": "a" * 64, "files": {"main.py": "b" * 64},
+        }
+        self.assertEqual(validate_manifest(manifest)["platform"], "raspberry-pi-os-trixie-arm64")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 [Unit]
 Description=CliOS 2 Automotive Dashboard
-After=graphical.target sound.target can0.service systemd-user-sessions.service
+After=sound.target can0.service systemd-user-sessions.service
 Wants=can0.service
 
 [Service]
@@ -16,4 +16,4 @@ Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target

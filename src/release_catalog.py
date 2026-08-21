@@ -12,6 +12,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from src.release_contract import ReleaseContractError, SemVer, validate_manifest
+from src.release_platform import (
+    ReleasePlatformError,
+    detect_release_platform,
+    get_release_platform,
+)
 
 
 DEFAULT_REPOSITORY = "Tanchouteur/CliOS"
@@ -55,6 +60,7 @@ class ReleaseCatalog:
         *,
         opener=None,
         repository: str | None = None,
+        platform_id: str | None = None,
         enforce_root_config: bool = True,
         api_base: str = "https://api.github.com",
     ):
@@ -66,6 +72,12 @@ class ReleaseCatalog:
         config = self._load_config(enforce_root_config)
         self.repository = repository or str(config.get("repository", DEFAULT_REPOSITORY))
         self._validate_repository(self.repository)
+        try:
+            self.platform = (
+                get_release_platform(platform_id) if platform_id else detect_release_platform()
+            )
+        except ReleasePlatformError as exc:
+            raise CatalogConfigurationError(str(exc)) from exc
 
     def check(self, channel: str, current_version: str) -> dict | None:
         self.last_error = None
@@ -100,8 +112,10 @@ class ReleaseCatalog:
             normalized = validate_manifest(manifest)
             if normalized["version"] != str(version):
                 raise CatalogResponseError("tag et version du manifeste différents")
+            if normalized["platform"] != self.platform.identifier:
+                raise CatalogResponseError("plateforme du manifeste différente de la machine")
             self._validate_asset_url(normalized["archive_url"])
-            archive_name = f"clios-{version}-bookworm-arm64.tar.gz"
+            archive_name = f"clios-{version}-{self.platform.target}.tar.gz"
             release_assets = {
                 str(candidate.get("name")): candidate
                 for candidate in release.get("assets", []) if isinstance(candidate, dict)
@@ -139,8 +153,10 @@ class ReleaseCatalog:
                 manifest = validate_manifest(self._fetch_json(str(asset["browser_download_url"]), use_cache=False))
                 if manifest["version"] != version:
                     break
+                if manifest["platform"] != self.platform.identifier:
+                    break
                 self._validate_asset_url(manifest["archive_url"])
-                archive_name = f"clios-{version}-bookworm-arm64.tar.gz"
+                archive_name = f"clios-{version}-{self.platform.target}.tar.gz"
                 archive = next((
                     entry for entry in item.get("assets", [])
                     if isinstance(entry, dict) and entry.get("name") == archive_name
@@ -225,10 +241,9 @@ class ReleaseCatalog:
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise CatalogResponseError("réponse GitHub non JSON") from exc
 
-    @staticmethod
-    def _manifest_asset(release: dict, version: str) -> dict | None:
+    def _manifest_asset(self, release: dict, version: str) -> dict | None:
         channel = "beta" if SemVer.parse(version).prerelease else "stable"
-        expected = f"clios-{version}-{channel}.json"
+        expected = f"clios-{version}-{self.platform.target}-{channel}.json"
         for asset in release.get("assets", []):
             if isinstance(asset, dict) and asset.get("name") == expected and asset.get("browser_download_url"):
                 return asset

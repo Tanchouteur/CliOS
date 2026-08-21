@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ACTION="${1:-}"
+BLOCK_NAME="${2:-}"
+MEDIA_ROOT="/media/clios"
+LOCK_FILE="/run/lock/clios-usb-mount.lock"
+
+log() {
+    logger -t clios-usb-mount -- "$*"
+}
+
+fail() {
+    log "ERREUR: $*"
+    echo "clios-usb-mount: $*" >&2
+    exit 1
+}
+
+if [[ "$ACTION" != "mount" && "$ACTION" != "unmount" ]]; then
+    fail "action refusée (mount ou unmount attendu)"
+fi
+
+if [[ ! "$BLOCK_NAME" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+    fail "nom de périphérique invalide"
+fi
+
+DEVICE="/dev/${BLOCK_NAME}"
+MOUNT_POINT="${MEDIA_ROOT}/${BLOCK_NAME}"
+
+mkdir -p "$(dirname "$LOCK_FILE")"
+exec 9>"$LOCK_FILE"
+flock 9
+
+device_is_usb() {
+    local properties
+    properties="$(udevadm info --query=property --name="$DEVICE" 2>/dev/null || true)"
+    grep -q '^ID_BUS=usb$' <<<"$properties" || grep -q '^ID_PATH=.*usb' <<<"$properties"
+}
+
+mounted_source() {
+    findmnt --noheadings --raw --mountpoint "$MOUNT_POINT" --output SOURCE 2>/dev/null || true
+}
+
+mount_device() {
+    local attempt filesystem group_id source
+    for attempt in {1..20}; do
+        [[ -b "$DEVICE" ]] && break
+        sleep 0.1
+    done
+    [[ -b "$DEVICE" ]] || fail "${DEVICE} n'est pas un périphérique bloc"
+    device_is_usb || fail "${DEVICE} n'est pas un stockage USB autorisé"
+
+    filesystem="$(lsblk --noheadings --nodeps --output FSTYPE "$DEVICE" | xargs)"
+    [[ -n "$filesystem" ]] || fail "aucun système de fichiers détecté sur ${DEVICE}"
+
+    source="$(mounted_source)"
+    if [[ -n "$source" ]]; then
+        [[ "$(readlink -f "$source" 2>/dev/null || true)" == "$(readlink -f "$DEVICE")" ]] \
+            || fail "${MOUNT_POINT} est déjà utilisé par ${source}"
+        return 0
+    fi
+
+    mkdir -p "$MOUNT_POINT"
+    group_id="$(getent group clios | cut -d: -f3)"
+    [[ -n "$group_id" ]] || fail "le groupe clios est introuvable"
+
+    case "$filesystem" in
+        vfat|msdos|exfat|ntfs|ntfs3)
+            mount -o "rw,nosuid,nodev,noexec,uid=0,gid=${group_id},dmask=0002,fmask=0113" \
+                "$DEVICE" "$MOUNT_POINT"
+            ;;
+        *)
+            mount -o rw,nosuid,nodev,noexec "$DEVICE" "$MOUNT_POINT"
+            ;;
+    esac
+
+    mkdir -p "${MOUNT_POINT}/clios"
+    chown root:clios "${MOUNT_POINT}/clios" 2>/dev/null || true
+    chmod 2775 "${MOUNT_POINT}/clios" 2>/dev/null || true
+    log "${DEVICE} (${filesystem}) monté sur ${MOUNT_POINT}"
+}
+
+unmount_device() {
+    local source
+    source="$(mounted_source)"
+    if [[ -z "$source" ]]; then
+        rmdir "$MOUNT_POINT" 2>/dev/null || true
+        return 0
+    fi
+
+    umount "$MOUNT_POINT" 2>/dev/null || umount --lazy "$MOUNT_POINT"
+    rmdir "$MOUNT_POINT" 2>/dev/null || true
+    log "${source} démonté de ${MOUNT_POINT}"
+}
+
+case "$ACTION" in
+    mount) mount_device ;;
+    unmount) unmount_device ;;
+esac

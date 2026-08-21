@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vérifie qu'un wheelhouse couvre entièrement le lock Bookworm ARM64."""
+"""Vérifie qu'un wheelhouse couvre entièrement un lock ARM64."""
 
 from __future__ import annotations
 

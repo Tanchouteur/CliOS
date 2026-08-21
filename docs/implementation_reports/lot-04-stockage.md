@@ -20,6 +20,12 @@ Les releases vivent sous `/opt/clios/releases`, l’active sous
 `/run/clios`. Le branchement USB déclenche une copie sans écrasement avec
 gestion explicite des conflits.
 
+Sur une installation kiosk sans bureau, udev demande à systemd de monter les
+partitions de stockage USB sous `/media/clios/<périphérique>`. Le montage est
+lié à la présence du périphérique et le dossier de données `clios/` est créé
+avec les droits du groupe `clios`. FAT, exFAT, NTFS et les systèmes de fichiers
+Linux pris en charge par le noyau sont acceptés.
+
 ## Compatibilité et retour arrière
 
 Les formats de données garantissent la lecture N-1. Les migrations sont
@@ -27,5 +33,5 @@ additives ou réversibles et précédées d’une sauvegarde.
 
 ## Vérifications réalisées
 
-Tests de détection OverlayFS depuis les montages, priorités USB/interne/RAM,
-transitions de stockage et migration non destructive.
+Tests de détection OverlayFS depuis les montages, contrat udev/systemd,
+priorités USB/interne/RAM, transitions de stockage et migration non destructive.

@@ -5,6 +5,7 @@ Ce document est la fiche de preuve à compléter avant de créer le tag stable.
 ## Raspberry Pi 5 — obligatoire
 
 - [ ] installation propre Raspberry Pi OS Bookworm 64 bits ;
+- [ ] installation propre Raspberry Pi OS Trixie 64 bits ;
 - [ ] rendu et tactile en 1920×720 ;
 - [ ] réception et diagnostic sur interface CAN réelle ;
 - [ ] mise à jour depuis une installation v2.0.0 ;

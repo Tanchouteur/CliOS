@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from functools import total_ordering
 from urllib.parse import urlparse
 
+from src.release_platform import SUPPORTED_PLATFORMS
+
 
 class ReleaseContractError(ValueError):
     """Une version ou un manifeste ne respecte pas le contrat public."""
@@ -113,7 +115,7 @@ def validate_manifest(manifest: object, *, require_https: bool = True) -> dict:
         raise ReleaseContractError(
             f"canal {channel!r} contradictoire avec la version {version} ({expected_channel})"
         )
-    if manifest["platform"] != "raspberry-pi-os-bookworm-arm64":
+    if manifest["platform"] not in SUPPORTED_PLATFORMS:
         raise ReleaseContractError("plateforme de release non prise en charge")
     archive_url = str(manifest["archive_url"])
     parsed = urlparse(archive_url)

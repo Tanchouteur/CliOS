@@ -18,7 +18,8 @@ La CI CliOS fait échouer le contrôle si l’un de ces points échoue :
 - chargement QML hors écran, avec les sept routes des cinq thèmes ;
 - états d’erreur, données manquantes et confirmations du smoke test ;
 - syntaxe des scripts shell ;
-- installation sur Debian Bookworm dans Docker.
+- installation sur Debian Bookworm dans Docker, puis builds et self-checks ARM64
+  parallèles pour Bookworm/Python 3.11 et Trixie/Python 3.13.
 
 La CI ne remplace ni le test sur Pi 4/5 ni le test avec une vraie interface CAN.
 Elle ne publie pas non plus une release toute seule : elle indique si le commit

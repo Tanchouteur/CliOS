@@ -1,15 +1,16 @@
 # CliOS v2.0.1
 
-Cette version consolide la livraison ARM64 Bookworm et remplace les mises à
+Cette version consolide la livraison ARM64 Bookworm/Trixie et remplace les mises à
 jour fondées sur Git par une chaîne GitHub Releases vérifiée par SHA-256.
 
 ## Mise à jour
 
 - catalogue officiel GitHub avec canaux stable et bêta, SemVer complet, ETag et cache ;
-- archive installable ARM64, manifeste v1 et `SHA256SUMS` produits à chaque tag ;
-- wheelhouse Bookworm ARM64 et lock Python strictement versionné et hashé ;
+- archives installables Bookworm/Python 3.11 et Trixie/Python 3.13, manifestes v1 et `SHA256SUMS` produits à chaque tag ;
+- wheelhouses ARM64 par plateforme et locks Python strictement versionnés et hashés ;
 - staging isolé, activation atomique, contrôle du premier démarrage et rollback N-1 ;
 - cockpit avec états détaillés, recherche réseau limitée à une fois par 24 h et diagnostic updater.
+- montage automatique des clés de données USB par udev/systemd, y compris sans bureau graphique.
 
 ## Sécurité
 
@@ -19,6 +20,6 @@ self-checks s'exécutent sous l'utilisateur non privilégié `clios`.
 
 ## Matériel
 
-La qualification finale cible Raspberry Pi 5, Raspberry Pi OS Bookworm 64 bits,
+La qualification finale cible Raspberry Pi 5, Raspberry Pi OS Bookworm ou Trixie 64 bits,
 écran 1920×720 et interface CAN réelle. La validation Raspberry Pi 4 est
 explicitement différée à une version ultérieure.

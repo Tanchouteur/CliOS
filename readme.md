@@ -1,6 +1,6 @@
 # CliOS
 
-> CliOS 2.0 officially targets Raspberry Pi OS Bookworm 64-bit on Raspberry Pi 4/5 with a 1920×720 display. Other resolutions and desktop platforms remain experimental development targets.
+> CliOS 2.0.1 officially targets Raspberry Pi OS Bookworm or Trixie 64-bit on Raspberry Pi 4/5 with a 1920×720 display. Other resolutions and desktop platforms remain experimental development targets.
 
 <div align="center">
 
