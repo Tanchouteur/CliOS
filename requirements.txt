@@ -9,7 +9,7 @@ pyserial==3.5
 pyudev~=0.24.3; sys_platform == "linux"
 PySide6-Addons~=6.8.0
 PySide6-Essentials~=6.8.0
-shiboken6~=6.8.0
+shiboken6~=6.11.2
 standard-aifc==3.13.0; python_version >= "3.13"
 audioop-lts==0.2.2; python_version >= "3.13"
 jsonschema~=4.25.1
