@@ -81,7 +81,7 @@ Item {
                     width: 260; height: 50; radius: 10
                     color: T.StyleManager.accent
                     Text { anchors.centerIn: parent; text: "CONTINUER LE TRAJET"; color: "#000000"; font.pixelSize: 14; font.bold: true }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: bridge.resumeTripSession() }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.actionRequested("resume_trip") }
                 }
 
                 Rectangle {

@@ -3,6 +3,7 @@
 # CliOS - Script de Mise à Jour Automatique
 # Description: Récupère les dernières modifications Git, met à jour les dépendances
 #              Python (.venv) et réapplique les permissions.
+# Développement uniquement : la production utilise tools/release_cli.py.
 # ==============================================================================
 
 set -eo pipefail
@@ -12,6 +13,7 @@ PROJECT_DIR="${SCRIPT_DIR}"
 VENV_PIP="${PROJECT_DIR}/.venv/bin/pip"
 
 echo -e "\033[1;34m▶ [1/3] Récupération des mises à jour depuis GitHub...\033[0m"
+echo -e "\033[1;33m⚠ Outil de développement uniquement. Utilisez release_cli.py en production.\033[0m"
 cd "$PROJECT_DIR"
 
 if ! git rev-parse --is-inside-work-tree &>/dev/null; then

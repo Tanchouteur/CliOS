@@ -1,0 +1,1 @@
+"""Gabarits communautaires CliOS."""

@@ -14,10 +14,10 @@ VehicleRuntime → VehicleStateStore
         ├──► services dérivés (VehicleMetrics, Dynamics, TripStats)
         │
         ▼
-DashboardBridge (contrat structuré uniquement)
+DashboardBridge (contrat structuré et commandes AppShell)
         │
         ▼
-UiState.qml (façade sémantique) → dashboards
+UiState.qml → AppShell → dashboards Theme API v1
 ```
 
 `VehicleStateStore` est l'unique source de vérité runtime. Un producteur ne
@@ -85,7 +85,7 @@ visible au lieu d'être silencieusement rangée dans un fourre-tout.
 
 ## Frontend
 
-`DashboardBridge` n'expose que les propriétés structurées. Les quatre styles
+`DashboardBridge` n'expose que les propriétés structurées. Les cinq styles
 livrés lisent leurs valeurs d'affichage via les propriétés sémantiques de
 `UiState.qml`. Les pages développeur peuvent explorer les domaines et leur
 métadonnée, sans reconstruire une carte plate.
@@ -98,8 +98,18 @@ n'existent plus ; les noms physiques sont
 La surface Qt est volontairement limitée à : `vehicleState`, `tripState`,
 `diagnosticsState`, `systemState`, `sessionState`, `calibrationState`,
 `presentationState`, `dataQuality` et `config`. Les signaux Qt portent le même
-nom avec le suffixe `Changed`. Les commandes restent des slots explicites
-(`resetTripA`, `endTripSession`, `requestDiagnosticScan`, etc.).
+nom avec le suffixe `Changed`. Les dashboards n'appellent aucun slot : ils
+émettent `commandRequested` et `settingsRequested`. `AppShell` centralise les
+routes, l'historique, les confirmations et la journalisation de la vitesse,
+puis appelle `executeUiCommand`.
+
+## Déploiement et données
+
+Le code versionné vit dans `/opt/clios/releases/<version>` et le lien atomique
+`/opt/clios/current` désigne la release active. Les données suivent la priorité
+USB CliOS, `/var/lib/clios` sur racine persistante, puis `/run/clios` lorsque la
+racine est un OverlayFS. Le lanceur restaure N-1 si la nouvelle release ne pose
+pas son marqueur de santé.
 
 ## Fréquences et responsabilités
 

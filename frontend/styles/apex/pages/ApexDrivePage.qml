@@ -210,7 +210,7 @@ Item {
                             id: sessionTouch
                             anchors.fill: parent
                             onClicked: {
-                                if (S.UiState.sessionState === "PAUSED") bridge.resumeTripSession()
+                                if (S.UiState.sessionState === "PAUSED") root.actionRequested("resume_trip")
                                 else root.actionRequested("end_trip")
                             }
                         }

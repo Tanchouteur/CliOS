@@ -5,7 +5,7 @@ import copy
 import os
 import sys
 
-from PySide6.QtCore import QObject, Property, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, Property, QTimer, Signal, Slot, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
@@ -101,6 +101,8 @@ class FakeBridge(QObject):
             "health": health,
             "storage": storage,
         }
+        self.commands = []
+        self._update_channel = "stable"
 
     @Property("QVariant", notify=vehicleStateChanged)
     def vehicleState(self):
@@ -230,12 +232,32 @@ class FakeBridge(QObject):
     def exportDiagnosticBundle(self):
         return "/tmp/clios-diagnostic.zip"
 
+    @Slot(result=str)
+    def getUpdateChannel(self):
+        return self._update_channel
+
+    @Slot(str, result=bool)
+    def setUpdateChannel(self, channel):
+        if channel not in {"stable", "beta"}:
+            return False
+        self._update_channel = channel
+        return True
+
+    @Slot()
+    def checkForUpdates(self):
+        pass
+
     @Slot(str, result=str)
     def getServiceParameters(self, _service):
         return "[]"
 
     @Slot(str, result=bool)
     def setActiveProfile(self, _profile):
+        return True
+
+    @Slot(str, float, result=bool)
+    def executeUiCommand(self, _command, _speed):
+        self.commands.append(_command)
         return True
 
     @Slot(str, str, str, str, str, result=bool)
@@ -256,6 +278,15 @@ def main():
     args = parser.parse_args()
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    qml_messages = []
+
+    def message_handler(_msg_type, context, message):
+        source = getattr(context, "file", None) or ""
+        lowered = message.lower()
+        if source.endswith(".qml") or "qml" in lowered or "referenceerror" in lowered or "typeerror" in lowered:
+            qml_messages.append(f"{source}: {message}")
+
+    previous_handler = qInstallMessageHandler(message_handler)
     QQuickStyle.setStyle("Basic")
     app = QGuiApplication(sys.argv)
     engine = QQmlApplicationEngine()
@@ -282,11 +313,8 @@ def main():
     window.setWidth(1920)
     window.setHeight(720)
     routes_by_style = {
-        "gt_modern": ["drive", "trip", "performance", "diagnostic", "menu", "appearance", "vehicle", "services", "system", "developer"],
-        "apex": ["drive", "perf", "menu"],
-        "atelier_luxe": ["main"],
-        "jdm_mugen": ["drive"],
-        "legacy_dashboard": ["main"],
+        style: ["home", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
+        for style in ("apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard")
     }
     styles = ["apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard"]
     failures = []
@@ -384,6 +412,10 @@ def main():
         QTimer.singleShot(180, finish_special)
 
     def advance():
+        if not bridge.commands:
+            shell = window.findChild(QObject, "appShell")
+            if shell is not None:
+                shell.requestCommand("resume_trip")
         if state["style"] >= len(styles):
             QTimer.singleShot(100, run_special)
             return
@@ -403,8 +435,13 @@ def main():
             active_dashboard = window.findChild(QObject, object_name)
             if active_dashboard is None:
                 failures.append(f"dashboard introuvable: {style}")
-            elif route != "main":
-                active_dashboard.navigate(route)
+            shell = window.findChild(QObject, "appShell")
+            if shell is None:
+                failures.append("AppShell introuvable")
+            elif route == "home":
+                shell.openRoute("home")
+            else:
+                shell.openRoute(route)
 
             QTimer.singleShot(400, capture)
 
@@ -420,6 +457,10 @@ def main():
 
     QTimer.singleShot(200, advance)
     app.exec()
+    qInstallMessageHandler(previous_handler)
+    failures.extend(qml_messages)
+    if "resume_trip" not in bridge.commands:
+        failures.append("commande principale resume_trip non transmise par AppShell")
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1

@@ -1,8 +1,17 @@
 import QtQuick
-import "../gt_modern" as GtModern
+import "../../state" as S
 
-// Ce point d'entrée réutilise le cockpit GT avec la palette du manifeste.
-// Remplacez GtModern.Dashboard par votre propre Item pour changer toute la disposition.
-GtModern.Dashboard {
+Item {
+    signal settingsRequested(string route)
+    signal commandRequested(string command)
     anchors.fill: parent
+
+    Text {
+        anchors.centerIn: parent
+        text: Math.round(S.UiState.speed) + " km/h"
+        color: "white"
+        font.pixelSize: 72
+    }
+
+    MouseArea { anchors.fill: parent; onClicked: parent.settingsRequested("appearance") }
 }

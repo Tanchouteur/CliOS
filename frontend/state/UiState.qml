@@ -258,10 +258,13 @@ QtObject {
     readonly property real appRamMb: number(telemetryState.app_ram_mb, 0)
 
     readonly property bool usbConnected: storageState.usb_connected === true
-    readonly property bool ramMode: !usbConnected || storageState.mode === "RAM"
+    readonly property bool ramMode: storageState.mode === "RAM"
     readonly property real storageFreeMb: number(storageState.free_space_mb, 0)
     readonly property string storageMode: text(storageState.mode, "UNKNOWN")
     readonly property string systemVersion: text(systemState.version, "unknown")
+    readonly property var recoveryState: systemState.recovery || ({})
+    readonly property bool recoveryMode: recoveryState.active === true
+    readonly property string recoveryMessage: text(recoveryState.message, "")
 
     // Diagnostic OBD
     readonly property bool isScanning: diagnosticsState.scanning === true

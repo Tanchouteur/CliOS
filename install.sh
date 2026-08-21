@@ -604,7 +604,22 @@ if [[ $VENV_ONLY -eq 1 || "$OS_NAME" != "Linux" ]]; then
 else
     echo -e "CliOS peut se lancer automatiquement en plein écran au démarrage via le compositeur Wayland ${C_BOLD}Cage${C_RESET} (sans nécessiter de bureau)."
     if prompt_confirm "Voulez-vous installer le service de démarrage Kiosk (clios.service) ?" "N"; then
-        
+        RELEASE_VERSION="$(tr -d '[:space:]' < "${PROJECT_DIR}/VERSION")"
+        RELEASE_DIR="/opt/clios/releases/${RELEASE_VERSION}"
+        run_sudo_cmd "Création du répertoire de release" mkdir -p "${RELEASE_DIR}" /var/lib/clios /run/clios
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_dry "Copie de ${PROJECT_DIR} vers ${RELEASE_DIR} puis lien /opt/clios/current"
+        else
+            run_sudo_cmd "Installation de la release ${RELEASE_VERSION}" cp -a "${PROJECT_DIR}/." "${RELEASE_DIR}/"
+            run_sudo_cmd "Activation initiale de la release" ln -sfn "${RELEASE_DIR}" /opt/clios/current
+            for legacy_dir in dash_save trips trips_mock logs; do
+                if [[ -d "${PROJECT_DIR}/data/${legacy_dir}" ]]; then
+                    run_sudo_cmd "Préparation du stockage ${legacy_dir}" mkdir -p "/var/lib/clios/${legacy_dir}"
+                    run_sudo_cmd "Migration non destructive de ${legacy_dir}" cp -an "${PROJECT_DIR}/data/${legacy_dir}/." "/var/lib/clios/${legacy_dir}/"
+                fi
+            done
+        fi
+
         USER_UID="$(id -u "$CURRENT_USER" 2>/dev/null || echo 1000)"
         TMP_SERVICE_FILE="/tmp/clios.service"
         cat << EOF > "$TMP_SERVICE_FILE"
@@ -616,11 +631,13 @@ Wants=can0.service
 [Service]
 Type=simple
 User=${CURRENT_USER}
+StateDirectory=clios
+RuntimeDirectory=clios
 PAMName=login
-WorkingDirectory=${PROJECT_DIR}
+WorkingDirectory=/opt/clios/current
 Environment=XDG_RUNTIME_DIR=/run/user/${USER_UID}
 Environment=QT_QPA_PLATFORM=wayland
-ExecStart=/usr/bin/cage -s -- ${PROJECT_DIR}/.venv/bin/python3 -u ${PROJECT_DIR}/main.py --ui gui
+ExecStart=/usr/bin/cage -s -- /usr/bin/python3 -u /opt/clios/current/tools/clios_launcher.py -- --ui gui
 Restart=on-failure
 RestartSec=3
 

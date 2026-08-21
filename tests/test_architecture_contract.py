@@ -11,12 +11,38 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class ArchitectureContractTest(unittest.TestCase):
+    def test_normal_shutdown_never_uses_os_exit(self):
+        for relative in ("main.py", "src/qt_bridge.py"):
+            with open(os.path.join(ROOT, relative), encoding="utf-8") as stream:
+                self.assertNotIn("os._exit", stream.read())
+
+    def test_every_bridge_reference_in_qml_exists_on_dashboard_bridge(self):
+        meta = DashboardBridge.staticMetaObject
+        exposed = {
+            meta.property(index).name()
+            for index in range(meta.propertyOffset(), meta.propertyCount())
+        }
+        exposed.update(
+            bytes(meta.method(index).name()).decode("utf-8")
+            for index in range(meta.methodOffset(), meta.methodCount())
+        )
+        references = set()
+        frontend = os.path.join(ROOT, "frontend")
+        for base, _dirs, files in os.walk(frontend):
+            for filename in files:
+                if filename.endswith(".qml"):
+                    with open(os.path.join(base, filename), encoding="utf-8") as stream:
+                        references.update(re.findall(r"\bbridge\.(\w+)", stream.read()))
+        self.assertEqual(references - exposed, set())
+
     def test_every_decoded_can_signal_has_an_explicit_catalog_domain(self):
         path = os.path.join(ROOT, "data", "can", "can_moteur_clio3.json")
         with open(path, encoding="utf-8") as stream:
             database = json.load(stream)
         decoded_names = set()
-        for frame in database.values():
+        for frame_id, frame in database.items():
+            if frame_id == "schema_version":
+                continue
             for name, signal in frame["signals"].items():
                 decoded_names.update(signal.get("bits", {name: None}).keys())
         self.assertEqual(decoded_names - SIGNALS.keys(), set())
@@ -76,6 +102,26 @@ class ArchitectureContractTest(unittest.TestCase):
                     if reference not in declared:
                         missing.append(f"{os.path.relpath(path, ROOT)}:{reference}")
         self.assertEqual(missing, [])
+
+    def test_official_themes_only_use_theme_api_v1(self):
+        styles = os.path.join(ROOT, "frontend", "styles")
+        offenders = []
+        for style_id in ("gt_modern", "apex", "atelier_luxe", "jdm_mugen", "legacy_dashboard"):
+            dashboard = os.path.join(styles, style_id, "Dashboard.qml")
+            with open(dashboard, encoding="utf-8") as stream:
+                source = stream.read()
+            for signal in ("settingsRequested", "commandRequested"):
+                if not re.search(rf"\bsignal\s+{signal}\s*\(", source):
+                    offenders.append(f"{style_id}: signal {signal} manquant")
+            for base, _dirs, files in os.walk(os.path.join(styles, style_id)):
+                for filename in files:
+                    if not filename.endswith(".qml"):
+                        continue
+                    with open(os.path.join(base, filename), encoding="utf-8") as stream:
+                        qml = stream.read()
+                    if re.search(r"\bbridge\.", qml) or "shared_pages" in qml:
+                        offenders.append(os.path.relpath(os.path.join(base, filename), ROOT))
+        self.assertEqual(offenders, [])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clios.dev/schemas/v1/can-dictionary.schema.json",
+  "title": "CliOS CAN dictionary v1",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {"schema_version": {"const": 1}},
+  "patternProperties": {
+    "^0x[0-9a-fA-F]+$": {
+      "type": "object",
+      "required": ["name", "signals"],
+      "properties": {
+        "name": {"type": "string"},
+        "signals": {"type": "object", "minProperties": 1}
+      }
+    }
+  },
+  "additionalProperties": false
+}

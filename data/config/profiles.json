@@ -1,4 +1,5 @@
 {
+    "schema_version": 1,
     "active_profile": "clio3diesel",
     "profiles": {
         "clio3diesel": {

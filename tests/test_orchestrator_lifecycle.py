@@ -45,3 +45,35 @@ class OrchestratorLifecycleTest(unittest.TestCase):
         self.assertEqual(service.starts, 2)
         orchestrator.stop_all()
 
+    def test_stop_all_continues_after_service_error(self):
+        stopped = []
+
+        class BrokenService:
+            service_name = "broken"
+            _thread = None
+
+            def start(self, _event):
+                pass
+
+            def stop(self):
+                raise RuntimeError("boom")
+
+            def get_health(self):
+                return {"status": "OK", "message": ""}
+
+        class HealthyService(BrokenService):
+            service_name = "healthy"
+
+            def stop(self):
+                stopped.append(self.service_name)
+
+        orchestrator = SystemOrchestrator()
+        orchestrator.add_service(BrokenService())
+        orchestrator.add_service(HealthyService())
+        orchestrator.start_all()
+
+        report = orchestrator.stop_all()
+
+        self.assertEqual(stopped, ["healthy"])
+        self.assertIn("broken", report["errors"])
+        self.assertIn("healthy", report["stopped"])

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clios.dev/schemas/v1/theme-manifest.schema.json",
+  "title": "CliOS Theme API v1 manifest",
+  "type": "object",
+  "required": ["apiVersion", "id", "label", "dashboard", "minCliOSVersion", "supportedResolutions", "capabilities", "palette"],
+  "properties": {
+    "apiVersion": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "label": {"type": "string", "minLength": 1},
+    "dashboard": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+\\.qml$"},
+    "minCliOSVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "supportedResolutions": {"type": "array", "contains": {"const": "1920x720"}},
+    "capabilities": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "palette": {
+      "type": "object",
+      "required": ["background", "surface", "surfaceRaised", "surfaceSoft", "text", "textSecondary", "outline", "gaugeTrack"],
+      "additionalProperties": {"type": "string"}
+    }
+  }
+}

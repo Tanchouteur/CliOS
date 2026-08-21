@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python-qml:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install PySide6 jsonschema psutil python-can pyserial
+      - name: Compile Python
+        run: python -m compileall -q main.py src tools tests
+      - name: Validate JSON and manifests
+        run: python tools/validate_data.py --all
+      - name: Unit and QML compile tests
+        run: python -m unittest discover -s tests -v
+      - name: QML route smoke test
+        run: python tools/qml_smoke.py
+      - name: Shell syntax
+        run: bash -n install.sh update.sh tools/*.sh
+
+  installer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n install.sh update.sh tools/*.sh
+      - run: tools/test_install_docker.sh

@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "0x0c2": {
     "name": "STEERING_DATA",
     "signals": {

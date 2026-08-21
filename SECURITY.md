@@ -16,7 +16,7 @@ La maintenance de sécurité est assurée exclusivement sur la branche principal
 La divulgation publique d'une faille de sécurité est proscrite afin de protéger les utilisateurs du système. Pour signaler une vulnérabilité, veuillez suivre la procédure suivante :
 
 1. Ne pas ouvrir d'Issue publique.
-2. Envoyer un rapport détaillé par courriel à : **[VOTRE_EMAIL_ICI]**
+2. Envoyer un rapport détaillé par courriel à : **louis.tanchouøgmail.com**
 3. Inclure dans le rapport :
    - La nature de la faille (Injection, élévation de privilèges, déni de service, etc.).
    - Le vecteur d'attaque et les composants affectés (ex: API, service CAN).

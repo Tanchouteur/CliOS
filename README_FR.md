@@ -1,5 +1,7 @@
 # CliOS
 
+> CliOS 2.0 cible officiellement Raspberry Pi OS Bookworm 64 bits sur Raspberry Pi 4/5 avec un écran 1920×720. Les autres résolutions et les postes desktop restent des cibles expérimentales de développement.
+
 <div align="center">
 
 **Systeme d'exploitation et tableau de bord numerique modulaire pour automobile.**  
@@ -32,6 +34,13 @@
 - **DSP Audio et Eclairage d'ambiance** : Synthese sonore dynamique du moteur / filtrage du bruit d'habitacle (`pyo`) et synchronisation de bandeaux LED BLE.
 - **Mode simulation sans materiel** : Moteur de simulation physique et CAN interactif pour tester et developper sur macOS, Linux ou Windows sans vehicule.
 - **Demarrage rapide Raspberry Pi 5** : Lancement automatique en mode Kiosk Wayland (`cage`) en moins de 5 secondes au contact.
+- **Releases sûres** : préparation vérifiée par SHA-256, activation atomique de `/opt/clios/current`, contrôle de santé au premier démarrage et rollback N-1 automatique.
+
+## Compatibilité CliOS 2.x
+
+Theme API v1 et les schémas v1 de thème, véhicule, CAN et profils restent stables pendant toute la série 2.x. Une future rupture exige une nouvelle version majeure d’API. Les thèmes locaux sont du QML de confiance non sandboxé et ne sont chargés qu’en mode développeur. Les services Python restent inscrits statiquement et doivent être relus dans ce dépôt.
+
+Parcours communauté : [créer un thème, adapter un véhicule et développer un service](docs/community_fr.md). Validation : `python3 tools/validate_data.py --all`.
 
 ---
 
@@ -74,7 +83,7 @@ Pour faire fonctionner CliOS dans une vraie voiture, les elements suivants sont 
 1. **Ordinateur monocarte (SBC)** :
    - Raspberry Pi 5 (recommande) ou Raspberry Pi 4 sous Raspberry Pi OS 64-bit / Debian.
 2. **Ecran** :
-   - Ecran bandeau ultra-large 1920x720 (HDMI ou DSI) ou tout autre ecran tactile integre.
+   - Écran bandeau ultra-large 1920×720 (HDMI ou DSI). C’est le seul format garanti ; les autres sont expérimentaux.
 3. **Adaptateur / Modem CAN** :
    - Tout adaptateur compatible SocketCAN sous Linux (branche sur la prise OBD-II ou directement sur les fils CAN High / CAN Low).
    - Materiel teste et supporte : **InnoMaker USB-CAN**, **CANable / CandleLight** (gs_usb), **Waveshare CAN HAT**, ou dongles serie **SLCAN** (OBDLink SX, etc.).

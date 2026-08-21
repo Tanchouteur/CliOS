@@ -38,7 +38,10 @@ Item {
                         text: String(modelData)
                         subtext: String(modelData) === root.activeProfile ? "Profil chargé" : (String(modelData) === root.pendingProfile ? "Redémarrage requis" : "Disponible")
                         primary: String(modelData) === root.pendingProfile
-                        onClicked: { root.pendingProfile = String(modelData); bridge.switchProfile(String(modelData)) }
+                        onClicked: {
+                            if (bridge.setActiveProfile(String(modelData)))
+                                root.pendingProfile = String(modelData)
+                        }
                     }
                 }
             }

@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplica
 from src.logging_runtime import get_logger, get_recent_events
 from src.diagnostic_bundle import create_diagnostic_bundle
 from src.state_store import VEHICLE_DOMAINS
+from src.release_manager import ReleaseManager, ReleaseError
 
 
 class DashboardBridge(QObject):
@@ -22,6 +23,7 @@ class DashboardBridge(QObject):
     configChanged = Signal()
     notificationEvent = Signal(str, str, int, arguments=['level', 'message', 'duration'])
     openMaintenanceRequested = Signal()
+    exitRequested = Signal()
 
     def __init__(self, runtime, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
@@ -43,6 +45,13 @@ class DashboardBridge(QObject):
         self._config_writer_stop = threading.Event()
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self._ui_styles_dir = os.path.join(project_root, "frontend", "styles")
+        self._dev_styles_dir = os.path.join(project_root, "frontend", "dev_styles")
+        self._theme_diagnostics = []
+        try:
+            with open(os.path.join(project_root, "VERSION"), encoding="utf-8") as stream:
+                self._clios_version = tuple(int(part) for part in stream.read().strip().split("."))
+        except (OSError, ValueError):
+            self._clios_version = (0, 0, 0)
 
         self._config_path = config_path
         self._vehicle_state = {}
@@ -75,6 +84,9 @@ class DashboardBridge(QObject):
         self.timer_slow.start(1000)
 
         self.needs_restart = False
+        self.requested_power_action = ""
+        self._closed = False
+        self.exitRequested.connect(self._quit_qt)
 
     # Boucles de rafraîchissement.
     def _update_fast_data(self):
@@ -118,6 +130,11 @@ class DashboardBridge(QObject):
             "telemetry": telemetry,
             "health": self.orchestrator.get_system_health(),
             "storage": self._read_storage_status(),
+            "theme_diagnostics": self._theme_diagnostics,
+            "recovery": {
+                "active": bool(self.profile_manager and self.profile_manager.recovery_mode),
+                "message": self.profile_manager.error_message if self.profile_manager else "",
+            },
         })
         if new_system != self._system_state:
             self._system_state = new_system
@@ -192,48 +209,83 @@ class DashboardBridge(QObject):
 
     @Slot(result='QVariantList')
     def getAvailableUiStyles(self):
-        """Découvre les paquets UI placés dans frontend/styles/<id>/style.json."""
+        """Découvre uniquement les thèmes conformes à Theme API v1."""
         required_colors = {
             "background", "surface", "surfaceRaised", "surfaceSoft",
             "text", "textSecondary", "outline", "gaugeTrack",
         }
         styles = []
-        try:
-            entries = sorted(os.scandir(self._ui_styles_dir), key=lambda entry: entry.name)
-        except OSError as exc:
-            self.logger.error(f"Catalogue de styles illisible: {exc}", extra={"error_code": "UI_STYLE_CATALOG_ERROR"})
-            return []
+        diagnostics = []
+        official_ids = set()
+        developer_enabled = bool(self._config.get("developer", {}).get("enabled", False))
+        roots = [(self._ui_styles_dir, "styles", False)]
+        if developer_enabled:
+            roots.append((self._dev_styles_dir, "dev_styles", True))
 
-        for entry in entries:
-            if not entry.is_dir() or entry.name.startswith("_") or not entry.name.replace("_", "").isalnum():
-                continue
-            manifest_path = os.path.join(entry.path, "style.json")
+        for styles_root, qml_prefix, is_local in roots:
             try:
-                with open(manifest_path, "r", encoding="utf-8") as manifest_file:
-                    manifest = json.load(manifest_file)
-            except (OSError, json.JSONDecodeError, TypeError):
+                entries = sorted(os.scandir(styles_root), key=lambda entry: entry.name)
+            except OSError as exc:
+                if not is_local:
+                    diagnostics.append(f"Catalogue officiel illisible: {exc}")
                 continue
+            for entry in entries:
+                if not entry.is_dir() or entry.name.startswith("_") or not entry.name.replace("_", "").isalnum():
+                    continue
+                manifest_path = os.path.join(entry.path, "style.json")
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as manifest_file:
+                        manifest = json.load(manifest_file)
+                    style_id = str(manifest.get("id", ""))
+                    dashboard_file = os.path.basename(str(manifest.get("dashboard", "Dashboard.qml")))
+                    palette = manifest.get("palette", {})
+                    problems = []
+                    if style_id != entry.name:
+                        problems.append("id différent du dossier")
+                    if manifest.get("apiVersion") != 1:
+                        problems.append("apiVersion doit valoir 1")
+                    try:
+                        minimum = tuple(int(part) for part in str(manifest.get("minCliOSVersion", "")).split("."))
+                        if len(minimum) != 3 or minimum > self._clios_version:
+                            problems.append(f"requiert CliOS {manifest.get('minCliOSVersion')}")
+                    except ValueError:
+                        problems.append("minCliOSVersion invalide")
+                    if "1920x720" not in manifest.get("supportedResolutions", []):
+                        problems.append("résolution 1920x720 non déclarée")
+                    if not isinstance(manifest.get("capabilities"), list):
+                        problems.append("capabilities manquant")
+                    if not dashboard_file.endswith(".qml") or not os.path.isfile(os.path.join(entry.path, dashboard_file)):
+                        problems.append("dashboard QML manquant")
+                    if not isinstance(palette, dict) or not required_colors.issubset(palette):
+                        problems.append("palette incomplète")
+                    if is_local and style_id in official_ids:
+                        problems.append("un thème local ne peut pas remplacer un thème officiel")
+                    if problems:
+                        diagnostics.append(f"{entry.name}: " + "; ".join(problems))
+                        continue
+                except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                    diagnostics.append(f"{entry.name}: manifeste invalide ({exc})")
+                    continue
 
-            style_id = str(manifest.get("id", ""))
-            dashboard_file = os.path.basename(str(manifest.get("dashboard", "Dashboard.qml")))
-            palette = manifest.get("palette", {})
-            if style_id != entry.name or not dashboard_file.endswith(".qml"):
-                continue
-            if not isinstance(palette, dict) or not required_colors.issubset(palette):
-                continue
-            if not os.path.isfile(os.path.join(entry.path, dashboard_file)):
-                continue
+                if not is_local:
+                    official_ids.add(style_id)
+                styles.append({
+                    "id": style_id,
+                    "label": str(manifest.get("label", style_id)),
+                    "description": str(manifest.get("description", "")),
+                    "order": int(manifest.get("order", 100)),
+                    "dashboard": f"{qml_prefix}/{style_id}/{dashboard_file}",
+                    "palette": {key: str(palette[key]) for key in required_colors},
+                    "metrics": self._sanitize_for_qml(manifest.get("metrics", {})),
+                    "apiVersion": 1,
+                    "capabilities": self._sanitize_for_qml(manifest.get("capabilities", [])),
+                    "local": is_local,
+                    "trustedCodeWarning": "Code QML local de confiance, non sandboxé" if is_local else "",
+                })
 
-            styles.append({
-                "id": style_id,
-                "label": str(manifest.get("label", style_id)),
-                "description": str(manifest.get("description", "")),
-                "order": int(manifest.get("order", 100)),
-                "dashboard": f"styles/{style_id}/{dashboard_file}",
-                "palette": {key: str(palette[key]) for key in required_colors},
-                "metrics": self._sanitize_for_qml(manifest.get("metrics", {})),
-            })
-
+        self._theme_diagnostics = diagnostics
+        for message in diagnostics:
+            self.logger.error(message, extra={"error_code": "UI_THEME_INVALID"})
         styles.sort(key=lambda item: (item["order"], item["label"].lower()))
         return styles
 
@@ -341,6 +393,9 @@ class DashboardBridge(QObject):
 
     def close(self):
         """Vide la dernière configuration et arrête l'écrivain sérialisé."""
+        if self._closed:
+            return True
+        self._closed = True
         saved = self._write_current_config()
         self._config_writer_stop.set()
         self._config_write_requested.set()
@@ -369,6 +424,47 @@ class DashboardBridge(QObject):
 
     def send_notification(self, level: str, message: str, duration: int = 3000):
         self.notificationEvent.emit(level, message, duration)
+
+    @Slot(str, float, result=bool)
+    def executeUiCommand(self, command: str, speed_kmh: float = 0.0) -> bool:
+        """Point d'entrée unique des commandes émises par l'AppShell."""
+        self.logger.warning(
+            f"Commande UI '{command}' à {speed_kmh:.1f} km/h",
+            extra={"error_code": "UI_COMMAND", "speed_kmh": speed_kmh, "command": command},
+        )
+        actions = {
+            "reset_a": self.resetTripA,
+            "reset_b": self.resetTripB,
+            "reset_maintenance": self.resetMaintenance,
+            "end_trip": self.endTripSession,
+            "resume_trip": self.resumeTripSession,
+            "pause_trip": lambda: self.setSessionState("PAUSED"),
+            "quit": self.quitApplication,
+            "restart": self.restartApplication,
+            "reboot": self.rebootSystem,
+            "shutdown": self.shutdownSystem,
+            "diagnostic_scan": self.requestDiagnosticScan,
+            "gear_calibration_start": self.startGearCalibration,
+            "gear_calibration_stop": self.stopGearCalibration,
+            "toggle_overlayfs": self.toggleOverlayFs,
+        }
+        action = actions.get(command)
+        if action is not None:
+            action()
+            return True
+        for prefix, setter in {
+            "set_fuel_price:": self.updateFuelPrice,
+            "set_trip_b_fuel:": self.updateTripBFuel,
+            "set_trip_b_distance:": self.updateTripBDistance,
+        }.items():
+            if command.startswith(prefix):
+                try:
+                    setter(float(command[len(prefix):]))
+                    return True
+                except ValueError:
+                    break
+        self.logger.error(f"Commande UI inconnue: {command}", extra={"error_code": "UI_COMMAND_UNKNOWN"})
+        return False
 
     def _get_service_obj(self, service_name: str):
         for srv in self.orchestrator.services.keys():
@@ -439,7 +535,13 @@ class DashboardBridge(QObject):
         self.logger.warning("Ordre de redemarrage recu", extra={"error_code": "APP_RESTART_REQUEST"})
         self.send_notification("INFO", "Redémarrage de CliOS en cours...", 2000)
         self.needs_restart = True
-        QTimer.singleShot(400, QCoreApplication.instance().quit)
+        QTimer.singleShot(400, self.exitRequested.emit)
+
+    @Slot()
+    def _quit_qt(self):
+        app = QCoreApplication.instance()
+        if app is not None:
+            app.quit()
 
     @Slot(int, result=str)
     def getRecentLogs(self, limit: int = 100) -> str:
@@ -492,36 +594,58 @@ class DashboardBridge(QObject):
 
     @Slot()
     def triggerGitUpdate(self):
-        """Déclenche la mise à jour Git de CliOS en arrière-plan."""
-        self.logger.info("Déclenchement mise à jour Git", extra={"error_code": "MAINT_GIT_UPDATE"})
-        self.send_notification("INFO", "Mise à jour Git en cours...", 4000)
+        """Compatibilité dev uniquement; aucune mise à jour Git n'est lancée."""
+        self.logger.warning("triggerGitUpdate obsolète", extra={"error_code": "GIT_UPDATE_DISABLED"})
+        self.send_notification("WARNING", "Mise à jour Git désactivée en production", 4000)
 
-        def _update_task():
-            import subprocess
+    @Slot(result=str)
+    def getUpdateChannel(self) -> str:
+        channel = str(self._config.get("updates", {}).get("channel", "stable"))
+        return channel if channel in ReleaseManager.VALID_CHANNELS else "stable"
+
+    @Slot(str, result=bool)
+    def setUpdateChannel(self, channel: str) -> bool:
+        if channel not in ReleaseManager.VALID_CHANNELS:
+            self.send_notification("ERROR", "Canal de mise à jour inconnu", 3500)
+            return False
+        self.save_setting("updates.channel", channel)
+        try:
+            ReleaseManager().set_channel(channel)
+        except OSError as exc:
+            # La configuration véhicule reste la source persistante de l'UI en
+            # développement, où /var/lib/clios n'est pas forcément accessible.
+            self.logger.warning(
+                f"Canal non synchronisé avec le gestionnaire système: {exc}",
+                extra={"error_code": "RELEASE_CHANNEL_STATE_WARNING"},
+            )
+        label = "Bêta" if channel == "beta" else "Stable"
+        self.logger.info(
+            f"Canal de mise à jour sélectionné: {channel}",
+            extra={"error_code": "RELEASE_CHANNEL_CHANGED"},
+        )
+        self.send_notification("WARNING" if channel == "beta" else "SUCCESS", f"Canal {label} sélectionné", 3500)
+        return True
+
+    @Slot()
+    def checkForUpdates(self):
+        feed = str(self._config.get("updates", {}).get("feed", ""))
+        channel = self.getUpdateChannel()
+        if not feed:
+            self.send_notification("WARNING", "Aucun catalogue de releases configuré", 4000)
+            return
+
+        def task():
             try:
-                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                project_update_script = os.path.join(project_root, "update.sh")
-
-                if os.path.isfile(project_update_script):
-                    res = subprocess.run(["bash", project_update_script], cwd=project_root, capture_output=True, text=True, timeout=180)
+                release = ReleaseManager().check(feed, channel)
+                if release:
+                    self.send_notification("INFO", f"Release {release['version']} disponible", 5000)
                 else:
-                    res = subprocess.run(["git", "pull", "--rebase"], cwd=project_root, capture_output=True, text=True, timeout=60)
+                    self.send_notification("SUCCESS", "CliOS est à jour", 3500)
+            except (ReleaseError, OSError, ValueError) as exc:
+                self.logger.error(f"Recherche de release impossible: {exc}", extra={"error_code": "RELEASE_CHECK_ERROR"})
+                self.send_notification("ERROR", f"Recherche impossible: {str(exc)[:70]}", 5000)
 
-                if res.returncode == 0:
-                    self.logger.info(f"Mise à jour Git réussie: {res.stdout.strip()}", extra={"error_code": "GIT_PULL_SUCCESS"})
-                    self.send_notification("SUCCESS", "Mise à jour terminée ! Veuillez redémarrer CliOS.", 5000)
-                else:
-                    err_msg = res.stderr.strip() or res.stdout.strip() or "Code erreur non nul"
-                    self.logger.error(f"Échec mise à jour Git: {err_msg}", extra={"error_code": "GIT_PULL_ERROR"})
-                    self.send_notification("ERROR", f"Échec mise à jour : {err_msg[:60]}", 6000)
-            except subprocess.TimeoutExpired:
-                self.logger.error("Timeout lors de la mise à jour Git", extra={"error_code": "GIT_PULL_TIMEOUT"})
-                self.send_notification("ERROR", "Délai dépassé lors du git pull (pas d'accès Internet ?)", 5000)
-            except Exception as e:
-                self.logger.error(f"Erreur inattendue git pull: {e}", extra={"error_code": "GIT_PULL_EXCEPTION"})
-                self.send_notification("ERROR", f"Erreur màj: {str(e)[:50]}", 5000)
-
-        threading.Thread(target=_update_task, daemon=True, name="GitUpdateThread").start()
+        threading.Thread(target=task, daemon=True, name="ReleaseCheckThread").start()
 
     @Slot(result=str)
     def getSystemMaintenanceStatus(self) -> str:
@@ -745,21 +869,8 @@ class DashboardBridge(QObject):
 
     def _handle_exit(self, poweroff=False, reboot=False):
         import time
-        import os
-        import platform
 
         # Temps pour laisser l'UI afficher la notification
         time.sleep(1.0)
-
-        # Arrêt de l'orchestrateur (déclenche le .stop() de chaque service pour sauvegarder)
-        self.close()
-        self.orchestrator.stop_all()
-        time.sleep(0.8)
-
-        if reboot and platform.system() not in ["Darwin", "Windows"]:
-            os.system("sudo reboot")
-        elif poweroff and platform.system() not in ["Darwin", "Windows"]:
-            os.system("sudo poweroff")
-        else:
-            # os._exit(0) est plus radical que quit() pour s'assurer que le thread principal s'arrête
-            os._exit(0)
+        self.requested_power_action = "poweroff" if poweroff else ("reboot" if reboot else "quit")
+        self.exitRequested.emit()
