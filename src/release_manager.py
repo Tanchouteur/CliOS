@@ -192,6 +192,14 @@ class ReleaseManager:
         )
         if result.returncode:
             raise ReleaseError("self-check Python: " + (result.stderr or result.stdout))
+        if release_python.exists():
+            result = subprocess.run(
+                [python, "-c", "import PySide6, numpy, psutil, can, serial, pyudev, bleak, sounddevice, pyo"],
+                cwd=release_root, env=check_env, capture_output=True, text=True, timeout=60,
+                **run_options,
+            )
+            if result.returncode:
+                raise ReleaseError("self-check dépendances: " + (result.stderr or result.stdout))
         validator = release_root / "tools/validate_data.py"
         if validator.exists():
             result = subprocess.run(

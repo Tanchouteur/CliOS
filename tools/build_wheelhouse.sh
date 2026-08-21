@@ -11,6 +11,7 @@ mkdir -p "${WHEEL_DIR}"
 BUILD_VENV="$(mktemp -d -t clios-wheelhouse.XXXXXX)"
 trap 'rm -rf -- "${BUILD_VENV}"' EXIT
 python3 -m venv --system-site-packages "${BUILD_VENV}"
+export CFLAGS="${CFLAGS:-} -Wno-incompatible-pointer-types -Wno-error"
 "${BUILD_VENV}/bin/pip" wheel --require-hashes --wheel-dir "${WHEEL_DIR}" --requirement "${LOCK_FILE}"
 
 # Un wheel doit exister pour chaque exigence active : aucun build ne sera fait
