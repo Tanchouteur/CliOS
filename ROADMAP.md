@@ -2,7 +2,8 @@
 
 ## 2.0.1 stable
 
-Complete RC4 vehicle qualification, resolve any `fix/rc4-*` findings, and publish the signed stable release.
+Complete RC10 Raspberry Pi 5 and vehicle qualification, resolve only blocking
+findings, then publish the signed stable release without adding new features.
 
 ## 2.1
 
