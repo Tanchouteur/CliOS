@@ -147,6 +147,23 @@ class ArchitectureContractTest(unittest.TestCase):
             self.assertIn("signal backRequested()", source, filename)
             self.assertIn("PageHeader", source, filename)
 
+    def test_jdm_needles_are_instantaneous_with_visual_motion_trails(self):
+        components = os.path.join(ROOT, "frontend", "styles", "jdm_mugen", "components")
+        for filename, direct_value in (("MugenTachometer.qml", "currentRpm / dialMaxRpm"), ("MugenSpeedometer.qml", "currentSpeed / dialMaxSpeed")):
+            with open(os.path.join(components, filename), encoding="utf-8") as stream:
+                source = stream.read()
+            self.assertIn(direct_value, source, filename)
+            self.assertIn("motionTrailOpacity", source, filename)
+            self.assertNotIn("smoothRpm", source, filename)
+            self.assertNotIn("smoothSpeed", source, filename)
+
+        with open(os.path.join(components, "MugenCombimeter.qml"), encoding="utf-8") as stream:
+            combimeter = stream.read()
+        with open(os.path.join(components, "MugenClusterBezel.qml"), encoding="utf-8") as stream:
+            bezel = stream.read()
+        self.assertIn("auxiliaryGaugeOffset: 158", combimeter)
+        self.assertIn("id: buttonFace", bezel)
+
 
 if __name__ == "__main__":
     unittest.main()

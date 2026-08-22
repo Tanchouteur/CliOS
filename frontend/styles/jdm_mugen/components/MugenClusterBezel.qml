@@ -345,55 +345,104 @@ Item {
     // =========================================================================
     // 5. BOUTON MENU TACTILE INTÉGRÉ
     // =========================================================================
-    Rectangle {
+    Item {
         id: menuButton
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 14
-        width: 240
-        height: 48
-        radius: 24
-        color: "#111722"
-        border.width: 1.8
-        border.color: T.StyleManager.accent
+        anchors.bottomMargin: 9
+        width: 248
+        height: 62
 
-        // Halo d'accent Mugen
+        // Ombre de la pièce encastrée dans la casquette.
         Rectangle {
-            anchors.fill: parent
-            anchors.margins: 2
-            radius: 22
-            color: Qt.rgba(T.StyleManager.accent.r, T.StyleManager.accent.g, T.StyleManager.accent.b, 0.14)
+            x: 3; y: 7
+            width: parent.width - 6; height: parent.height - 5
+            radius: 14
+            color: "#020305"
+            opacity: 0.9
         }
 
-        Row {
-            anchors.centerIn: parent
-            spacing: 10
+        // Cerclage métallique satiné.
+        Rectangle {
+            anchors.fill: parent
+            anchors.bottomMargin: 4
+            radius: 14
+            border.width: 1.2
+            border.color: "#626B76"
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "#414954" }
+                GradientStop { position: 0.35; color: "#20262E" }
+                GradientStop { position: 1.0; color: "#090C10" }
+            }
+        }
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "☰"
-                color: T.StyleManager.accent
-                font.pixelSize: 17
-                font.bold: true
+        // Tête mobile du poussoir, légèrement enfoncée au toucher.
+        Rectangle {
+            id: buttonFace
+            x: 9
+            y: buttonArea.pressed ? 8 : 5
+            width: parent.width - 18
+            height: 43
+            radius: 9
+            border.width: 1
+            border.color: buttonArea.pressed ? "#252B32" : "#59636E"
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: buttonArea.pressed ? "#11151A" : "#303740" }
+                GradientStop { position: 0.18; color: buttonArea.pressed ? "#151A20" : "#232A32" }
+                GradientStop { position: 1.0; color: "#090C10" }
+            }
+            Behavior on y { NumberAnimation { duration: 45 } }
+
+            Rectangle {
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.leftMargin: 10; anchors.rightMargin: 10; anchors.topMargin: 2
+                height: 1; color: "#7B8793"; opacity: buttonArea.pressed ? 0.15 : 0.55
             }
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "MENU & SYSTÈME"
-                color: "#FFFFFF"
-                font.family: "Arial, sans-serif"
-                font.pixelSize: 13
-                font.bold: true
-                font.letterSpacing: 1.2
+            Row {
+                anchors.centerIn: parent
+                spacing: 13
+
+                Item {
+                    width: 22; height: 18
+                    Column {
+                        anchors.centerIn: parent; spacing: 3
+                        Repeater {
+                            model: 3
+                            Rectangle { width: 20; height: 2; radius: 1; color: "#C9D0D6" }
+                        }
+                    }
+                }
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: -1
+                    Text { text: "MENU"; color: "#F2F4F6"; font.family: "Arial"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 2.1 }
+                    Text { text: "CLIOS"; color: "#7F8A95"; font.family: "Arial"; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.8 }
+                }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 6; height: 6; radius: 3
+                    color: buttonArea.pressed ? "#E7C36A" : "#665A38"
+                    border.width: 1; border.color: "#171A1E"
+                }
+            }
+        }
+
+        // Deux vis noyées rendent la pièce crédible comme commande physique.
+        Repeater {
+            model: [14, menuButton.width - 14]
+            Rectangle {
+                x: modelData - 3; y: 25
+                width: 6; height: 6; radius: 3
+                color: "#11151A"; border.width: 1; border.color: "#6A737D"
+                Rectangle { anchors.centerIn: parent; width: 4; height: 1; color: "#87919B"; rotation: index === 0 ? -22 : 18 }
             }
         }
 
         MouseArea {
+            id: buttonArea
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            hoverEnabled: true
-            onEntered: menuButton.color = "#182232"
-            onExited: menuButton.color = "#111722"
             onClicked: root.openMenuRequested()
         }
     }

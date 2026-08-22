@@ -87,6 +87,7 @@ Item {
 
     C.ConfirmDialog {
         id: confirm
+        objectName: "globalConfirmDialog"
         z: 9300
         onRejected: { visible = false; root.pendingCommand = "" }
         onAccepted: {
