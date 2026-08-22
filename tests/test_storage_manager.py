@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -48,6 +49,7 @@ class StorageManagerTest(unittest.TestCase):
         self.assertEqual(transitions, [StorageMode.USB])
 
         self.mounts.clear()
+        shutil.rmtree(volume)
         self.assertTrue(self.manager.refresh())
         self.assertEqual(self.manager.mode, StorageMode.VOLATILE)
         self.assertEqual(transitions[-1], StorageMode.VOLATILE)
@@ -60,6 +62,15 @@ class StorageManagerTest(unittest.TestCase):
         self.assertTrue(self.manager.refresh())
         self.assertEqual(self.manager.mode, StorageMode.USB)
         self.assertEqual(self.manager.get_writable_root(), os.path.realpath(usb_root))
+
+    def test_managed_directory_fallback_when_mount_api_omits_usb(self):
+        volume = os.path.join(self.media_root, "sda1")
+        usb_root = os.path.join(volume, "clios")
+        os.makedirs(usb_root)
+
+        self.assertTrue(self.manager.refresh())
+        self.assertEqual(self.manager.mode, StorageMode.USB)
+        self.assertEqual(self.manager.get_status()["mount_point"], os.path.realpath(volume))
 
     def test_fuse_mount_is_not_filtered_by_psutil(self):
         volume = os.path.join(self.media_root, "sda1")

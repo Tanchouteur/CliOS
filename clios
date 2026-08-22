@@ -9,8 +9,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_PYTHON="${SCRIPT_DIR}/.venv/bin/python3"
 MAIN_SCRIPT="${SCRIPT_DIR}/main.py"
+SYSTEM_ROOT="${CLIOS_INSTALL_ROOT:-/opt/clios}/current"
+SYSTEM_PYTHON="${SYSTEM_ROOT}/.venv/bin/python3"
+SYSTEM_MAIN="${SYSTEM_ROOT}/main.py"
 
 if [[ ! -f "$VENV_PYTHON" ]]; then
+    if [[ -f "$SYSTEM_PYTHON" && -f "$SYSTEM_MAIN" ]]; then
+        echo -e "\033[1;36m[INFO] Lancement de l'installation système depuis ${SYSTEM_ROOT}.\033[0m"
+        exec "$SYSTEM_PYTHON" -u "$SYSTEM_MAIN" "$@"
+    fi
     echo -e "\033[1;31m[ERREUR] L'environnement virtuel Python est introuvable (.venv).\033[0m"
     echo -e "\033[1;33mPour installer et configurer CliOS automatiquement, lancez :\033[0m"
     echo -e "  \033[1;36m./install.sh\033[0m"

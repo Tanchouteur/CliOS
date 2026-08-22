@@ -13,6 +13,7 @@ PAMName=login
 WorkingDirectory=@INSTALL_ROOT@/current
 Environment=XDG_RUNTIME_DIR=/run/user/@UID@
 Environment=QT_QPA_PLATFORM=wayland
+Environment=CLIOS_HIDE_CURSOR=1
 ExecStart=/usr/bin/cage -s -- /usr/bin/python3 -u @INSTALL_ROOT@/current/tools/clios_launcher.py -- --ui gui
 Restart=on-failure
 RestartSec=3

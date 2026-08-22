@@ -226,7 +226,7 @@ def migrate_to_v1(path: str | Path, payload: dict) -> dict:
     if "dashboard" in migrated and "profiles" not in migrated:
         dashboard = migrated.get("dashboard", {})
         migrated.setdefault("theme", {"main": "#48B8FF"})
-        migrated.setdefault("ui", {"visual_style": "gt_modern"})
+        migrated.setdefault("ui", {"visual_style": "apex"})
         migrated.setdefault("tachometer", {"max_rpm": dashboard.get("max_rpm", 7000), "redline_rpm": dashboard.get("redline", 6500)})
         migrated.setdefault("speedometer", {"max_speed": dashboard.get("max_speed", 220)})
         migrated.setdefault("fuel", {"max_liters": 50, "reserve_percentage": 0.15})

@@ -97,7 +97,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 14
 
-        // Stockage USB
+        // Stockage actif
         RowLayout {
             spacing: 6
             Rectangle {
@@ -105,7 +105,7 @@ Item {
                 color: S.UiState.usbConnected ? T.StyleManager.success : "#4A5B6E"
             }
             Text {
-                text: "USB " + S.UiState.fixed(S.UiState.storageFreeMb, 0, "—") + " MB"
+                text: (S.UiState.usbConnected ? "USB " : (S.UiState.internalStorage ? "SD " : "RAM ")) + S.UiState.fixed(S.UiState.storageFreeMb, 0, "—") + " MB"
                 color: "#FFFFFF"
                 font.family: T.StyleManager.fontFamily
                 font.pixelSize: 13

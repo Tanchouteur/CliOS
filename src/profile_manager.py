@@ -207,7 +207,7 @@ class ProfileManager:
         base_config = {
             "schema_version": 1,
             "theme": {"main": "#48B8FF"},
-            "ui": {"visual_style": "gt_modern"},
+            "ui": {"visual_style": "apex"},
             "tachometer": {"max_rpm": 7000, "redline_rpm": 6500, "idle_rpm": 850},
             "speedometer": {"max_speed": 220},
             "engine": {"label": "Véhicule personnalisé", "max_torque_nm": 200, "performance_curve": []},

@@ -25,6 +25,7 @@ class SchemaValidationTest(unittest.TestCase):
 
             self.assertEqual(migrated["dashboard"], original["dashboard"])
             self.assertEqual(migrated["schema_version"], 1)
+            self.assertEqual(migrated["ui"]["visual_style"], "apex")
             self.assertEqual(validate_vehicle_config(migrated), [])
             with open(path + ".v0.bak", encoding="utf-8") as stream:
                 self.assertEqual(json.load(stream), original)
@@ -33,6 +34,12 @@ class SchemaValidationTest(unittest.TestCase):
         payload = {"schema_version": 1, "dashboard": {"max_speed": 220}}
         legacy_view = {key: value for key, value in payload.items() if key != "schema_version"}
         self.assertEqual(legacy_view, {"dashboard": {"max_speed": 220}})
+
+    def test_official_vehicle_profiles_start_with_apex(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for filename in ("config_clio3diesel.json", "clio3rs.json"):
+            with open(os.path.join(root, "data", "config", filename), encoding="utf-8") as stream:
+                self.assertEqual(json.load(stream)["ui"]["visual_style"], "apex")
 
     def test_vehicle_errors_include_precise_json_paths(self):
         payload = {

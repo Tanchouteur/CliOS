@@ -29,6 +29,7 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn("User=dashboard", rendered)
         self.assertIn("SupplementaryGroups=clios", rendered)
         self.assertIn("XDG_RUNTIME_DIR=/run/user/1234", rendered)
+        self.assertIn("Environment=CLIOS_HIDE_CURSOR=1", rendered)
         self.assertIn("@USER@", template)
         self.assertFalse((ROOT / "installation/etc/systemd/system/clios.service").exists())
 
@@ -49,6 +50,17 @@ class LauncherSystemdTest(unittest.TestCase):
             installer.index('install_release_tree "$RELEASE_DIR"'),
             installer.index('ln -sfn "${RELEASE_DIR}" /opt/clios/current'),
         )
+
+    def test_source_launcher_falls_back_to_system_install_after_venv_move(self):
+        launcher = (ROOT / "clios").read_text(encoding="utf-8")
+        self.assertIn('SYSTEM_ROOT="${CLIOS_INSTALL_ROOT:-/opt/clios}/current"', launcher)
+        self.assertIn('exec "$SYSTEM_PYTHON" -u "$SYSTEM_MAIN" "$@"', launcher)
+
+    def test_installer_finishes_with_system_service_instructions(self):
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("CliOS est installé dans /opt/clios/current", installer)
+        self.assertIn("Voulez-vous démarrer CliOS maintenant ?", installer)
+        self.assertIn('start clios.service', installer)
 
 
 if __name__ == "__main__":

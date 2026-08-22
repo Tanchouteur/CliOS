@@ -112,6 +112,7 @@ class DashboardBridge(QObject):
         self.requested_power_action = ""
         self._closed = False
         self.exitRequested.connect(self._quit_qt)
+        self._update_health()
 
     # Boucles de rafraîchissement.
     def _update_fast_data(self):

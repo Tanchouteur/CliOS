@@ -38,6 +38,8 @@ DRY_RUN=0
 VENV_ONLY=0
 NON_INTERACTIVE=0
 DO_UNINSTALL=0
+KIOSK_INSTALLED=0
+KIOSK_AUTOSTART_ENABLED=0
 
 # ------------------------------------------------------------------------------
 # 2. Couleurs & Mise en page CLI
@@ -759,6 +761,7 @@ if [[ $VENV_ONLY -eq 1 || "$OS_NAME" != "Linux" ]]; then
 else
     echo -e "CliOS peut se lancer automatiquement en plein écran au démarrage via le compositeur Wayland ${C_BOLD}Cage${C_RESET} (sans nécessiter de bureau)."
     if prompt_confirm "Voulez-vous installer le service de démarrage Kiosk (clios.service) ?" "N"; then
+        KIOSK_INSTALLED=1
         if ! getent group clios >/dev/null 2>&1; then
             run_sudo_cmd "Création du groupe système clios" groupadd --system clios
         fi
@@ -833,6 +836,7 @@ else
 
             if prompt_confirm "Activer le lancement automatique de CliOS à chaque démarrage maintenant ?" "Y"; then
                 safe_systemctl "Activation de clios.service" enable clios.service
+                KIOSK_AUTOSTART_ENABLED=1
                 log_success "clios.service configuré pour le démarrage du système."
             else
                 log_info "clios.service installé mais non activé (utilisez 'sudo systemctl enable clios.service' plus tard)."
@@ -881,13 +885,19 @@ echo -e "\n${C_GREEN}${C_BOLD}════════════════�
 echo -e "${C_GREEN}${C_BOLD}  ✓ INSTALLATION DE CliOS TERMINÉE AVEC SUCCÈS !${C_RESET}"
 echo -e "${C_GREEN}${C_BOLD}══════════════════════════════════════════════════════════════════${C_RESET}\n"
 
-echo -e "${C_BOLD}Vous pouvez maintenant démarrer CliOS facilement :${C_RESET}\n"
-echo -e "  ${C_CYAN}./clios${C_RESET}                 # Lancement standard (Dashboard GUI sur véhicule)"
-echo -e "  ${C_CYAN}./clios --mock${C_RESET}          # Lancement en mode Simulation (sans matériel)"
-echo -e "  ${C_CYAN}./clios --ui cli --mock${C_RESET} # Lancement en mode Terminal interactif"
-echo -e "  ${C_CYAN}./clios --help${C_RESET}          # Consulter toutes les options disponibles"
-echo ""
-echo -e "${C_DIM}Pour gérer le service Kiosk :${C_RESET}"
-echo -e "  ${C_DIM}sudo systemctl start clios.service   # Démarrer le service${C_RESET}"
-echo -e "  ${C_DIM}sudo systemctl status clios.service  # Voir l'état du service${C_RESET}"
-echo -e "  ${C_DIM}journalctl -u clios.service -f       # Voir les logs en direct${C_RESET}\n"
+if [[ $KIOSK_INSTALLED -eq 1 ]]; then
+    echo -e "${C_BOLD}CliOS est installé dans /opt/clios/current.${C_RESET}\n"
+    echo -e "  ${C_CYAN}sudo systemctl start clios.service${C_RESET}    # Démarrer le cockpit maintenant"
+    echo -e "  ${C_CYAN}sudo systemctl status clios.service${C_RESET}   # Vérifier son état"
+    echo -e "  ${C_CYAN}journalctl -u clios.service -f${C_RESET}        # Suivre les logs"
+    echo -e "  ${C_DIM}./clios --help redirige automatiquement vers /opt/clios/current.${C_RESET}\n"
+    if [[ $KIOSK_AUTOSTART_ENABLED -eq 1 ]] && prompt_confirm "Voulez-vous démarrer CliOS maintenant ?" "Y"; then
+        safe_systemctl "Démarrage immédiat de CliOS" start clios.service
+    fi
+else
+    echo -e "${C_BOLD}Vous pouvez maintenant démarrer CliOS depuis ce dossier :${C_RESET}\n"
+    echo -e "  ${C_CYAN}./clios${C_RESET}                 # Lancement standard"
+    echo -e "  ${C_CYAN}./clios --mock${C_RESET}          # Simulation sans matériel"
+    echo -e "  ${C_CYAN}./clios --ui cli --mock${C_RESET} # Terminal interactif"
+    echo -e "  ${C_CYAN}./clios --help${C_RESET}          # Options disponibles\n"
+fi

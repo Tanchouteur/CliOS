@@ -113,14 +113,14 @@ Item {
             spacing: 9
             Rectangle {
                 width: 10; height: 10; radius: 5
-                color: S.UiState.ramMode ? "#FF6670" : "#54E3A5"
+                color: S.UiState.usbConnected ? "#54E3A5" : (S.UiState.internalStorage ? "#FFB84D" : "#FF6670")
                 anchors.verticalCenter: parent.verticalCenter
             }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 0
                 Text {
-                    text: S.UiState.ramMode ? "MÉMOIRE INTERNE" : "STOCKAGE CONNECTÉ"
+                    text: S.UiState.usbConnected ? "CLÉ USB CONNECTÉE" : (S.UiState.internalStorage ? "CARTE SD INTERNE" : "MÉMOIRE TEMPORAIRE")
                     color: "#E5EDF4"
                     font.pixelSize: 11
                     font.bold: true
