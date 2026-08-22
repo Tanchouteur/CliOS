@@ -14,6 +14,7 @@ from typing import Callable
 from src.can_activity import CanActivitySource
 from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
+from src.update_safety import UpdateSafety
 
 
 class PowerState(str, Enum):
@@ -75,13 +76,15 @@ class PowerManagementService(BaseService):
     def __init__(self, runtime, storage, orchestrator, can_activity: CanActivitySource,
                  *, power_executor: SystemPowerExecutor | None = None,
                  clock: Callable[[], float] = time.monotonic,
-                 sync_writes: Callable[[], None] | None = None):
+                 sync_writes: Callable[[], None] | None = None,
+                 update_safety: UpdateSafety | None = None):
         super().__init__("PowerManager", storage)
         self.runtime = runtime
         self.orchestrator = orchestrator
         self.can_activity = can_activity
         self.power_executor = power_executor or SystemPowerExecutor()
         self.clock = clock
+        self.update_safety = update_safety or UpdateSafety()
         if sync_writes is not None:
             self.sync_writes: Callable[[], None] = sync_writes
         elif hasattr(os, "sync"):
@@ -93,6 +96,7 @@ class PowerManagementService(BaseService):
         self._countdown_started_at: float | None = None
         self._last_contact_active: bool | None = None
         self._retry_at: float | None = None
+        self._update_was_in_progress = False
         self._action_lock = threading.Lock()
 
         self.register_param(
@@ -134,12 +138,18 @@ class PowerManagementService(BaseService):
                 self._retry_at = None
                 self._publish_state(None)
             return self.state
+        if self.update_safety.update_in_progress():
+            self._update_was_in_progress = True
+            self._set_state(PowerState.WAITING_FOR_CONTACT, "update_in_progress", countdown_started_at=None)
+            self.set_warning("Extinction suspendue pendant la mise à jour")
+            return self.state
         powertrain = self.runtime.snapshot().domain("powertrain")
         has_contact_signal = "key_acc" in powertrain or "key_run" in powertrain
         contact_active = bool(powertrain.get("key_acc", False) or powertrain.get("key_run", False))
         activity = self.can_activity.snapshot(current)
 
         if contact_active:
+            self._update_was_in_progress = False
             self._last_contact_active = True
             self._set_state(PowerState.CONTACT_ON, "", countdown_started_at=None)
             self.set_ok("Contact actif")
@@ -156,6 +166,17 @@ class PowerManagementService(BaseService):
         contact_just_turned_off = self._last_contact_active is True
         if has_contact_signal:
             self._last_contact_active = False
+
+        if self._update_was_in_progress:
+            self._update_was_in_progress = False
+            if has_contact_signal:
+                self._begin_countdown(PowerState.CONTACT_OFF_COUNTDOWN, "contact_off", current)
+            elif bool(self._params["shutdown_on_can_silence"]["value"]):
+                self._begin_countdown(PowerState.CAN_SILENCE_COUNTDOWN, "can_silence", current)
+                self._continue_countdown(float(self._params["can_silence_delay"]["value"]), current)
+            else:
+                self._set_state(PowerState.WAITING_FOR_CONTACT, "", countdown_started_at=None)
+            return self.state
 
         if contact_just_turned_off:
             self._begin_countdown(PowerState.CONTACT_OFF_COUNTDOWN, "contact_off", current)
@@ -194,6 +215,11 @@ class PowerManagementService(BaseService):
             self.set_warning(f"Extinction ({self.shutdown_reason}) dans {int(remaining + 0.999)} s")
 
     def _request_poweroff(self, now: float) -> None:
+        if self.update_safety.update_in_progress():
+            self._update_was_in_progress = True
+            self._set_state(PowerState.WAITING_FOR_CONTACT, "update_in_progress", countdown_started_at=None)
+            self.set_warning("Extinction suspendue pendant la mise à jour")
+            return
         if not self._action_lock.acquire(blocking=False):
             return
         try:

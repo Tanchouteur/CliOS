@@ -33,6 +33,14 @@ class FakePowerExecutor:
         return (self.succeeds, "test")
 
 
+class FakeUpdateSafety:
+    def __init__(self):
+        self.active = False
+
+    def update_in_progress(self):
+        return self.active
+
+
 class PowerManagementServiceTest(unittest.TestCase):
     def setUp(self):
         self.clock = FakeClock()
@@ -41,6 +49,7 @@ class PowerManagementServiceTest(unittest.TestCase):
         self.runtime = VehicleRuntime(self.storage)
         self.activity = CanActivitySource(self.clock)
         self.executor = FakePowerExecutor()
+        self.update_safety = FakeUpdateSafety()
         self.orchestrator = MagicMock()
         self.orchestrator.stop_all.return_value = {"errors": {}, "unresponsive": [], "stopped": []}
         self.service = PowerManagementService(
@@ -51,6 +60,7 @@ class PowerManagementServiceTest(unittest.TestCase):
             power_executor=self.executor,
             clock=self.clock,
             sync_writes=lambda: None,
+            update_safety=self.update_safety,
         )
 
     def publish_contact(self, acc=False, run=False, rpm=0):
@@ -111,6 +121,29 @@ class PowerManagementServiceTest(unittest.TestCase):
         self.clock.now = 900.0
         self.assertEqual(self.service.evaluate(), PowerState.WAITING_FOR_CONTACT)
         self.assertEqual(self.executor.calls, 0)
+
+    def test_update_inhibits_shutdown_and_restarts_a_full_silence_delay(self):
+        self.update_safety.active = True
+        self.clock.now = 180.0
+        self.assertEqual(self.service.evaluate(), PowerState.WAITING_FOR_CONTACT)
+        system = self.runtime.snapshot().domain("system")
+        self.assertEqual(system["power_shutdown_reason"], "update_in_progress")
+        self.assertEqual(self.executor.calls, 0)
+
+        self.update_safety.active = False
+        self.service.evaluate()
+        self.clock.now = 359.9
+        self.service.evaluate()
+        self.assertEqual(self.executor.calls, 0)
+        self.clock.now = 360.0
+        self.service.evaluate()
+        self.assertEqual(self.executor.calls, 1)
+
+    def test_update_is_rechecked_immediately_before_power_command(self):
+        self.update_safety.active = True
+        self.service._request_poweroff(180.0)
+        self.assertEqual(self.executor.calls, 0)
+        self.assertEqual(self.service.shutdown_reason, "update_in_progress")
 
     def test_recent_can_with_explicit_contact_off_uses_short_delay(self):
         self.clock.now = 50.0
