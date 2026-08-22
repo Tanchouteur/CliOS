@@ -196,7 +196,7 @@ def main():
     if profile_manager.recovery_mode:
         vehicle_config = {
             "schema_version": 1,
-            "theme": {"main": "#48B8FF"}, "ui": {"visual_style": "gt_modern"},
+            "theme": {"main": "#48B8FF"}, "ui": {"visual_style": "apex"},
             "tachometer": {"max_rpm": 7000, "redline_rpm": 6500},
             "speedometer": {"max_speed": 220}, "fuel": {"max_liters": 50},
             "engine_temp": {"warning": 105, "max_display": 120},

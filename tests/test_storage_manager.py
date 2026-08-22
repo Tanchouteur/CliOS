@@ -72,6 +72,22 @@ class StorageManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.mode, StorageMode.USB)
         self.assertEqual(self.manager.get_status()["mount_point"], os.path.realpath(volume))
 
+    def test_missing_linux_media_root_is_normal_on_desktop(self):
+        missing_root = os.path.join(self.root, "does-not-exist")
+        with mock.patch("src.storage_manager.logging.Logger.warning") as warning:
+            manager = StorageManager(
+                self.root,
+                media_root=missing_root,
+                volatile_root=os.path.join(self.root, "desktop-volatile"),
+                mount_provider=lambda: [],
+                mount_table_provider=lambda: "",
+            )
+        try:
+            warning.assert_not_called()
+            self.assertEqual(manager.mode, StorageMode.VOLATILE)
+        finally:
+            manager.stop_monitoring()
+
     def test_fuse_mount_is_not_filtered_by_psutil(self):
         volume = os.path.join(self.media_root, "sda1")
         usb_root = os.path.join(volume, "clios")

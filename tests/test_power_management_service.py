@@ -148,6 +148,20 @@ class PowerManagementServiceTest(unittest.TestCase):
             self.assertTrue(executor.is_simulated)
             self.assertTrue(executor.poweroff()[0])
 
+    def test_desktop_simulation_does_not_start_a_shutdown_countdown(self):
+        service = PowerManagementService(
+            self.runtime,
+            self.storage,
+            self.orchestrator,
+            self.activity,
+            power_executor=SystemPowerExecutor(system="Darwin"),
+            clock=self.clock,
+            sync_writes=lambda: None,
+        )
+        self.clock.now = 900.0
+        self.assertEqual(service.evaluate(), PowerState.WAITING_FOR_CONTACT)
+        self.assertIsNone(self.runtime.snapshot().domain("system")["power_shutdown_seconds"])
+
     def test_linux_executor_uses_no_shell_and_checks_return_code(self):
         runner = MagicMock(return_value=subprocess.CompletedProcess([], 4, "", "denied"))
         executor = SystemPowerExecutor(system="Linux", runner=runner)

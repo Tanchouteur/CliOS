@@ -35,6 +35,22 @@ class SchemaValidationTest(unittest.TestCase):
         legacy_view = {key: value for key, value in payload.items() if key != "schema_version"}
         self.assertEqual(legacy_view, {"dashboard": {"max_speed": 220}})
 
+    def test_early_v1_vehicle_gets_missing_transmission_contract_fields(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, "vehicle.json")
+            original = {
+                "schema_version": 1,
+                "transmission": {"ratios": {"1": 100.0, "2": 60.0, "3": 40.0}},
+            }
+            with open(path, "w", encoding="utf-8") as stream:
+                json.dump(original, stream)
+
+            migrated = migrate_to_v1(path, original)
+
+            self.assertEqual(migrated["transmission"]["type"], "manual")
+            self.assertEqual(migrated["transmission"]["gears_count"], 3)
+            self.assertTrue(os.path.isfile(path + ".v1-legacy.bak"))
+
     def test_official_vehicle_profiles_start_with_apex(self):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         for filename in ("config_clio3diesel.json", "clio3rs.json"):

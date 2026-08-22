@@ -126,6 +126,14 @@ class PowerManagementService(BaseService):
     def evaluate(self, now: float | None = None) -> PowerState:
         """Advance the state machine once; public for deterministic tests."""
         current = self.clock() if now is None else now
+        if self.power_executor.is_simulated:
+            if self.state is not PowerState.WAITING_FOR_CONTACT or self.shutdown_reason:
+                self.state = PowerState.WAITING_FOR_CONTACT
+                self.shutdown_reason = ""
+                self._countdown_started_at = None
+                self._retry_at = None
+                self._publish_state(None)
+            return self.state
         powertrain = self.runtime.snapshot().domain("powertrain")
         has_contact_signal = "key_acc" in powertrain or "key_run" in powertrain
         contact_active = bool(powertrain.get("key_acc", False) or powertrain.get("key_run", False))

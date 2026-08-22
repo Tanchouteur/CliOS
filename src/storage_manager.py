@@ -304,20 +304,21 @@ class StorageManager:
         # psutil sur certains systèmes de fichiers FUSE. /media/clios est
         # détenu par root : inspecter ses enfants directs reste borné et sûr.
         managed_paths = []
-        try:
-            if os.path.isdir(os.path.join(self._media_root, self._usb_folder_name)):
-                managed_paths.append(self._media_root)
-            for entry in os.scandir(self._media_root):
-                if (
-                    entry.is_dir(follow_symlinks=False)
-                    and os.path.isdir(os.path.join(entry.path, self._usb_folder_name))
-                ):
-                    managed_paths.append(entry.path)
-        except OSError as exc:
-            self._set_usb_diagnostic(
-                f"Inspection de {self._media_root} impossible: {exc}",
-                "USB_MEDIA_ROOT_SCAN_FAILED",
-            )
+        if os.path.isdir(self._media_root):
+            try:
+                if os.path.isdir(os.path.join(self._media_root, self._usb_folder_name)):
+                    managed_paths.append(self._media_root)
+                for entry in os.scandir(self._media_root):
+                    if (
+                        entry.is_dir(follow_symlinks=False)
+                        and os.path.isdir(os.path.join(entry.path, self._usb_folder_name))
+                    ):
+                        managed_paths.append(entry.path)
+            except OSError as exc:
+                self._set_usb_diagnostic(
+                    f"Inspection de {self._media_root} impossible: {exc}",
+                    "USB_MEDIA_ROOT_SCAN_FAILED",
+                )
         for managed_path in managed_paths:
             if managed_path not in mountpoints:
                 mountpoints.append(managed_path)

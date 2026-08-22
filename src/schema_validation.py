@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 
@@ -187,7 +188,8 @@ def validate_profile_references(payload: object, config_dir: str | Path, can_dir
         config_name = profile.get("config_file")
         if isinstance(config_name, str) and JSON_NAME.fullmatch(config_name) and (config_root / config_name).is_file():
             try:
-                config = load_json(config_root / config_name)
+                config_path = config_root / config_name
+                config = migrate_to_v1(config_path, load_json(config_path))
                 errors.extend(f"profiles.{profile_id}.{error}" for error in validate_vehicle_config(config, available_themes))
             except (OSError, json.JSONDecodeError) as exc:
                 errors.append(f"profiles.{profile_id}.config_file: {exc}")
@@ -214,14 +216,10 @@ def load_json(path: str | Path) -> object:
 
 
 def migrate_to_v1(path: str | Path, payload: dict) -> dict:
-    """Additive v0 -> v1 migration with a recoverable backup."""
-    if payload.get("schema_version") == 1:
-        return payload
+    """Additive legacy -> v1 migration with a recoverable backup."""
     target = Path(path)
-    backup = target.with_suffix(target.suffix + ".v0.bak")
-    if target.exists() and not backup.exists():
-        shutil.copy2(target, backup)
-    migrated = dict(payload)
+    original_version = payload.get("schema_version")
+    migrated = deepcopy(payload)
     migrated["schema_version"] = 1
     if "dashboard" in migrated and "profiles" not in migrated:
         dashboard = migrated.get("dashboard", {})
@@ -233,6 +231,19 @@ def migrate_to_v1(path: str | Path, payload: dict) -> dict:
         migrated.setdefault("engine_temp", {"warning": 105, "max_display": 120})
         migrated.setdefault("transmission", {"type": "manual", "gears_count": 5, "ratios": {}})
         migrated.setdefault("maintenance", {"revision": {"interval_km": 20000, "warning_threshold_km": 2000}})
+    if "profiles" not in migrated and isinstance(migrated.get("transmission"), dict):
+        transmission = dict(migrated["transmission"])
+        ratios = transmission.get("ratios")
+        inferred_gears = len(ratios) if isinstance(ratios, dict) and ratios else 5
+        transmission.setdefault("type", "manual")
+        transmission.setdefault("gears_count", inferred_gears)
+        migrated["transmission"] = transmission
+    if migrated == payload:
+        return payload
+    backup_suffix = ".v0.bak" if original_version != 1 else ".v1-legacy.bak"
+    backup = target.with_suffix(target.suffix + backup_suffix)
+    if target.exists() and not backup.exists():
+        shutil.copy2(target, backup)
     tmp = target.with_suffix(target.suffix + ".tmp")
     tmp.parent.mkdir(parents=True, exist_ok=True)
     with open(tmp, "w", encoding="utf-8") as stream:
