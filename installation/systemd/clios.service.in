@@ -1,7 +1,6 @@
 [Unit]
 Description=CliOS Automotive Dashboard (Wayland Kiosk via Cage)
-After=sound.target can0.service systemd-user-sessions.service
-Wants=can0.service
+After=systemd-user-sessions.service
 
 [Service]
 Type=simple

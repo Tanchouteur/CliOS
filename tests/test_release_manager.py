@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -101,6 +102,18 @@ class ReleaseManagerTest(unittest.TestCase):
                 mock.patch("pwd.getpwnam", return_value=account):
             options = self.manager._run_as_options("clios")
         self.assertEqual(set(options), {"user", "group"})
+
+    def test_runtime_precompile_uses_the_release_python(self):
+        release = self.root / "release"
+        python = release / ".venv/bin/python3"
+        python.parent.mkdir(parents=True)
+        python.touch()
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch("src.release_manager.subprocess.run", return_value=completed) as run:
+            self.manager._precompile_runtime(release)
+
+        self.assertEqual(run.call_args.args[0][:4], [str(python), "-m", "compileall", "-q"])
+        self.assertEqual(run.call_args.kwargs["cwd"], release)
 
     def test_channel_is_stable_by_default_and_persists(self):
         self.assertEqual(self.manager.get_channel(), "stable")
