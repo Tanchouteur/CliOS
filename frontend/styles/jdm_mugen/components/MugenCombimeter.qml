@@ -176,7 +176,7 @@ Item {
             ctx.fillText("E", fuelPivotX + Math.cos(fAngleBottom + 0.12) * (fuelTrackR + 18), fuelPivotY + Math.sin(fAngleBottom + 0.12) * (fuelTrackR + 18))
 
             // Icône pompe à essence
-            const pumpX = cx - 88
+            const pumpX = cx - 75
             const pumpY = cy - 6
             ctx.fillStyle = S.UiState.lowFuel ? "#E62020" : "#475569"
             ctx.fillRect(pumpX, pumpY - 8, 10, 14)
@@ -239,7 +239,7 @@ Item {
             ctx.fillText("C", tempPivotX + Math.cos(tAngleBottom - 0.12) * (tempTrackR + 18), tempPivotY + Math.sin(tAngleBottom - 0.12) * (tempTrackR + 18))
 
             // Icône température liquide de refroidissement
-            const tempIconX = cx + 78
+            const tempIconX = cx + 60
             const tempIconY = cy - 6
             ctx.fillStyle = S.UiState.hotEngine ? "#E62020" : "#475569"
             ctx.fillRect(tempIconX + 4, tempIconY - 8, 3, 10)
