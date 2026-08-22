@@ -2,12 +2,11 @@ import os
 import sys
 import argparse
 import threading
-import platform
-import subprocess
 
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtCore import Qt
 from PySide6 import __version__ as pyside_version
 
 from src.services.export_service import ExportService
@@ -197,7 +196,7 @@ def main():
     if profile_manager.recovery_mode:
         vehicle_config = {
             "schema_version": 1,
-            "theme": {"main": "#48B8FF"}, "ui": {"visual_style": "gt_modern"},
+            "theme": {"main": "#48B8FF"}, "ui": {"visual_style": "apex"},
             "tachometer": {"max_rpm": 7000, "redline_rpm": 6500},
             "speedometer": {"max_speed": 220}, "fuel": {"max_liters": 50},
             "engine_temp": {"warning": 105, "max_display": 120},
@@ -276,6 +275,8 @@ def main():
         elif args.ui == 'gui':
             QQuickStyle.setStyle("Basic")
             app = QApplication(sys.argv)
+            if os.environ.get("CLIOS_HIDE_CURSOR") == "1":
+                QApplication.setOverrideCursor(Qt.CursorShape.BlankCursor)
             engine = QQmlApplicationEngine()
 
             # Connexion du Bridge
@@ -345,10 +346,12 @@ def main():
     # --- 7. Redémarrage Kiosk ---
     if needs_restart:
         executable = sys.executable
-        args = [executable] + sys.argv
-        os.execv(executable, args)
-    if requested_power_action in {"reboot", "poweroff"} and platform.system() not in {"Darwin", "Windows"}:
-        subprocess.run(["sudo", requested_power_action], check=False)
+        restart_args = [executable] + sys.argv
+        os.execv(executable, restart_args)
+    if requested_power_action in {"reboot", "poweroff"}:
+        ok, detail = SystemPowerExecutor(mock=args.mock).execute(requested_power_action)
+        if not ok:
+            print(f"[ERREUR] Action système impossible: {detail}", file=sys.stderr)
 
 
 if __name__ == "__main__":

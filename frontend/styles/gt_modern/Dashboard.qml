@@ -86,7 +86,7 @@ Item {
                 Layout.preferredWidth: 190; height: 38; radius: T.StyleManager.radiusSmall
                 color: S.UiState.ramMode ? Qt.rgba(T.StyleManager.danger.r, T.StyleManager.danger.g, T.StyleManager.danger.b, 0.14) : Qt.rgba(T.StyleManager.success.r, T.StyleManager.success.g, T.StyleManager.success.b, 0.12)
                 border.width: 1; border.color: S.UiState.ramMode ? T.StyleManager.danger : T.StyleManager.success
-                Text { anchors.centerIn: parent; text: S.UiState.ramMode ? "USB · MODE RAM" : "USB · " + S.UiState.fixed(S.UiState.storageFreeMb, 0, "0") + " MB"; color: parent.border.color; font.pixelSize: 14; font.bold: true }
+                Text { anchors.centerIn: parent; text: S.UiState.usbConnected ? "USB · " + S.UiState.fixed(S.UiState.storageFreeMb, 0, "0") + " MB" : (S.UiState.internalStorage ? "SD · " + S.UiState.fixed(S.UiState.storageFreeMb, 0, "0") + " MB" : "STOCKAGE · MODE RAM"); color: parent.border.color; font.pixelSize: 14; font.bold: true }
             }
             Rectangle {
                 visible: S.UiState.serviceErrorKeys.length + S.UiState.serviceWarningKeys.length > 0

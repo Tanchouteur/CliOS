@@ -4,7 +4,7 @@
         "main": "#ff00b8"
     },
     "ui": {
-        "visual_style": "gt_modern"
+        "visual_style": "apex"
     },
     "tachometer": {
         "max_rpm": 6000,

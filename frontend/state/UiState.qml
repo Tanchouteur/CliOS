@@ -264,8 +264,11 @@ QtObject {
 
     readonly property bool usbConnected: storageState.usb_connected === true
     readonly property bool ramMode: storageState.mode === "RAM"
+    readonly property bool internalStorage: storageState.mode === "INTERNAL"
     readonly property real storageFreeMb: number(storageState.free_space_mb, 0)
     readonly property string storageMode: text(storageState.mode, "UNKNOWN")
+    readonly property string storageMount: text(storageState.mount_point, "")
+    readonly property string storageDiagnostic: text(storageState.usb_diagnostic, "")
     readonly property string systemVersion: text(systemState.version, "unknown")
     readonly property var recoveryState: systemState.recovery || ({})
     readonly property bool recoveryMode: recoveryState.active === true

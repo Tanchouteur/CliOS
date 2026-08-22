@@ -91,6 +91,21 @@ class PowerManagementServiceTest(unittest.TestCase):
         self.service.evaluate()
         self.assertEqual(self.executor.calls, 1)
 
+    def test_continuous_can_activity_resets_silence_countdown(self):
+        for second in range(0, 301, 30):
+            self.clock.now = float(second)
+            self.activity.record_frame()
+            self.service.evaluate()
+        self.assertEqual(self.service.state, PowerState.CAN_SILENCE_COUNTDOWN)
+        self.assertEqual(self.executor.calls, 0)
+
+        self.clock.now = 479.9
+        self.service.evaluate()
+        self.assertEqual(self.executor.calls, 0)
+        self.clock.now = 480.0
+        self.service.evaluate()
+        self.assertEqual(self.executor.calls, 1)
+
     def test_can_silence_can_be_disabled(self):
         self.service.update_param("shutdown_on_can_silence", False)
         self.clock.now = 900.0
@@ -133,6 +148,20 @@ class PowerManagementServiceTest(unittest.TestCase):
             self.assertTrue(executor.is_simulated)
             self.assertTrue(executor.poweroff()[0])
 
+    def test_desktop_simulation_does_not_start_a_shutdown_countdown(self):
+        service = PowerManagementService(
+            self.runtime,
+            self.storage,
+            self.orchestrator,
+            self.activity,
+            power_executor=SystemPowerExecutor(system="Darwin"),
+            clock=self.clock,
+            sync_writes=lambda: None,
+        )
+        self.clock.now = 900.0
+        self.assertEqual(service.evaluate(), PowerState.WAITING_FOR_CONTACT)
+        self.assertIsNone(self.runtime.snapshot().domain("system")["power_shutdown_seconds"])
+
     def test_linux_executor_uses_no_shell_and_checks_return_code(self):
         runner = MagicMock(return_value=subprocess.CompletedProcess([], 4, "", "denied"))
         executor = SystemPowerExecutor(system="Linux", runner=runner)
@@ -144,19 +173,25 @@ class PowerManagementServiceTest(unittest.TestCase):
 
     def test_linux_executor_handles_success_and_process_error(self):
         success = MagicMock(return_value=subprocess.CompletedProcess([], 0, "", ""))
-        self.assertTrue(SystemPowerExecutor(system="Linux", runner=success).poweroff()[0])
+        executor = SystemPowerExecutor(system="Linux", runner=success)
+        self.assertTrue(executor.poweroff()[0])
+        self.assertTrue(executor.reboot()[0])
+        self.assertEqual(success.call_args.args[0], ["systemctl", "reboot"])
+        self.assertFalse(executor.execute("suspend")[0])
         failure = MagicMock(side_effect=subprocess.TimeoutExpired(["systemctl"], 10))
         ok, detail = SystemPowerExecutor(system="Linux", runner=failure).poweroff()
         self.assertFalse(ok)
         self.assertIn("commande impossible", detail)
 
-    def test_service_stop_or_sync_failure_prevents_power_command(self):
+    def test_service_stop_failure_is_logged_but_does_not_block_host_poweroff(self):
         self.clock.now = 180.0
         self.orchestrator.stop_all.return_value = {"errors": {"save": "failed"}, "unresponsive": [], "stopped": []}
         self.service.evaluate()
-        self.assertEqual(self.service.state, PowerState.POWER_ACTION_FAILED)
-        self.assertEqual(self.executor.calls, 0)
+        self.assertEqual(self.service.state, PowerState.POWERING_OFF)
+        self.assertEqual(self.executor.calls, 1)
 
+    def test_sync_failure_prevents_power_command(self):
+        self.clock.now = 180.0
         service = PowerManagementService(
             self.runtime, self.storage, self.orchestrator, self.activity,
             power_executor=self.executor, clock=self.clock,

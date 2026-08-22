@@ -75,15 +75,6 @@ Item {
         onNavigateRequested: route => root.openRoute(route)
     }
 
-    Rectangle {
-        anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter
-        width: 720; height: 48; radius: 0
-        visible: S.UiState.complexInteraction
-        color: "#F2A05A00"; border.width: 1; border.color: T.StyleManager.warning
-        z: 9000
-        Text { anchors.centerIn: parent; text: "VÉHICULE EN MOUVEMENT · " + Math.round(S.UiState.speed) + " km/h · RESTEZ ATTENTIF"; color: "white"; font.pixelSize: 17; font.bold: true }
-    }
-
     MaintenanceOverlay {
         id: maintenanceOverlay; z: 9200
         onCommandRequested: command => root.requestCommand(command)

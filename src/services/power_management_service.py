@@ -40,12 +40,14 @@ class SystemPowerExecutor:
     def is_simulated(self) -> bool:
         return self.mock or self.system != "Linux"
 
-    def poweroff(self) -> tuple[bool, str]:
+    def execute(self, action: str) -> tuple[bool, str]:
+        if action not in {"poweroff", "reboot"}:
+            return False, f"action système interdite: {action}"
         if self.is_simulated:
-            return True, f"Extinction simulée ({'mock' if self.mock else self.system})"
+            return True, f"Action {action} simulée ({'mock' if self.mock else self.system})"
         try:
             completed = self.runner(
-                ["systemctl", "poweroff"],
+                ["systemctl", action],
                 shell=False,
                 timeout=self.timeout_s,
                 check=False,
@@ -57,7 +59,13 @@ class SystemPowerExecutor:
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout or "sans détail").strip()
             return False, f"code {completed.returncode}: {detail}"
-        return True, "Extinction système demandée"
+        return True, f"Action système demandée: {action}"
+
+    def poweroff(self) -> tuple[bool, str]:
+        return self.execute("poweroff")
+
+    def reboot(self) -> tuple[bool, str]:
+        return self.execute("reboot")
 
 
 class PowerManagementService(BaseService):
@@ -118,6 +126,14 @@ class PowerManagementService(BaseService):
     def evaluate(self, now: float | None = None) -> PowerState:
         """Advance the state machine once; public for deterministic tests."""
         current = self.clock() if now is None else now
+        if self.power_executor.is_simulated:
+            if self.state is not PowerState.WAITING_FOR_CONTACT or self.shutdown_reason:
+                self.state = PowerState.WAITING_FOR_CONTACT
+                self.shutdown_reason = ""
+                self._countdown_started_at = None
+                self._retry_at = None
+                self._publish_state(None)
+            return self.state
         powertrain = self.runtime.snapshot().domain("powertrain")
         has_contact_signal = "key_acc" in powertrain or "key_run" in powertrain
         contact_active = bool(powertrain.get("key_acc", False) or powertrain.get("key_run", False))
@@ -150,8 +166,12 @@ class PowerManagementService(BaseService):
             self._begin_countdown(PowerState.CONTACT_OFF_COUNTDOWN, "contact_off", current)
         elif bool(self._params["shutdown_on_can_silence"]["value"]):
             delay = float(self._params["can_silence_delay"]["value"])
-            if self.state is not PowerState.CAN_SILENCE_COUNTDOWN:
-                started = current - min(activity.last_frame_age, delay)
+            started = current - min(activity.last_frame_age, delay)
+            if (
+                self.state is not PowerState.CAN_SILENCE_COUNTDOWN
+                or self._countdown_started_at is None
+                or started > self._countdown_started_at
+            ):
                 self._begin_countdown(PowerState.CAN_SILENCE_COUNTDOWN, "can_silence", started)
             self._continue_countdown(delay, current)
         else:
@@ -182,8 +202,11 @@ class PowerManagementService(BaseService):
             self.set_error("Extinction ordonnée en cours")
             report = self.orchestrator.stop_all()
             if report.get("errors") or report.get("unresponsive"):
-                self._power_failed(f"arrêt incomplet des services: {report}", now)
-                return
+                self.logger.error(
+                    "Arrêt incomplet des services avant extinction: %s",
+                    report,
+                    extra={"error_code": "POWER_SERVICE_STOP_INCOMPLETE"},
+                )
             self._flush_logs()
             try:
                 self.sync_writes()
