@@ -8,6 +8,38 @@ from tools import scan_ble_leds
 
 
 class BleScanToolTest(unittest.IsolatedAsyncioTestCase):
+    def test_each_protocol_has_a_distinct_witness_color(self):
+        colors = [protocol.color for protocol in scan_ble_leds.PROTOCOLS.values()]
+        self.assertEqual(len(colors), len(set(colors)))
+
+    def test_protocol_payloads_contain_their_witness_color(self):
+        color_slices = {"1": slice(4, 7), "2": slice(1, 4), "3": slice(1, 4), "4": slice(4, 7)}
+        for key, protocol in scan_ble_leds.PROTOCOLS.items():
+            color_payload = scan_ble_leds.build_protocol_payloads(key, *protocol.color)[1]
+            self.assertEqual(tuple(color_payload[color_slices[key]]), protocol.color)
+
+    def test_preferred_characteristic_and_write_mode_are_detected(self):
+        generic = SimpleNamespace(
+            uuid="11111111-1111-1111-1111-111111111111",
+            properties=["write-without-response"],
+        )
+        preferred = SimpleNamespace(
+            uuid="0000ffe1-0000-1000-8000-00805f9b34fb",
+            properties=["write"],
+        )
+        with patch("builtins.input", return_value=""):
+            selected = scan_ble_leds.select_write_characteristic([generic, preferred])
+
+        self.assertIs(selected, preferred)
+        self.assertTrue(scan_ble_leds.write_requires_response(preferred))
+        self.assertFalse(scan_ble_leds.write_requires_response(generic))
+
+    def test_protocol_result_waits_for_an_explicit_answer(self):
+        with patch("builtins.input", side_effect=["invalide", ""]) as prompt:
+            result = scan_ble_leds.ask_protocol_result("ROUGE")
+        self.assertEqual(result, "next")
+        self.assertEqual(prompt.call_count, 2)
+
     async def test_scan_reads_rssi_from_advertisement_data(self):
         device = SimpleNamespace(address="AA:BB:CC:DD:EE:FF", name="ELK-BLEDOM")
         advertisement = SimpleNamespace(rssi=-47)

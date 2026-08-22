@@ -3,13 +3,14 @@
 
 Permet de scanner les appareils environnants, de détecter les contrôleurs
 Lotus Lantern et LED Lamp, et d'envoyer des séquences de test de couleurs
-pour identifier la bonne adresse MAC et le bon protocole.
+pour identifier le bon appareil BLE et le bon protocole.
 
 Usage sur Raspberry Pi:
     python3 tools/scan_ble_leds.py
 """
 
 import asyncio
+from typing import NamedTuple
 
 try:
     from bleak import BleakScanner, BleakClient
@@ -37,24 +38,114 @@ KNOWN_LED_NAMES = [
     "triones", "ble", "lamp", "dream", "slg", "hj", "zengge"
 ]
 
+
+class ProtocolTest(NamedTuple):
+    identifier: str
+    label: str
+    color_name: str
+    color: tuple[int, int, int]
+
+
 PROTOCOLS = {
-    "1": ("LOTUS_9B (Lotus Lantern / ELK-BLEDOM 9-octets)", [
-        bytearray([0x7E, 0x00, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]), # ON
-        bytearray([0x7E, 0x00, 0x05, 0x03, 255, 0, 0, 0x00, 0xEF]),       # Rouge
-    ]),
-    "2": ("TRIONES_7B (LED BLE / Triones / Magic 7-octets)", [
-        bytearray([0xCC, 0x23, 0x33]),                                      # ON
-        bytearray([0x56, 255, 0, 0, 0x00, 0xF0, 0xAA]),                     # Rouge
-    ]),
-    "3": ("SP110E_4B (BanlanX / SP110E DreamColor 4-octets)", [
-        bytearray([0xAA, 0x02, 0x01, 0xAD]),                               # ON
-        bytearray([0x38, 255, 0, 0]),                                       # Rouge
-    ]),
-    "4": ("LED_LAMP_9B (HiLighting / LED Lamp 9-octets variant)", [
-        bytearray([0x7E, 0x04, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]), # ON
-        bytearray([0x7E, 0x04, 0x05, 0x03, 255, 0, 0, 0xFF, 0xEF]),       # Rouge
-    ]),
+    "1": ProtocolTest(
+        "LOTUS_9B", "Lotus Lantern / ELK-BLEDOM 9 octets", "ROUGE", (255, 0, 0),
+    ),
+    "2": ProtocolTest(
+        "TRIONES_7B", "LED BLE / Triones / Magic 7 octets", "VERT", (0, 255, 0),
+    ),
+    "3": ProtocolTest(
+        "SP110E_4B", "BanlanX / SP110E DreamColor 4 octets", "BLEU", (0, 0, 255),
+    ),
+    "4": ProtocolTest(
+        "LED_LAMP_9B", "HiLighting / LED Lamp 9 octets", "MAGENTA", (255, 0, 255),
+    ),
 }
+
+PREFERRED_CHAR_UUIDS = [
+    "0000fff3-0000-1000-8000-00805f9b34fb",
+    "0000ffe1-0000-1000-8000-00805f9b34fb",
+    "0000ffd9-0000-1000-8000-00805f9b34fb",
+    "0000ae01-0000-1000-8000-00805f9b34fb",
+    "0000fa02-0000-1000-8000-00805f9b34fb",
+]
+
+
+def build_protocol_payloads(protocol_key: str, r: int, g: int, b: int) -> list[bytearray]:
+    """Construit la commande d'allumage et la couleur d'un protocole de test."""
+    if protocol_key == "1":
+        return [
+            bytearray([0x7E, 0x00, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
+            bytearray([0x7E, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xEF]),
+            bytearray([0x7E, 0x00, 0x01, 100, 0x00, 0x00, 0x00, 0x00, 0xEF]),
+        ]
+    if protocol_key == "2":
+        return [
+            bytearray([0xCC, 0x23, 0x33]),
+            bytearray([0x56, r, g, b, 0x00, 0xF0, 0xAA]),
+        ]
+    if protocol_key == "3":
+        return [
+            bytearray([0xAA, 0x02, 0x01, 0xAD]),
+            bytearray([0x38, r, g, b]),
+        ]
+    if protocol_key == "4":
+        return [
+            bytearray([0x7E, 0x04, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
+            bytearray([0x7E, 0x04, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
+        ]
+    raise ValueError(f"Protocole de test inconnu: {protocol_key}")
+
+
+def preferred_characteristic_index(characteristics) -> int:
+    for preferred_uuid in PREFERRED_CHAR_UUIDS:
+        for index, characteristic in enumerate(characteristics):
+            if characteristic.uuid.lower() == preferred_uuid:
+                return index
+    return 0
+
+
+def select_write_characteristic(characteristics):
+    """Laisse choisir la cible GATT au lieu d'utiliser arbitrairement la première."""
+    default_index = preferred_characteristic_index(characteristics)
+    if len(characteristics) == 1:
+        return characteristics[0]
+
+    print("\nPlusieurs caractéristiques acceptent une écriture.")
+    print("Choisissez celle à tester ; Entrée conserve la cible recommandée.")
+    try:
+        choice = input(f"> [défaut {default_index + 1}] ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return characteristics[default_index]
+    if choice.isdigit() and 1 <= int(choice) <= len(characteristics):
+        return characteristics[int(choice) - 1]
+    return characteristics[default_index]
+
+
+def write_requires_response(characteristic) -> bool:
+    properties = set(characteristic.properties)
+    return "write-without-response" not in properties and "write" in properties
+
+
+def ask_protocol_result(color_name: str) -> str:
+    """Attend explicitement l'observation humaine avant le protocole suivant."""
+    prompt = (
+        f"La couleur {color_name} est-elle apparue ? "
+        "[o] oui  [r] réessayer  [Entrée] protocole suivant  [q] arrêter\n> "
+    )
+    while True:
+        try:
+            answer = input(prompt).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return "quit"
+        if answer in {"", "n", "non"}:
+            return "next"
+        if answer in {"o", "oui", "y", "yes"}:
+            return "success"
+        if answer in {"r", "retry", "réessayer"}:
+            return "retry"
+        if answer in {"q", "quit", "quitter"}:
+            return "quit"
+        print("Réponse inconnue.")
 
 
 async def scan_devices():
@@ -97,62 +188,62 @@ async def test_device(address: str, name: str):
                     props = ", ".join(char.properties)
                     is_writable = "write" in char.properties or "write-without-response" in char.properties
                     marker = "✏️ [ÉCRITURE POSSIBLE]" if is_writable else ""
-                    print(f"   Service: {service.uuid[:8]}... | Char: {char.uuid} ({props}) {marker}")
                     if is_writable:
-                        write_chars.append(char.uuid)
+                        write_chars.append(char)
+                        marker = f"✏️ [ÉCRITURE {len(write_chars)}]"
+                    print(f"   Service: {service.uuid[:8]}... | Char: {char.uuid} ({props}) {marker}")
 
             if not write_chars:
                 print("❌ Aucune caractéristique d'écriture trouvée sur ce périphérique.")
                 return
 
-            target_char = write_chars[0]
-            print(f"\n🎯 Caractéristique sélectionnée pour l'envoi : {target_char}")
+            target_char = select_write_characteristic(write_chars)
+            response = write_requires_response(target_char)
+            write_mode = "avec réponse" if response else "sans réponse"
+            print(f"\n🎯 Caractéristique sélectionnée : {target_char.uuid}")
+            print(f"   Mode d'écriture : {write_mode}")
 
-            # Test de chaque protocole
-            print("\n🧪 Test d'envoi de séquences de couleurs (ROUGE -> VERT -> BLEU)...")
-            colors = [
-                ("ROUGE", 255, 0, 0),
-                ("VERT", 0, 255, 0),
-                ("BLEU", 0, 0, 255),
-            ]
+            print("\n🧪 Chaque protocole utilise une couleur distincte.")
+            print("Le script attend votre validation avant de poursuivre.")
 
-            for proto_key, (proto_name, _) in PROTOCOLS.items():
-                print(f"\n--- Test Protocole {proto_key} : {proto_name} ---")
-                for cname, r, g, b in colors:
-                    payloads = []
-                    if proto_key == "1":
-                        payloads = [
-                            bytearray([0x7E, 0x00, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
-                            bytearray([0x7E, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xEF]),
-                            bytearray([0x7E, 0x00, 0x01, 100, 0x00, 0x00, 0x00, 0x00, 0xEF]),
-                        ]
-                    elif proto_key == "2":
-                        payloads = [
-                            bytearray([0xCC, 0x23, 0x33]),
-                            bytearray([0x56, r, g, b, 0x00, 0xF0, 0xAA]),
-                        ]
-                    elif proto_key == "3":
-                        payloads = [
-                            bytearray([0xAA, 0x02, 0x01, 0xAD]),
-                            bytearray([0x38, r, g, b]),
-                        ]
-                    elif proto_key == "4":
-                        payloads = [
-                            bytearray([0x7E, 0x04, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
-                            bytearray([0x7E, 0x04, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
-                        ]
-
-                    for p in payloads:
+            for proto_key, protocol in PROTOCOLS.items():
+                print(f"\n--- Protocole {proto_key}: {protocol.identifier} ---")
+                print(f"    Famille : {protocol.label}")
+                print(f"    Couleur témoin : {protocol.color_name} {protocol.color}")
+                while True:
+                    payloads = build_protocol_payloads(proto_key, *protocol.color)
+                    sent = True
+                    for payload in payloads:
                         try:
-                            await client.write_gatt_char(target_char, p, response=False)
+                            print(f"    TX {payload.hex(' ')}")
+                            await client.write_gatt_char(target_char.uuid, payload, response=response)
                             await asyncio.sleep(0.05)
-                        except Exception as e:
-                            print(f"   ⚠️ Erreur envoi: {e}")
+                        except Exception as exc:
+                            sent = False
+                            print(f"    ⚠️ Erreur d'envoi : {exc}")
+                            break
 
-                    print(f"   -> Couleur envoyée : {cname} ({r},{g},{b})")
-                    await asyncio.sleep(1.2)
+                    if sent:
+                        print(f"    Couleur {protocol.color_name} envoyée. Observez le bandeau.")
+                    action = ask_protocol_result(protocol.color_name)
+                    if action == "retry":
+                        continue
+                    if action == "success":
+                        print("\n✅ Protocole confirmé :")
+                        print(f"   Appareil : {name} ({address})")
+                        print(f"   Protocole : {protocol.identifier}")
+                        print(f"   Caractéristique : {target_char.uuid}")
+                        print(f"   Écriture : {write_mode}")
+                        return
+                    if action == "quit":
+                        print("\nTest interrompu par l'utilisateur.")
+                        return
+                    break
 
-            print("\n🏁 Test terminé ! Avez-vous vu le bandeau changer de couleur ?")
+            print("\n❌ Aucun protocole n'a été confirmé sur cette caractéristique.")
+            if len(write_chars) > 1:
+                print("Relancez le test et sélectionnez une autre caractéristique d'écriture.")
+            print("Conservez la liste GATT et les lignes TX pour identifier un protocole supplémentaire.")
 
     except BleakError as e:
         print(f"❌ Échec de connexion : {e}")
@@ -173,7 +264,8 @@ async def main():
     if not devices:
         return 0
 
-    print("\nEntrez le numéro ou l'adresse MAC de l'appareil à tester (ou 'q' pour quitter) :")
+    print("\nEntrez le numéro, l'identifiant BLE ou l'adresse MAC de l'appareil à tester")
+    print("(ou 'q' pour quitter) :")
     try:
         choice = input("> ").strip()
     except (EOFError, KeyboardInterrupt):
