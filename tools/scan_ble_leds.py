@@ -48,24 +48,26 @@ PROTOCOLS = {
 
 async def scan_devices():
     print("\n🔍 Recherche des appareils Bluetooth BLE à proximité (5 secondes)...")
-    devices = await BleakScanner.discover(timeout=5.0)
+    discovered = await BleakScanner.discover(timeout=5.0, return_adv=True)
+    entries = list(discovered.values())
 
-    if not devices:
+    if not entries:
         print("❌ Aucun appareil Bluetooth détecté. Vérifiez que le Bluetooth est activé.")
         return []
 
-    print(f"\n📡 {len(devices)} appareils détectés :\n")
+    print(f"\n📡 {len(entries)} appareils détectés :\n")
     candidates = []
 
-    for idx, d in enumerate(devices, 1):
+    for idx, (d, advertisement) in enumerate(entries, 1):
         name = d.name or "Inconnu"
         is_candidate = any(k in name.lower() for k in KNOWN_LED_NAMES)
         marker = "💡 [POTENTIEL CONTRÔLEUR LED]" if is_candidate else ""
-        print(f"  [{idx:02d}] {d.address} | Nom: {name:<24} | RSSI: {d.rssi} dBm {marker}")
+        rssi = getattr(advertisement, "rssi", "?")
+        print(f"  [{idx:02d}] {d.address} | Nom: {name:<24} | RSSI: {rssi} dBm {marker}")
         if is_candidate or name != "Inconnu":
             candidates.append(d)
 
-    return devices
+    return [device for device, _advertisement in entries]
 
 
 async def test_device(address: str, name: str):

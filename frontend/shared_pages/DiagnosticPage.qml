@@ -6,6 +6,7 @@ import "../state" as S
 
 Item {
     id: root
+    signal backRequested()
     readonly property var codes: S.UiState.diagnosticCodes
     readonly property bool scanning: S.UiState.isScanning
     readonly property bool scanned: S.UiState.hasScanned
@@ -13,9 +14,17 @@ Item {
     readonly property string statusText: !ready ? "INDISPONIBLE" : scanning ? "ANALYSE" : !scanned ? "PRÊT" : codes.length ? "DÉFAUTS" : "OK"
     readonly property color statusColor: !ready ? T.StyleManager.textSecondary : scanning ? T.StyleManager.accent : codes.length ? T.StyleManager.danger : scanned ? T.StyleManager.success : T.StyleManager.text
 
-    RowLayout {
-        anchors.fill: parent; anchors.margins: 16; spacing: 14
-        Card {
+    ColumnLayout {
+        anchors.fill: parent; anchors.margins: 16; spacing: 12
+        PageHeader {
+            Layout.fillWidth: true
+            title: "Diagnostic moteur"
+            subtitle: "Lecture des codes défaut OBD-II"
+            onBackClicked: root.backRequested()
+        }
+        RowLayout {
+            Layout.fillWidth: true; Layout.fillHeight: true; spacing: 14
+            Card {
             Layout.preferredWidth: 350; Layout.fillHeight: true; title: "Diagnostic moteur"; highlighted: root.codes.length > 0
             ColumnLayout {
                 anchors.fill: parent; spacing: 20
@@ -36,9 +45,9 @@ Item {
                 Button { Layout.fillWidth: true; text: "EFFACER LES DÉFAUTS"; destructive: true; enabled: false; subtext: "Backend non disponible" }
             }
         }
-        Card {
-            Layout.fillWidth: true; Layout.fillHeight: true; title: "Rapport DTC"
-            ListView {
+            Card {
+                Layout.fillWidth: true; Layout.fillHeight: true; title: "Rapport DTC"
+                ListView {
                 anchors.fill: parent; clip: true; spacing: 10; model: root.codes
                 delegate: Rectangle {
                     width: ListView.view.width; height: 84; radius: T.StyleManager.radiusSmall
@@ -54,6 +63,7 @@ Item {
                     text: root.scanning ? "Analyse en cours…" : root.scanned ? "Aucun code défaut" : "Lancez un scan pour afficher les codes DTC"
                     color: root.scanned ? T.StyleManager.success : T.StyleManager.textSecondary
                     font.pixelSize: 23
+                }
                 }
             }
         }

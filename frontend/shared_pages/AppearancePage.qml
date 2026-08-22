@@ -159,7 +159,7 @@ Item {
                                     color: "#FFFFFF"
                                     font.pixelSize: 11
                                     font.bold: true
-                                    font.family: "Monospace"
+                                    font.family: T.StyleManager.fontMono
                                 }
                             }
                         }

@@ -54,6 +54,14 @@ class SimulationScenariosTest(unittest.TestCase):
         runner.stop()
         self.assertFalse(runner.is_running)
 
+    def test_direct_mock_fuel_signal_matches_the_wrapping_can_counter(self):
+        self.provider.engine.state.fuel_used_total_l = 0.025
+        time.sleep(0.05)
+        fuel_used = self.runtime.snapshot().domain("powertrain").get("fuel_used")
+        self.assertIsNotNone(fuel_used)
+        self.assertGreaterEqual(fuel_used, 0.0)
+        self.assertLess(fuel_used, 0.02048)
+
 
 if __name__ == "__main__":
     unittest.main()

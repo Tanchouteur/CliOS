@@ -20,10 +20,14 @@ def install_crash_hooks(log_dir: str) -> None:
     logger = get_logger("CrashHooks")
 
     def _sys_hook(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
+            return
         logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_tb), extra={"error_code": "UNHANDLED_EXCEPTION"})
 
     def _thread_hook(args: threading.ExceptHookArgs):
         if args.exc_value is None:
+            return
+        if issubclass(args.exc_type, (KeyboardInterrupt, SystemExit)):
             return
         logger.critical(
             "Unhandled thread exception in %s",

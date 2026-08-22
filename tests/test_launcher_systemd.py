@@ -62,6 +62,13 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn("Voulez-vous démarrer CliOS maintenant ?", installer)
         self.assertIn('start clios.service', installer)
 
+    def test_gui_hides_cursor_and_desktop_forces_mock_by_default(self):
+        main = (ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn("--show-cursor", main)
+        self.assertIn("if not args.show_cursor", main)
+        self.assertIn('platform.system() != "Linux"', main)
+        self.assertIn("args.mock = True", main)
+
 
 if __name__ == "__main__":
     unittest.main()

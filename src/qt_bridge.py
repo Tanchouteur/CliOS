@@ -116,6 +116,8 @@ class DashboardBridge(QObject):
 
     # Boucles de rafraîchissement.
     def _update_fast_data(self):
+        if self._closed:
+            return
         snapshot = self.runtime.snapshot()
         new_vehicle_state = self._sanitize_for_qml(snapshot.as_dict(VEHICLE_DOMAINS))
         if new_vehicle_state != self._vehicle_state:
@@ -148,6 +150,8 @@ class DashboardBridge(QObject):
             self.presentationStateChanged.emit()
 
     def _update_health(self):
+        if self._closed:
+            return
         system = self.runtime.snapshot().domain("system")
         version = system.get("system_version", "unknown")
         telemetry = {key: value for key, value in system.items() if key != "system_version"}
@@ -372,6 +376,8 @@ class DashboardBridge(QObject):
         if self._closed:
             return True
         self._closed = True
+        self.timer_fast.stop()
+        self.timer_slow.stop()
         saved = self._write_current_config()
         self._config_writer_stop.set()
         self._config_write_requested.set()

@@ -20,5 +20,5 @@ QtObject {
     readonly property color secondaryDark: Qt.darker(secondary, 1.25)
     readonly property color redLine: StyleManager.danger
     readonly property string fontMain: StyleManager.fontFamily
-    readonly property string fontMono: "Monospace"
+    readonly property string fontMono: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "DejaVu Sans Mono")
 }

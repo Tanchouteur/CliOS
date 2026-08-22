@@ -139,6 +139,14 @@ class ArchitectureContractTest(unittest.TestCase):
         for action in ("reset_a", "reset_b", "pause_trip", "resume_trip", "end_trip"):
             self.assertIn(action, menu)
 
+    def test_every_shared_detail_page_can_return_to_the_menu(self):
+        pages = os.path.join(ROOT, "frontend", "shared_pages")
+        for filename in ("AppearancePage.qml", "VehiclePage.qml", "ServicesPage.qml", "SystemPage.qml", "DiagnosticPage.qml", "DeveloperPage.qml"):
+            with open(os.path.join(pages, filename), encoding="utf-8") as stream:
+                source = stream.read()
+            self.assertIn("signal backRequested()", source, filename)
+            self.assertIn("PageHeader", source, filename)
+
 
 if __name__ == "__main__":
     unittest.main()
