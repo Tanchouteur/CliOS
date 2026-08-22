@@ -10,15 +10,26 @@ Usage sur Raspberry Pi:
 """
 
 import asyncio
-import sys
 
 try:
     from bleak import BleakScanner, BleakClient
     from bleak.exc import BleakError
-except ImportError:
-    print("\n[ERREUR] La bibliothèque 'bleak' n'est pas installée.")
-    print("Installez-la avec : pip install bleak\n")
-    sys.exit(1)
+    BLEAK_IMPORT_ERROR = None
+except ImportError as exc:
+    BleakScanner = None
+    BleakClient = None
+    BLEAK_IMPORT_ERROR = exc
+
+    class BleakError(Exception):
+        """Type de repli utilisé uniquement lorsque Bleak est absent."""
+
+
+def require_bleak():
+    if BLEAK_IMPORT_ERROR is not None or BleakScanner is None or BleakClient is None:
+        raise RuntimeError(
+            "La bibliothèque 'bleak' n'est pas installée. "
+            "Installez-la avec : pip install bleak"
+        ) from BLEAK_IMPORT_ERROR
 
 
 KNOWN_LED_NAMES = [
@@ -47,6 +58,7 @@ PROTOCOLS = {
 
 
 async def scan_devices():
+    require_bleak()
     print("\n🔍 Recherche des appareils Bluetooth BLE à proximité (5 secondes)...")
     discovered = await BleakScanner.discover(timeout=5.0, return_adv=True)
     entries = list(discovered.values())
@@ -71,6 +83,7 @@ async def scan_devices():
 
 
 async def test_device(address: str, name: str):
+    require_bleak()
     print(f"\n🔌 Connexion à {name} ({address})...")
     try:
         async with BleakClient(address, timeout=6.0) as client:
@@ -152,18 +165,22 @@ async def main():
     print("   🚗 CliOS - Diagnostic & Scanner Bandeaux LED Bluetooth")
     print("=" * 65)
 
-    devices = await scan_devices()
+    try:
+        devices = await scan_devices()
+    except RuntimeError as exc:
+        print(f"\n[ERREUR] {exc}\n")
+        return 1
     if not devices:
-        return
+        return 0
 
     print("\nEntrez le numéro ou l'adresse MAC de l'appareil à tester (ou 'q' pour quitter) :")
     try:
         choice = input("> ").strip()
     except (EOFError, KeyboardInterrupt):
-        return
+        return 0
 
     if choice.lower() == 'q' or not choice:
-        return
+        return 0
 
     target = None
     if choice.isdigit() and 1 <= int(choice) <= len(devices):
@@ -178,10 +195,11 @@ async def main():
         await test_device(target.address, target.name or "Inconnu")
     else:
         print(f"❌ Appareil '{choice}' non trouvé dans la liste.")
+    return 0
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        raise SystemExit(asyncio.run(main()))
     except KeyboardInterrupt:
         print("\nArrêt.")

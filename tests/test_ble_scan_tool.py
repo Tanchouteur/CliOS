@@ -14,13 +14,25 @@ class BleScanToolTest(unittest.IsolatedAsyncioTestCase):
         discover = AsyncMock(return_value={device.address: (device, advertisement)})
 
         output = io.StringIO()
-        with patch.object(scan_ble_leds.BleakScanner, "discover", discover):
+        scanner = SimpleNamespace(discover=discover)
+        client = SimpleNamespace()
+        with patch.object(scan_ble_leds, "BleakScanner", scanner), \
+                patch.object(scan_ble_leds, "BleakClient", client), \
+                patch.object(scan_ble_leds, "BLEAK_IMPORT_ERROR", None):
             with contextlib.redirect_stdout(output):
                 devices = await scan_ble_leds.scan_devices()
 
         self.assertEqual(devices, [device])
         self.assertIn("RSSI: -47 dBm", output.getvalue())
         discover.assert_awaited_once_with(timeout=5.0, return_adv=True)
+
+    async def test_missing_bleak_is_reported_without_exiting_during_import(self):
+        missing = ImportError("No module named 'bleak'")
+        with patch.object(scan_ble_leds, "BleakScanner", None), \
+                patch.object(scan_ble_leds, "BleakClient", None), \
+                patch.object(scan_ble_leds, "BLEAK_IMPORT_ERROR", missing):
+            with self.assertRaisesRegex(RuntimeError, "pip install bleak"):
+                await scan_ble_leds.scan_devices()
 
 
 if __name__ == "__main__":
