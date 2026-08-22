@@ -39,6 +39,7 @@ from src.services.dynamics_service import DynamicsService
 from src.logging_runtime import init_logging, relocate_log_dir, set_global_context, shutdown_logging, get_logger
 from src.crash_hooks import install_crash_hooks, relocate_crash_log
 from src.storage_manager import StorageManager, StorageMode
+from src.update_safety import UpdateSafety
 
 # Import de notre outil de debug externalisé
 from src.cli_debug import ui_loop
@@ -123,6 +124,7 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
     dynamics_service = DynamicsService(runtime, vehicle_config, storage)
     gear_calib_service = GearCalibrationService(runtime, storage, profile_manager, dynamics_service)
     session_manager = TripSessionManager(runtime, storage, stats_service, storage_dir)
+    update_safety = UpdateSafety()
 
     services_to_register = [
         (diag_service, "services.Diag.enabled", True),
@@ -137,6 +139,7 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
         (PowerManagementService(
             runtime, storage, orchestrator, can_activity,
             power_executor=SystemPowerExecutor(mock=mock),
+            update_safety=update_safety,
         ), "services.PowerManager.enabled", True),
         (session_manager, "services.SessionManager.enabled", True),
         (UsbStorageService(runtime, storage, storage_manager, development_mode=mock), None, True),

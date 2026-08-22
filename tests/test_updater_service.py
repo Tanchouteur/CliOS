@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.release_manager import ReleaseManager
 from src.updater_service import UpdaterEngine, UpdaterProtocolError
+from src.update_safety import UpdateSafety
 
 
 class Catalog:
@@ -64,7 +65,36 @@ class UpdaterServiceTest(unittest.TestCase):
             platform_id="raspberry-pi-os-bookworm-arm64",
         )
         manager._install_environment = lambda _root, _platform: None
-        return UpdaterEngine(manager, Catalog(manifests), str(self.state / "updater-status.json"), restart=lambda: None, health_timeout=timeout)
+        safety = UpdateSafety(
+            str(self.state / "updater-status.json"), str(self.root / "missing-mountinfo"),
+        )
+        return UpdaterEngine(
+            manager, Catalog(manifests), str(self.state / "updater-status.json"),
+            restart=lambda: None, health_timeout=timeout, update_safety=safety,
+        )
+
+    def test_overlay_install_root_is_rejected_before_download(self):
+        manifest = self.make_manifest("2.0.1-rc.10", "beta")
+        engine = self.engine({"2.0.1-rc.10": manifest})
+        mountinfo = self.root / "mountinfo"
+        mountinfo.write_text("36 25 0:32 / / rw - overlay overlay rw\n", encoding="utf-8")
+        engine.update_safety.mountinfo_path = mountinfo
+
+        with self.assertRaisesRegex(RuntimeError, "protection SD active"):
+            engine.stage("2.0.1-rc.10")
+        self.assertFalse((self.install / "releases/2.0.1-rc.10").exists())
+
+    def test_helper_restart_clears_stale_power_inhibitor(self):
+        self.state.mkdir(parents=True)
+        status = self.state / "updater-status.json"
+        status.write_text(
+            '{"state":"DOWNLOADING","version":"2.0.1-rc.10"}', encoding="utf-8",
+        )
+
+        engine = self.engine({})
+
+        self.assertEqual(engine.status()["state"], "ERROR")
+        self.assertEqual(engine.status()["error"]["code"], "UPDATE_INTERRUPTED")
 
     def test_protocol_rejects_urls_paths_and_extra_fields(self):
         engine = self.engine({})

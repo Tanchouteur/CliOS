@@ -154,6 +154,8 @@ class ArchitectureContractTest(unittest.TestCase):
                 source = stream.read()
             self.assertIn(direct_value, source, filename)
             self.assertIn("motionTrailOpacity", source, filename)
+            self.assertGreaterEqual(source.count("preferredRendererType: Shape.CurveRenderer"), 2, filename)
+            self.assertGreaterEqual(source.count("antialiasing: true"), 2, filename)
             self.assertNotIn("smoothRpm", source, filename)
             self.assertNotIn("smoothSpeed", source, filename)
 

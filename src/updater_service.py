@@ -15,6 +15,7 @@ from pathlib import Path
 from src.release_catalog import CatalogError, ReleaseCatalog
 from src.release_contract import ReleaseContractError, SemVer
 from src.release_manager import ReleaseError, ReleaseManager
+from src.update_safety import ACTIVE_UPDATE_STATES, UpdateSafety
 
 
 class UpdaterProtocolError(ValueError):
@@ -30,15 +31,31 @@ class UpdaterEngine:
     }
 
     def __init__(self, manager: ReleaseManager, catalog: ReleaseCatalog, status_path: str,
-                 service_name: str = "clios.service", restart=None, health_timeout: float = 45.0):
+                 service_name: str = "clios.service", restart=None, health_timeout: float = 45.0,
+                 update_safety: UpdateSafety | None = None):
         self.manager = manager
         self.catalog = catalog
         self.status_path = Path(status_path)
         self.service_name = service_name
         self.restart = restart or self._restart_service
         self.health_timeout = health_timeout
+        self.update_safety = update_safety or UpdateSafety(status_path=status_path)
         self._lock = threading.Lock()
         self.manager.progress_callback = self._progress
+        self._recover_interrupted_operation()
+
+    def _recover_interrupted_operation(self) -> None:
+        previous = self._read_status()
+        state = str(previous.get("state", "IDLE"))
+        if state not in ACTIVE_UPDATE_STATES:
+            return
+        message = f"opération {state.lower()} interrompue au redémarrage du helper"
+        previous.update({
+            "state": "ERROR",
+            "message": message,
+            "error": {"code": "UPDATE_INTERRUPTED", "message": message},
+        })
+        self._write_status(previous)
 
     def handle(self, request: object) -> dict:
         if not isinstance(request, dict):
@@ -79,6 +96,10 @@ class UpdaterEngine:
         return updater
 
     def stage(self, version: str) -> dict:
+        if self.update_safety.path_is_overlay(self.manager.install_root):
+            raise ReleaseError(
+                "protection SD active: désactivez OverlayFS et redémarrez avant la mise à jour"
+            )
         self._write_status({"state": "DOWNLOADING", "version": version, "progress": 0, "message": "Résolution GitHub", "error": None})
         try:
             manifest = self.catalog.find(version)

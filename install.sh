@@ -32,6 +32,7 @@ SYSTEMD_DIR="/etc/systemd/system"
 UDEV_RULES_DIR="/etc/udev/rules.d"
 LOCAL_LIBEXEC_DIR="/usr/local/libexec"
 POLKIT_RULES_DIR="/etc/polkit-1/rules.d"
+SUDOERS_DIR="/etc/sudoers.d"
 
 # Flags d'exécution
 DRY_RUN=0
@@ -339,6 +340,14 @@ do_uninstall() {
 
         if [[ -f "${LOCAL_LIBEXEC_DIR}/clios-usb-mount" ]]; then
             run_sudo_cmd "Suppression du helper de montage USB" rm -f "${LOCAL_LIBEXEC_DIR}/clios-usb-mount"
+        fi
+
+        if [[ -f "${SUDOERS_DIR}/clios-overlayfs" ]]; then
+            run_sudo_cmd "Suppression de l'autorisation OverlayFS" rm -f "${SUDOERS_DIR}/clios-overlayfs"
+        fi
+
+        if [[ -f "${POLKIT_RULES_DIR}/49-clios-power.rules" ]]; then
+            run_sudo_cmd "Suppression de la règle Polkit CliOS" rm -f "${POLKIT_RULES_DIR}/49-clios-power.rules"
         fi
 
         safe_systemctl "Rechargement de systemd et udev" daemon-reload
@@ -791,7 +800,7 @@ else
         python3 "${PROJECT_DIR}/tools/generate_systemd.py" \
             --user "${CURRENT_USER}" --uid "${USER_UID}" --output "${TMP_SERVICE_FILE}"
 
-        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" "${UDEV_RULES_DIR}" "${LOCAL_LIBEXEC_DIR}" /etc/clios /var/lib/clios /run/clios /media/clios
+        run_sudo_cmd "Création des répertoires système" mkdir -p "${SYSTEMD_DIR}" "${UDEV_RULES_DIR}" "${LOCAL_LIBEXEC_DIR}" "${SUDOERS_DIR}" /etc/clios /var/lib/clios /run/clios /media/clios
         run_sudo_cmd "Création du répertoire Polkit" mkdir -p "${POLKIT_RULES_DIR}"
         run_sudo_cmd "Droits des données updater" chown root:clios /var/lib/clios /run/clios
         run_sudo_cmd "Permissions des données updater" chmod 0770 /var/lib/clios /run/clios
@@ -804,6 +813,7 @@ else
         backup_system_file "/etc/clios/updater.json"
         backup_system_file "/etc/clios/release-keys.json"
         backup_system_file "${POLKIT_RULES_DIR}/49-clios-power.rules"
+        backup_system_file "${SUDOERS_DIR}/clios-overlayfs"
 
         if [[ $DRY_RUN -eq 1 ]]; then
             log_dry "Contenu du service généré (${TMP_SERVICE_FILE}) :"
@@ -828,6 +838,12 @@ else
             run_sudo_cmd "Installation de la règle Polkit CliOS" cp /tmp/49-clios-power.rules "${POLKIT_RULES_DIR}/49-clios-power.rules"
             run_sudo_cmd "Permissions de la règle Polkit CliOS" chmod 0644 "${POLKIT_RULES_DIR}/49-clios-power.rules"
             rm -f /tmp/49-clios-power.rules
+            sed "s/@CLIOS_USER@/${CURRENT_USER}/g" \
+                "${INSTALL_ETC_DIR}/sudoers.d/clios-overlayfs.in" > /tmp/clios-overlayfs.sudoers
+            run_sudo_cmd "Validation de l'autorisation OverlayFS" visudo -cf /tmp/clios-overlayfs.sudoers
+            run_sudo_cmd "Installation de l'autorisation OverlayFS" cp /tmp/clios-overlayfs.sudoers "${SUDOERS_DIR}/clios-overlayfs"
+            run_sudo_cmd "Permissions de l'autorisation OverlayFS" chmod 0440 "${SUDOERS_DIR}/clios-overlayfs"
+            rm -f /tmp/clios-overlayfs.sudoers
             safe_systemctl "Rechargement daemon systemd" daemon-reload
             safe_udevadm "Rechargement des règles de stockage USB" control --reload-rules
             safe_udevadm "Détection des stockages USB déjà branchés" trigger --subsystem-match=block --action=add

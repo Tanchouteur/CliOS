@@ -276,6 +276,8 @@ Item {
             }
             Shape {
                 anchors.centerIn: parent
+                antialiasing: true
+                preferredRendererType: Shape.CurveRenderer
                 ShapePath {
                     fillColor: "#FF3828"
                     strokeColor: "transparent"
@@ -303,6 +305,8 @@ Item {
         // Aiguille profilée sport
         Shape {
             anchors.centerIn: parent
+            antialiasing: true
+            preferredRendererType: Shape.CurveRenderer
 
             // Corps principal rouge fluo
             ShapePath {

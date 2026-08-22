@@ -14,12 +14,14 @@ from pathlib import Path
 
 from src.diagnostic_bundle import create_diagnostic_bundle
 from src.logging_runtime import get_recent_events
+from src.update_safety import UpdateSafety
 
 
 class SystemController:
     def __init__(self, target):
         self.target = target
         self.project_root = Path(__file__).parents[2]
+        self.update_safety = UpdateSafety()
 
     def recent_logs(self, limit: int) -> str:
         return json.dumps(get_recent_events(limit=max(1, min(limit, 300))))
@@ -162,6 +164,9 @@ class SystemController:
 
     def toggle_overlay(self) -> None:
         target = self.target
+        if self.update_safety.update_in_progress():
+            target.send_notification("ERROR", "OverlayFS verrouillé pendant la mise à jour", 4500)
+            return
         target.logger.info("Bascule protection SD demandée", extra={"error_code": "MAINT_SD_TOGGLE"})
 
         def task() -> None:
@@ -209,6 +214,13 @@ class SystemController:
 
     def request_exit(self, action: str) -> None:
         target = self.target
+        if action in {"poweroff", "reboot"} and self.update_safety.update_in_progress():
+            target.logger.warning(
+                "Action %s refusée pendant la mise à jour", action,
+                extra={"error_code": "POWER_BLOCKED_BY_UPDATE", "action": action},
+            )
+            target.send_notification("ERROR", "Extinction bloquée : mise à jour en cours", 5000)
+            return
         messages = {
             "poweroff": ("warning", "Extinction système demandée", "SYS_SHUTDOWN", "Extinction du système..."),
             "reboot": ("warning", "Redémarrage matériel demandé", "SYS_REBOOT", "Redémarrage du système..."),

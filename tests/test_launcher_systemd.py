@@ -62,6 +62,16 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn("Voulez-vous démarrer CliOS maintenant ?", installer)
         self.assertIn('start clios.service', installer)
 
+    def test_overlayfs_permission_is_limited_to_raspi_config_actions(self):
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        sudoers = (ROOT / "installation/etc/sudoers.d/clios-overlayfs.in").read_text(encoding="utf-8")
+        helper = (ROOT / "tools/toggle_overlayfs.sh").read_text(encoding="utf-8")
+        for action in ("get_overlay_now", "enable_overlayfs", "disable_overlayfs"):
+            self.assertIn(f"/usr/bin/raspi-config nonint {action}", sudoers)
+        self.assertNotIn("NOPASSWD:ALL", sudoers)
+        self.assertIn("visudo -cf", installer)
+        self.assertIn("sudo -n /usr/bin/raspi-config", helper)
+
     def test_gui_hides_cursor_and_desktop_forces_mock_by_default(self):
         main = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn("--show-cursor", main)
