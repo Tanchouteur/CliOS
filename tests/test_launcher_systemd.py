@@ -32,6 +32,8 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn("Environment=CLIOS_HIDE_CURSOR=1", rendered)
         self.assertIn("@USER@", template)
         self.assertFalse((ROOT / "installation/etc/systemd/system/clios.service").exists())
+        self.assertNotIn("can0.service", rendered)
+        self.assertNotIn("sound.target", rendered)
 
     def test_installer_has_offline_targets_for_both_supported_distributions(self):
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
@@ -45,6 +47,8 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn("--exclude='./.venv'", installer)
         self.assertIn('mv "$VENV_DIR" "${staging_dir}/.venv"', installer)
         self.assertIn("Self-check QML de la release", installer)
+        self.assertIn("Précompilation Python pour le premier démarrage", installer)
+        self.assertIn("-m compileall -q", installer)
         self.assertNotIn('cp -a "${PROJECT_DIR}/." "${RELEASE_DIR}/"', installer)
         self.assertLess(
             installer.index('install_release_tree "$RELEASE_DIR"'),

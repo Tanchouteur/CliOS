@@ -1,7 +1,5 @@
 import time
 import threading
-import numpy as np
-import sounddevice as sd
 from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
 
@@ -13,6 +11,8 @@ class CabinNoiseService(BaseService):
         super().__init__("Noise", storage)
         self.runtime = runtime
         self._stream = None
+        self._np = None
+        self._sd = None
 
         self._last_fft_time = 0
 
@@ -36,6 +36,9 @@ class CabinNoiseService(BaseService):
         self._thread.start()
 
     def _audio_callback(self, indata, frames, time_info, status):
+        np = self._np
+        if np is None:
+            return
         audio_data = indata[:, 0]
         rms = np.sqrt(np.mean(audio_data ** 2))
 
@@ -77,7 +80,14 @@ class CabinNoiseService(BaseService):
 
     def _run(self, stop_event):
         try:
-            self._stream = sd.InputStream(callback=self._audio_callback, channels=1, samplerate=44100)
+            # NumPy et PortAudio sont coûteux sur un cache froid Raspberry Pi.
+            # Les charger dans le worker laisse Qt afficher sa première image
+            # avant l'initialisation facultative du microphone.
+            import numpy as np
+            import sounddevice as sd
+            self._np = np
+            self._sd = sd
+            self._stream = self._sd.InputStream(callback=self._audio_callback, channels=1, samplerate=44100)
             self._stream.start()
             self.set_ok("Microphone actif")
 

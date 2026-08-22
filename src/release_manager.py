@@ -135,6 +135,7 @@ class ReleaseManager:
             self._progress("DOWNLOADING", 100, "Installation de l'environnement")
             self._install_environment(release_root, str(manifest.get("platform", "")))
             self.self_check(release_root, run_as=self.self_check_user)
+            self._precompile_runtime(release_root)
             os.replace(release_root, target)
             self._write_json_atomic(target / "release-manifest.json", manifest)
             self._progress("STAGED", 100, f"Release {version} préparée")
@@ -331,6 +332,19 @@ class ReleaseManager:
             )
             if result.returncode:
                 raise ReleaseError("self-check QML: " + (result.stderr or result.stdout))
+
+    @staticmethod
+    def _precompile_runtime(release_root: Path) -> None:
+        """Persist target-version bytecode so the first cockpit boot stays light."""
+        python = release_root / ".venv/bin/python3"
+        if not python.exists():
+            return
+        result = subprocess.run(
+            [str(python), "-m", "compileall", "-q", "main.py", "src", "tools"],
+            cwd=release_root, capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode:
+            raise ReleaseError("précompilation Python: " + (result.stderr or result.stdout))
 
     @staticmethod
     def _install_environment(release_root: Path, platform_id: str = "") -> None:

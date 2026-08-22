@@ -258,6 +258,13 @@ install_release_tree() {
         run_sudo_cmd "Nettoyage du staging incomplet" rm -rf "$staging_dir"
         return 1
     fi
+    if ! run_sudo_cmd "Précompilation Python pour le premier démarrage" \
+        "${staging_dir}/.venv/bin/python3" -m compileall -q \
+        "${staging_dir}/main.py" "${staging_dir}/src" "${staging_dir}/tools"; then
+        run_sudo_cmd "Restauration de l'environnement Python source" mv "${staging_dir}/.venv" "$VENV_DIR"
+        run_sudo_cmd "Nettoyage du staging incomplet" rm -rf "$staging_dir"
+        return 1
+    fi
     if [[ -f "${staging_dir}/tools/qml_smoke.py" ]] && ! run_target_cmd "Self-check QML de la release" \
         env QT_QPA_PLATFORM=offscreen "${staging_dir}/.venv/bin/python3" "${staging_dir}/tools/qml_smoke.py"; then
         run_sudo_cmd "Restauration de l'environnement Python source" mv "${staging_dir}/.venv" "$VENV_DIR"
