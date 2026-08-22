@@ -72,6 +72,44 @@ class StorageManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.mode, StorageMode.USB)
         self.assertEqual(self.manager.get_status()["mount_point"], os.path.realpath(volume))
 
+    def test_nonempty_sda1_usb_wins_even_if_legacy_migration_fails(self):
+        pending = self.manager.resolve_path("logs/pending.log")
+        with open(pending, "w", encoding="utf-8") as stream:
+            stream.write("pending")
+        volume = os.path.join(self.media_root, "sda1")
+        usb_root = os.path.join(volume, "clios")
+        os.makedirs(os.path.join(usb_root, "export"))
+        with open(os.path.join(usb_root, "export", "ancien-export.zip"), "w", encoding="utf-8") as stream:
+            stream.write("keep")
+
+        with mock.patch("src.storage_manager.shutil.copy2", side_effect=PermissionError("metadata refused")):
+            self.assertTrue(self.manager.refresh())
+
+        self.assertEqual(self.manager.mode, StorageMode.USB)
+        self.assertEqual(self.manager.get_writable_root(), os.path.realpath(usb_root))
+        self.assertTrue(os.path.isfile(os.path.join(usb_root, "export", "ancien-export.zip")))
+        self.assertIn("migration partielle", self.manager.get_status()["usb_diagnostic"])
+
+    def test_metadata_error_after_successful_copy_does_not_fail_migration(self):
+        source = self.manager.resolve_path("logs/pending.log")
+        with open(source, "w", encoding="utf-8") as stream:
+            stream.write("complete data")
+        volume = os.path.join(self.media_root, "sda1")
+        usb_root = os.path.join(volume, "clios")
+        os.makedirs(usb_root)
+
+        def copy_then_reject_metadata(copy_source, copy_target):
+            shutil.copyfile(copy_source, copy_target)
+            raise PermissionError("chmod refused")
+
+        with mock.patch("src.storage_manager.shutil.copy2", side_effect=copy_then_reject_metadata):
+            self.assertTrue(self.manager.refresh())
+
+        self.assertEqual(self.manager.mode, StorageMode.USB)
+        with open(os.path.join(usb_root, "logs", "pending.log"), encoding="utf-8") as stream:
+            self.assertEqual(stream.read(), "complete data")
+        self.assertNotIn("migration partielle", self.manager.get_status()["usb_diagnostic"])
+
     def test_missing_linux_media_root_is_normal_on_desktop(self):
         missing_root = os.path.join(self.root, "does-not-exist")
         with mock.patch("src.storage_manager.logging.Logger.warning") as warning:

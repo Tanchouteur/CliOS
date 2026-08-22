@@ -67,7 +67,7 @@ Item {
                 Column { anchors.centerIn: parent; spacing: 5
                     Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.usbConnected ? "CLÉ USB" : (S.UiState.internalStorage ? "CARTE SD" : "MODE RAM"); color: S.UiState.usbConnected ? T.StyleManager.success : (S.UiState.internalStorage ? T.StyleManager.warning : T.StyleManager.danger); font.pixelSize: 25; font.bold: true }
                     Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.fixed(S.UiState.storageFreeMb, 0, "0") + " MB libres"; color: T.StyleManager.textSecondary; font.pixelSize: 16 }
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.usbConnected ? S.UiState.storageMount : S.UiState.storageMode; color: T.StyleManager.textSecondary; font.pixelSize: 11; elide: Text.ElideMiddle; width: 190; horizontalAlignment: Text.AlignHCenter }
+                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.usbConnected ? S.UiState.storageMount : (S.UiState.storageDiagnostic || S.UiState.storageMode); color: T.StyleManager.textSecondary; font.pixelSize: 11; elide: Text.ElideRight; width: 250; horizontalAlignment: Text.AlignHCenter }
                 }
             }
             Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "CAN"; Metric { anchors.centerIn: parent; width: parent.width; label: "Service moteur"; value: S.UiState.serviceHealth.CAN_Moteur ? S.UiState.serviceHealth.CAN_Moteur.status : "—"; alignment: Text.AlignHCenter; valueSize: 26 } }

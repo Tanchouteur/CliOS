@@ -58,26 +58,34 @@ mount_device() {
     if [[ -n "$source" ]]; then
         [[ "$(readlink -f "$source" 2>/dev/null || true)" == "$(readlink -f "$DEVICE")" ]] \
             || fail "${MOUNT_POINT} est déjà utilisé par ${source}"
-        return 0
+    else
+        mkdir -p "$MOUNT_POINT"
+        group_id="$(getent group clios | cut -d: -f3)"
+        [[ -n "$group_id" ]] || fail "le groupe clios est introuvable"
+
+        case "$filesystem" in
+            vfat|msdos|exfat|ntfs|ntfs3)
+                mount -o "rw,nosuid,nodev,noexec,uid=0,gid=${group_id},dmask=0002,fmask=0113" \
+                    "$DEVICE" "$MOUNT_POINT"
+                ;;
+            *)
+                mount -o rw,nosuid,nodev,noexec "$DEVICE" "$MOUNT_POINT"
+                ;;
+        esac
     fi
 
-    mkdir -p "$MOUNT_POINT"
-    group_id="$(getent group clios | cut -d: -f3)"
-    [[ -n "$group_id" ]] || fail "le groupe clios est introuvable"
-
-    case "$filesystem" in
-        vfat|msdos|exfat|ntfs|ntfs3)
-            mount -o "rw,nosuid,nodev,noexec,uid=0,gid=${group_id},dmask=0002,fmask=0113" \
-                "$DEVICE" "$MOUNT_POINT"
-            ;;
-        *)
-            mount -o rw,nosuid,nodev,noexec "$DEVICE" "$MOUNT_POINT"
-            ;;
-    esac
-
-    mkdir -p "${MOUNT_POINT}/clios"
-    chown root:clios "${MOUNT_POINT}/clios" 2>/dev/null || true
-    chmod 2775 "${MOUNT_POINT}/clios" 2>/dev/null || true
+    local clios_root managed_dir
+    clios_root="${MOUNT_POINT}/clios"
+    mkdir -p "$clios_root"
+    chown root:clios "$clios_root" 2>/dev/null || true
+    chmod 2775 "$clios_root" 2>/dev/null || true
+    # Ne touche pas aux autres contenus de la clé (notamment les anciens
+    # exports). Seuls les répertoires runtime connus sont préparés.
+    for managed_dir in dash_save logs trips trips_mock config diagnostics; do
+        mkdir -p "${clios_root}/${managed_dir}"
+        chown root:clios "${clios_root}/${managed_dir}" 2>/dev/null || true
+        chmod 2775 "${clios_root}/${managed_dir}" 2>/dev/null || true
+    done
     log "${DEVICE} (${filesystem}) monté sur ${MOUNT_POINT}"
 }
 
