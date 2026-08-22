@@ -2,6 +2,7 @@
 
 import argparse
 import copy
+import json
 import os
 import sys
 
@@ -261,8 +262,18 @@ class FakeBridge(QObject):
         pass
 
     @Slot(str, result=str)
-    def getServiceParameters(self, _service):
-        return "[]"
+    def getServiceParameters(self, service):
+        if service != "CAN_Moteur":
+            return "[]"
+        return json.dumps([
+            {"key": "enabled", "label": "Activer", "type": "toggle", "value": True},
+            {"key": "rate", "label": "Fréquence", "type": "slider", "value": 25,
+             "min_val": 1, "max_val": 100},
+            {"key": "interface", "label": "Interface", "type": "list", "value": "can0",
+             "options": ["can0", "vcan0"]},
+            {"key": "address", "label": "Adresse", "type": "text", "value": "AA:BB:CC:DD:EE:FF"},
+            {"key": "action", "label": "Action", "type": "button", "value": False},
+        ])
 
     @Slot(str, result=bool)
     def setActiveProfile(self, _profile):
