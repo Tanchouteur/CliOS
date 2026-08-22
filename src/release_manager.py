@@ -99,6 +99,10 @@ class ReleaseManager:
         self.releases_dir.mkdir(parents=True, exist_ok=True)
         self.state_root.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix=f"clios-{version}-", dir=str(self.releases_dir)))
+        # tempfile impose 0700. Le self-check est volontairement exécuté avec
+        # l'utilisateur système ``clios`` : le groupe du service doit donc
+        # pouvoir traverser le staging sans pour autant le rendre public.
+        work.chmod(0o750)
         archive_part = work / "release.tar.part"
         try:
             self._progress("DOWNLOADING", 0, "Téléchargement de l'archive")
@@ -439,7 +443,10 @@ class ReleaseManager:
         except KeyError as exc:
             raise ReleaseError(f"utilisateur de self-check absent: {username}") from exc
 
-        return {"user": account.pw_uid, "group": account.pw_gid, "extra_groups": []}
+        # Ne pas passer extra_groups=[] ici. Python appellerait setgroups(2),
+        # opération refusée par certains profils systemd durcis (EPERM), alors
+        # que changer l'UID/GID primaire suffit pour ce self-check en lecture.
+        return {"user": account.pw_uid, "group": account.pw_gid}
 
     def _channel(self, release: Path) -> str:
         try:

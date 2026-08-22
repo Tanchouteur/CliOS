@@ -83,7 +83,7 @@ class UpdaterEngine:
         try:
             manifest = self.catalog.find(version)
             self._write_status({"state": "DOWNLOADING", "version": version, "progress": 0,
-                                "message": "Release vérifiée", "last_manifest": manifest, "error": None})
+                                "message": "Métadonnées GitHub vérifiées", "last_manifest": manifest, "error": None})
             target = self.manager.stage(manifest, strict=True)
             return {"state": "STAGED", "version": version, "path": str(target)}
         except Exception as exc:
