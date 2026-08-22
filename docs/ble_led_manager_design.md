@@ -70,9 +70,10 @@ validé par l'utilisateur. Les périphériques seulement « probables » restent
 dans les résultats de recherche et ne sont pas enregistrés automatiquement.
 
 Les essais matériels du 22 août 2026 ont confirmé `LOTUS_9B` sur un
-`ELK-BLEDOM` via `FFF3`. Un contrôleur `LEDCAR-01-DF02` a exposé `FFE1` mais n'a
-réagi à aucun des quatre dialectes historiques de CliOS. Le script teste donc
-également les sorties analogique, RGBIC/DMX et combinée propres à LEDCAR-01.
+`ELK-BLEDOM` via `FFF3`, puis `LEDCAR_DMX_9B` sur un `LEDCAR-01-DF02` via
+`FFE1`. Les quatre dialectes historiques de CliOS ne pilotaient pas ce second
+contrôleur ; ses trames RGBIC/DMX validées font désormais partie du service de
+base.
 
 Sources d'interopérabilité utilisées pour ces trames :
 
