@@ -13,10 +13,26 @@ class BleScanToolTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(colors), len(set(colors)))
 
     def test_protocol_payloads_contain_their_witness_color(self):
-        color_slices = {"1": slice(4, 7), "2": slice(1, 4), "3": slice(1, 4), "4": slice(4, 7)}
+        color_locations = {
+            "1": (1, slice(4, 7)), "2": (1, slice(1, 4)),
+            "3": (1, slice(1, 4)), "4": (1, slice(4, 7)),
+            "5": (2, slice(4, 7)), "6": (2, slice(3, 6)),
+            "7": (2, slice(3, 6)), "8": (2, slice(3, 6)),
+        }
         for key, protocol in scan_ble_leds.PROTOCOLS.items():
-            color_payload = scan_ble_leds.build_protocol_payloads(key, *protocol.color)[1]
-            self.assertEqual(tuple(color_payload[color_slices[key]]), protocol.color)
+            payload_index, color_slice = color_locations[key]
+            payload = scan_ble_leds.build_protocol_payloads(key, *protocol.color)[payload_index]
+            self.assertEqual(tuple(payload[color_slice]), protocol.color)
+
+    def test_ledcar_and_elk_names_prioritize_their_known_dialects(self):
+        self.assertEqual(scan_ble_leds.protocol_order("LEDCAR-01-DF02")[:4], ["6", "7", "8", "5"])
+        self.assertEqual(scan_ble_leds.protocol_order("ELK-BLEDOM")[0], "1")
+
+    def test_ledcar_dmx_frames_match_the_documented_nine_byte_dialect(self):
+        power, brightness, color = scan_ble_leds.build_protocol_payloads("6", 1, 2, 3)
+        self.assertEqual(bytes(power), bytes.fromhex("7b ff 04 03 ff ff ff ff bf"))
+        self.assertEqual(bytes(brightness), bytes.fromhex("7b ff 01 20 64 00 ff ff bf"))
+        self.assertEqual(bytes(color), bytes.fromhex("7b 00 07 01 02 03 00 ff bf"))
 
     def test_preferred_characteristic_and_write_mode_are_detected(self):
         generic = SimpleNamespace(

@@ -69,6 +69,19 @@ Un appareil n'est ajouté comme éclairage confirmé qu'après un changement vis
 validé par l'utilisateur. Les périphériques seulement « probables » restent
 dans les résultats de recherche et ne sont pas enregistrés automatiquement.
 
+Les essais matériels du 22 août 2026 ont confirmé `LOTUS_9B` sur un
+`ELK-BLEDOM` via `FFF3`. Un contrôleur `LEDCAR-01-DF02` a exposé `FFE1` mais n'a
+réagi à aucun des quatre dialectes historiques de CliOS. Le script teste donc
+également les sorties analogique, RGBIC/DMX et combinée propres à LEDCAR-01.
+
+Sources d'interopérabilité utilisées pour ces trames :
+
+- [MrMcFlyy/LEDCAR-01](https://github.com/MrMcFlyy/LEDCAR-01), relevés de
+  paquets de l'application LED LAMP ;
+- [LycheeAPPF/led-ble-car](https://github.com/LycheeAPPF/led-ble-car),
+  spécification indépendante et test matériel des dialectes A et B sur
+  LEDCAR-01.
+
 ## Organisation technique proposée
 
 - un registre de protocoles indépendant de l'interface et partagé entre le

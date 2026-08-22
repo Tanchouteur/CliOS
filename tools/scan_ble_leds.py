@@ -59,6 +59,18 @@ PROTOCOLS = {
     "4": ProtocolTest(
         "LED_LAMP_9B", "HiLighting / LED Lamp 9 octets", "MAGENTA", (255, 0, 255),
     ),
+    "5": ProtocolTest(
+        "LEDCAR_A_9B", "LEDCAR-01 sortie analogique / LED BLE", "JAUNE", (255, 255, 0),
+    ),
+    "6": ProtocolTest(
+        "LEDCAR_DMX_9B", "LEDCAR-01 barres RGBIC / LED DMX", "CYAN", (0, 255, 255),
+    ),
+    "7": ProtocolTest(
+        "LEDCAR_ALL_9B", "LEDCAR-01 canal combiné", "ORANGE", (255, 96, 0),
+    ),
+    "8": ProtocolTest(
+        "LEDCAR_B_CLASSIC_9B", "LEDCAR / LEDDMX dialecte B classique", "BLANC", (255, 255, 255),
+    ),
 }
 
 PREFERRED_CHAR_UUIDS = [
@@ -93,7 +105,43 @@ def build_protocol_payloads(protocol_key: str, r: int, g: int, b: int) -> list[b
             bytearray([0x7E, 0x04, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
             bytearray([0x7E, 0x04, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
         ]
+    if protocol_key == "5":
+        return [
+            bytearray([0x7E, 0xFF, 0x04, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xEF]),
+            bytearray([0x7E, 0xFF, 0x01, 32, 100, 0xFF, 0xFF, 0xFF, 0xEF]),
+            bytearray([0x7E, 0xFF, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
+        ]
+    if protocol_key == "6":
+        return [
+            bytearray([0x7B, 0xFF, 0x04, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
+            bytearray([0x7B, 0xFF, 0x01, 32, 100, 0x00, 0xFF, 0xFF, 0xBF]),
+            bytearray([0x7B, 0x00, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
+        ]
+    if protocol_key == "7":
+        return [
+            bytearray([0x7B, 0x01, 0x04, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
+            bytearray([0x7B, 0xFF, 0x01, 32, 100, 0x02, 0xFF, 0xFF, 0xBF]),
+            bytearray([0x7B, 0x01, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
+        ]
+    if protocol_key == "8":
+        return [
+            bytearray([0x7B, 0xFF, 0x04, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
+            bytearray([0x7B, 0xFF, 0x01, 32, 100, 0x01, 0xFF, 0xFF, 0xBF]),
+            bytearray([0x7B, 0xFF, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
+        ]
     raise ValueError(f"Protocole de test inconnu: {protocol_key}")
+
+
+def protocol_order(device_name: str) -> list[str]:
+    """Teste d'abord les dialectes correspondant au nom annoncé."""
+    keys = list(PROTOCOLS)
+    upper_name = device_name.strip().upper()
+    if upper_name.startswith("LEDCAR-01"):
+        priorities = ["6", "7", "8", "5"]
+        return priorities + [key for key in keys if key not in priorities]
+    if upper_name.startswith("ELK-BLEDOM"):
+        return ["1"] + [key for key in keys if key != "1"]
+    return keys
 
 
 def preferred_characteristic_index(characteristics) -> int:
@@ -206,7 +254,8 @@ async def test_device(address: str, name: str):
             print("\n🧪 Chaque protocole utilise une couleur distincte.")
             print("Le script attend votre validation avant de poursuivre.")
 
-            for proto_key, protocol in PROTOCOLS.items():
+            for proto_key in protocol_order(name):
+                protocol = PROTOCOLS[proto_key]
                 print(f"\n--- Protocole {proto_key}: {protocol.identifier} ---")
                 print(f"    Famille : {protocol.label}")
                 print(f"    Couleur témoin : {protocol.color_name} {protocol.color}")
