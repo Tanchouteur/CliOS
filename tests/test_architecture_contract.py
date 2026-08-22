@@ -147,6 +147,22 @@ class ArchitectureContractTest(unittest.TestCase):
             self.assertIn("signal backRequested()", source, filename)
             self.assertIn("PageHeader", source, filename)
 
+    def test_services_page_keeps_immediate_toggles_and_row_settings(self):
+        shared_pages = os.path.join(ROOT, "frontend", "shared_pages")
+        with open(os.path.join(shared_pages, "ServicesPage.qml"), encoding="utf-8") as stream:
+            services = stream.read()
+        with open(os.path.join(shared_pages, "components", "Toggle.qml"), encoding="utf-8") as stream:
+            toggle = stream.read()
+
+        self.assertNotIn("RÉGLAGES", services)
+        self.assertIn("onClicked: serviceRow.toggleDetails()", services)
+        self.assertIn("function reloadParams()", services)
+        for parameter_type in ("toggle", "slider", "list", "text", "number", "button"):
+            self.assertIn(f'parameterType === "{parameter_type}"', services)
+        self.assertIn("property bool visualChecked: checked", toggle)
+        self.assertIn("root.visualChecked = nextValue", toggle)
+        self.assertIn("onCheckedChanged: visualChecked = checked", toggle)
+
     def test_jdm_needles_are_instantaneous_with_visual_motion_trails(self):
         components = os.path.join(ROOT, "frontend", "styles", "jdm_mugen", "components")
         for filename, direct_value in (("MugenTachometer.qml", "currentRpm / dialMaxRpm"), ("MugenSpeedometer.qml", "currentSpeed / dialMaxSpeed")):

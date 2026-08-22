@@ -14,6 +14,16 @@ from src.services.param_types import ServiceParamType
 
 DEFAULT_MAC_DASHBOARD = "A060C742-6A5E-53EB-4196-099CF978EB2E"
 DEFAULT_MAC_FOOTWELL = "1ED496B4-A08D-40AD-5D1F-01C1DEC86072"
+DEFAULT_DASH_PROTOCOL = "LEDCAR_DMX_9B"
+DEFAULT_FOOT_PROTOCOL = "LOTUS_9B"
+
+SUPPORTED_PROTOCOLS = [
+    "LOTUS_9B",
+    "LEDCAR_DMX_9B",
+    "LED_LAMP_9B",
+    "TRIONES_7B",
+    "SP110E_4B",
+]
 
 PREFERRED_CHAR_UUIDS = [
     "0000fff3-0000-1000-8000-00805f9b34fb",
@@ -25,7 +35,7 @@ PREFERRED_CHAR_UUIDS = [
 
 
 class BleLedController(BaseService):
-    """Gestionnaire BLE multi-contrôleurs pour bandeaux LED Lotus Lantern & LED Lamp."""
+    """Gestionnaire BLE pour les contrôleurs Lotus et LEDCAR validés."""
 
     def __init__(self, storage=None):
         super().__init__("Leds", storage)
@@ -42,15 +52,31 @@ class BleLedController(BaseService):
         self.register_param("foot_on", "Activer Plancher", ServiceParamType.TOGGLE, True)
         self.register_param("brightness", "Luminosité (%)", ServiceParamType.SLIDER, 100.0, min_val=0.0, max_val=100.0)
         self.register_param(
-            "dash_proto", "Protocole Habitacle", ServiceParamType.LIST, "LOTUS_9B",
-            options=["LOTUS_9B", "LED_LAMP_9B", "TRIONES_7B", "SP110E_4B"]
+            "dash_proto", "Protocole Habitacle", ServiceParamType.LIST, DEFAULT_DASH_PROTOCOL,
+            options=SUPPORTED_PROTOCOLS,
         )
         self.register_param(
-            "foot_proto", "Protocole Plancher", ServiceParamType.LIST, "LOTUS_9B",
-            options=["LOTUS_9B", "LED_LAMP_9B", "TRIONES_7B", "SP110E_4B"]
+            "foot_proto", "Protocole Plancher", ServiceParamType.LIST, DEFAULT_FOOT_PROTOCOL,
+            options=SUPPORTED_PROTOCOLS,
         )
         self.register_param("dash_mac", "Adresse Habitacle", ServiceParamType.TEXT, DEFAULT_MAC_DASHBOARD)
         self.register_param("foot_mac", "Adresse Plancher", ServiceParamType.TEXT, DEFAULT_MAC_FOOTWELL)
+        self._migrate_validated_protocols()
+
+    def _migrate_validated_protocols(self):
+        """Corrige l'ancien protocole par défaut du contrôleur LEDCAR connu."""
+        dash_mac = str(self._params["dash_mac"]["value"]).strip().upper()
+        dash_proto = str(self._params["dash_proto"]["value"])
+        if dash_mac != DEFAULT_MAC_DASHBOARD.upper():
+            return
+        if dash_proto not in {"LOTUS_9B", "LED_LAMP_9B"}:
+            return
+        self._params["dash_proto"]["value"] = DEFAULT_DASH_PROTOCOL
+        if self.storage:
+            self.storage.set(
+                f"services.{self.service_name}.params.dash_proto",
+                DEFAULT_DASH_PROTOCOL,
+            )
 
     def start(self, stop_event=None):
         if self._running:
@@ -79,13 +105,17 @@ class BleLedController(BaseService):
     def update_param(self, key: str, value):
         """Réagit immédiatement aux changements de paramètres (luminosité, on/off)."""
         super().update_param(key, value)
-        if key in ("brightness", "dash_on", "foot_on", "dash_proto", "foot_proto"):
+        if key in (
+            "brightness", "dash_on", "foot_on", "dash_proto", "foot_proto",
+            "dash_mac", "foot_mac",
+        ):
             self.set_color(self._current_color)
 
     def _run_event_loop(self):
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         self._queue = asyncio.Queue()
+        self._queue.put_nowait(self._current_color)
         try:
             self._loop.run_until_complete(self._ble_worker())
         finally:
@@ -123,6 +153,20 @@ class BleLedController(BaseService):
             return [
                 bytearray([0x7E, 0x04, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
                 bytearray([0x7E, 0x04, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
+            ]
+
+        elif proto == "LEDCAR_DMX_9B":
+            # LEDCAR-01 / LED LAMP, sortie barres RGBIC confirmée sur FFE1.
+            if not power_on or brightness_val <= 0:
+                return [bytearray([0x7B, 0xFF, 0x04, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF])]
+            adjusted_brightness = (brightness_val * 32) // 100
+            return [
+                bytearray([0x7B, 0xFF, 0x04, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
+                bytearray([
+                    0x7B, 0xFF, 0x01, adjusted_brightness, brightness_val,
+                    0x00, 0xFF, 0xFF, 0xBF,
+                ]),
+                bytearray([0x7B, 0x00, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
             ]
 
         elif proto == "TRIONES_7B":
