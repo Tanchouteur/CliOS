@@ -72,6 +72,14 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn("visudo -cf", installer)
         self.assertIn("sudo -n /usr/bin/raspi-config", helper)
 
+    def test_usb_mount_prepares_only_runtime_directories(self):
+        helper = (ROOT / "installation/usr/local/libexec/clios-usb-mount").read_text(encoding="utf-8")
+        self.assertIn("for managed_dir in dash_save logs trips trips_mock config diagnostics", helper)
+        self.assertIn('chmod 2775 "${clios_root}/${managed_dir}"', helper)
+        self.assertNotIn("chown -R", helper)
+        mounted_branch = helper.split('if [[ -n "$source" ]]', 1)[1].split("local clios_root", 1)[0]
+        self.assertNotIn("return 0", mounted_branch)
+
     def test_gui_hides_cursor_and_desktop_forces_mock_by_default(self):
         main = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn("--show-cursor", main)

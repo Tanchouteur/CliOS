@@ -370,16 +370,54 @@ class StorageManager:
             self._logger.debug(message, extra={"error_code": error_code})
 
     def _switch_to_usb(self, usb_root: str) -> None:
+        previous_root = self.get_writable_root()
         try:
             self._ensure_tree(usb_root)
-            self._migrate_without_overwrite(self.get_writable_root(), usb_root)
-        except OSError:
+            self._verify_usb_tree_writable(usb_root)
+        except OSError as exc:
+            self._set_usb_diagnostic(
+                f"Dossier CliOS inutilisable: {usb_root}: {exc}",
+                "USB_ROOT_PREPARE_FAILED",
+            )
             return
 
+        migration_error = None
+        try:
+            self._migrate_without_overwrite(previous_root, usb_root)
+        except OSError as exc:
+            # Une migration opportuniste ne doit jamais annuler la sélection
+            # d'une clé parfaitement inscriptible. C'est notamment fréquent
+            # avec les métadonnées POSIX sur FAT/exFAT/NTFS.
+            migration_error = exc
+            self._logger.warning(
+                "Stockage USB activé malgré une migration partielle de %s vers %s: %s",
+                previous_root,
+                usb_root,
+                exc,
+                extra={"error_code": "USB_MIGRATION_PARTIAL"},
+            )
         with self._lock:
             self._usb_root = usb_root
             self._mode = StorageMode.USB
+            if migration_error is None:
+                self._usb_diagnostic = f"Stockage USB actif: {usb_root}"
+            else:
+                self._usb_diagnostic = f"Stockage USB actif; migration partielle: {migration_error}"
         self._notify_callbacks(StorageMode.USB)
+
+    @classmethod
+    def _verify_usb_tree_writable(cls, usb_root: str) -> None:
+        for folder in ("", *cls._DYNAMIC_DIRS):
+            directory = usb_root if not folder else os.path.join(usb_root, folder)
+            probe = os.path.join(directory, ".clios-write-probe")
+            try:
+                with open(probe, "w", encoding="utf-8") as stream:
+                    stream.write("ok")
+            finally:
+                try:
+                    os.remove(probe)
+                except FileNotFoundError:
+                    pass
 
     def _switch_to_base_storage(self) -> None:
         mode = StorageMode.VOLATILE
@@ -414,15 +452,25 @@ class StorageManager:
                     continue
                 target = os.path.join(target_dir, filename)
                 if not os.path.exists(target):
-                    shutil.copy2(source, target)
+                    self._copy_file_portable(source, target)
                     report["copied"].append(os.path.relpath(target, target_root))
                     continue
                 if self._same_file_contents(source, target):
                     continue
                 conflict = self._conflict_path(target)
-                shutil.copy2(source, conflict)
+                self._copy_file_portable(source, conflict)
                 report["conflicts"].append(os.path.relpath(conflict, target_root))
         return report
+
+    @classmethod
+    def _copy_file_portable(cls, source: str, target: str) -> None:
+        """Accept a copy whose data succeeded but POSIX metadata was refused."""
+        try:
+            shutil.copy2(source, target)
+        except OSError:
+            if os.path.isfile(target) and cls._same_file_contents(source, target):
+                return
+            raise
 
     def migrate_existing_data(self, source_root: str, report_path: str | None = None) -> MigrationReport:
         """Copie une ancienne installation vers le stockage actif sans supprimer la source."""
