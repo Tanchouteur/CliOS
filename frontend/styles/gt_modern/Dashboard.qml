@@ -21,7 +21,7 @@ Item {
         { id: "trip", label: "TRAJET", source: "pages/GtTripPage.qml", complex: true },
         { id: "performance", label: "PERFORMANCE", source: "pages/GtPerformancePage.qml", complex: true },
         { id: "diagnostic", label: "DIAGNOSTIC", source: "pages/GtDiagnosticPage.qml", complex: true },
-        { id: "menu", label: "MENU", source: "pages/GtMenuPage.qml", complex: true }
+        { id: "menu", label: "MENU", complex: true }
     ]
 
     function routeInfo(id) {
@@ -31,6 +31,10 @@ Item {
     }
 
     function navigate(id) {
+        if (id === "menu") {
+            root.settingsRequested("menu")
+            return
+        }
         if (["appearance", "vehicle", "services", "system", "diagnostic", "developer"].indexOf(id) >= 0) {
             root.settingsRequested(id)
             return

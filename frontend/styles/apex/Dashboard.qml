@@ -29,12 +29,15 @@ Item {
     property bool   pendingDanger: false
 
     function navigate(tab) {
+        if (tab === "menu") {
+            root.settingsRequested("menu")
+            return
+        }
         if (tab === currentTab) return
         currentTab = tab
         var src = {
             drive: Qt.resolvedUrl("pages/ApexDrivePage.qml"),
-            perf:  Qt.resolvedUrl("pages/ApexPerfPage.qml"),
-            menu:  Qt.resolvedUrl("pages/ApexMenuPage.qml")
+            perf:  Qt.resolvedUrl("pages/ApexPerfPage.qml")
         }
         if (src[tab]) pageLoader.source = src[tab]
     }

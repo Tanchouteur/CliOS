@@ -33,13 +33,7 @@ Item {
         RowLayout {
             Layout.fillWidth: true; spacing: 12
             Repeater {
-                model: [
-                    {label: "APPARENCE", route: "appearance"},
-                    {label: "VÉHICULE", route: "vehicle"},
-                    {label: "SERVICES", route: "services"},
-                    {label: "SYSTÈME", route: "system"},
-                    {label: "DIAGNOSTIC", route: "diagnostic"}
-                ]
+                model: [{label: "MENU CLIOS", route: "menu"}]
                 Rectangle {
                     Layout.fillWidth: true; height: 58; radius: 10
                     color: "#252525"; border.width: 1; border.color: T.StyleManager.outline

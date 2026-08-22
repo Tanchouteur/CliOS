@@ -1,7 +1,5 @@
 import QtQuick
-import QtQuick.Layouts
 import "../style" as T
-import "../state" as S
 
 Item {
     id: root
@@ -11,6 +9,7 @@ Item {
     signal navigateRequested(string route)
 
     readonly property var routeSources: ({
+        menu: "../shared_pages/MenuPage.qml",
         appearance: "../shared_pages/AppearancePage.qml",
         vehicle: "../shared_pages/VehiclePage.qml",
         services: "../shared_pages/ServicesPage.qml",
@@ -21,42 +20,9 @@ Item {
 
     Rectangle { anchors.fill: parent; color: T.StyleManager.background }
 
-    Rectangle {
-        id: systemBar
-        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-        height: 48
-        color: T.StyleManager.surfaceRaised
-        border.width: 1; border.color: T.StyleManager.outline
-        RowLayout {
-            anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 18; spacing: 14
-            Rectangle {
-                width: 130; height: 38; radius: T.StyleManager.radiusSmall
-                color: backArea.pressed ? T.StyleManager.accentSoft : T.StyleManager.surface
-                border.width: 1; border.color: T.StyleManager.outline
-                Text { anchors.centerIn: parent; text: "‹ COCKPIT"; color: T.StyleManager.text; font.pixelSize: 16; font.bold: true }
-                MouseArea { id: backArea; anchors.fill: parent; onClicked: root.backRequested() }
-            }
-            Text { text: "RÉGLAGES · " + root.route.toUpperCase(); color: T.StyleManager.text; font.pixelSize: 18; font.bold: true }
-            Repeater {
-                model: ["appearance", "vehicle", "services", "system", "diagnostic", "developer"]
-                Rectangle {
-                    width: 122; height: 34; radius: T.StyleManager.radiusSmall
-                    color: root.route === modelData ? T.StyleManager.accentSoft : T.StyleManager.surface
-                    border.width: 1; border.color: root.route === modelData ? T.StyleManager.accent : T.StyleManager.outline
-                    Text { anchors.centerIn: parent; text: String(modelData).toUpperCase(); color: T.StyleManager.text; font.pixelSize: 11; font.bold: true }
-                    MouseArea { anchors.fill: parent; onClicked: root.navigateRequested(String(modelData)) }
-                }
-            }
-            Item { Layout.fillWidth: true }
-            Text { text: S.UiState.storageMode; color: S.UiState.ramMode ? T.StyleManager.warning : T.StyleManager.success; font.pixelSize: 15; font.bold: true }
-            Text { text: "CliOS " + S.UiState.systemVersion; color: T.StyleManager.textSecondary; font.pixelSize: 15 }
-        }
-    }
-
     Loader {
         id: pageLoader
-        anchors.left: parent.left; anchors.right: parent.right
-        anchors.top: systemBar.bottom; anchors.bottom: parent.bottom
+        anchors.fill: parent
         source: root.routeSources[root.route] ? Qt.resolvedUrl(root.routeSources[root.route]) : ""
     }
 

@@ -326,7 +326,7 @@ def main():
     window.setWidth(1920)
     window.setHeight(720)
     routes_by_style = {
-        style: ["home", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
+        style: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
         for style in ("apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard")
     }
     styles = ["apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard"]

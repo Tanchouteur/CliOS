@@ -40,7 +40,7 @@ Item {
         anchors.topMargin: 10
         anchors.left: parent.left
         anchors.right: parent.right
-        onOpenSettingsRequested: root.settingsRequested("appearance")
+        onOpenSettingsRequested: root.settingsRequested("menu")
     }
 
     // 3. Cluster Principal 1920×720 à Profondeur 3D

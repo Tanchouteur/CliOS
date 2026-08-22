@@ -123,6 +123,22 @@ class ArchitectureContractTest(unittest.TestCase):
                         offenders.append(os.path.relpath(os.path.join(base, filename), ROOT))
         self.assertEqual(offenders, [])
 
+    def test_every_official_theme_enters_the_shared_menu(self):
+        styles = os.path.join(ROOT, "frontend", "styles")
+        for style_id in ("gt_modern", "apex", "atelier_luxe", "jdm_mugen", "legacy_dashboard"):
+            dashboard = os.path.join(styles, style_id, "Dashboard.qml")
+            with open(dashboard, encoding="utf-8") as stream:
+                source = stream.read()
+            self.assertIn('settingsRequested("menu")', source, style_id)
+
+        with open(os.path.join(ROOT, "frontend", "components", "SettingsShell.qml"), encoding="utf-8") as stream:
+            settings_shell = stream.read()
+        with open(os.path.join(ROOT, "frontend", "shared_pages", "MenuPage.qml"), encoding="utf-8") as stream:
+            menu = stream.read()
+        self.assertIn('menu: "../shared_pages/MenuPage.qml"', settings_shell)
+        for action in ("reset_a", "reset_b", "pause_trip", "resume_trip", "end_trip"):
+            self.assertIn(action, menu)
+
 
 if __name__ == "__main__":
     unittest.main()

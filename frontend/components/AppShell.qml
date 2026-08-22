@@ -1,5 +1,4 @@
 import QtQuick
-import "../style" as T
 import "../state" as S
 import "../shared_pages/components" as C
 
@@ -11,7 +10,7 @@ Item {
     property string pendingCommand: ""
     property bool recoveryOpened: false
 
-    readonly property var routes: ["home", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
+    readonly property var routes: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
     readonly property var confirmations: ({
         reset_a: ["Remettre Trip A à zéro ?", "La distance Trip A sera effacée.", "REMETTRE À ZÉRO", true],
         reset_b: ["Remettre Trip B à zéro ?", "La distance et la moyenne Trip B seront effacées.", "REMETTRE À ZÉRO", true],
@@ -26,18 +25,19 @@ Item {
     })
 
     function openRoute(nextRoute) {
-        if (routes.indexOf(nextRoute) < 0) nextRoute = "diagnostic"
+        if (routes.indexOf(nextRoute) < 0) nextRoute = "menu"
         if (nextRoute === route) return
         route = nextRoute
         history.push(nextRoute)
     }
 
     function back() {
-        if (history.length > 1) history.pop()
-        route = history.length ? history[history.length - 1] : "home"
-        if (route !== "home") {
+        if (route === "menu") {
             route = "home"
             history = ["home"]
+        } else if (route !== "home") {
+            route = "menu"
+            history = ["home", "menu"]
         }
     }
 

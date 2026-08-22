@@ -13,5 +13,5 @@ Item {
         font.pixelSize: 72
     }
 
-    MouseArea { anchors.fill: parent; onClicked: parent.settingsRequested("appearance") }
+    MouseArea { anchors.fill: parent; onClicked: parent.settingsRequested("menu") }
 }
