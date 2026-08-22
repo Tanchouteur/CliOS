@@ -51,6 +51,7 @@ QtObject {
     }
 
     readonly property string fontFamily: "Arial"
+    readonly property string fontMono: Qt.platform.os === "osx" ? "Menlo" : (Qt.platform.os === "windows" ? "Consolas" : "DejaVu Sans Mono")
     readonly property int radiusSmall: Number(metrics.radiusSmall !== undefined ? metrics.radiusSmall : 8)
     readonly property int radiusMedium: Number(metrics.radiusMedium !== undefined ? metrics.radiusMedium : 14)
     readonly property int radiusLarge: Number(metrics.radiusLarge !== undefined ? metrics.radiusLarge : 20)

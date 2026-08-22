@@ -30,7 +30,7 @@ Item {
                         Text {
                             Layout.preferredWidth: 130
                             text: (typeof modelData.value === "number" ? Number(modelData.value).toFixed(2) : String(modelData.value)) + (modelData.unit ? " " + modelData.unit : "")
-                            color: T.StyleManager.text; font.family: "Monospace"; font.pixelSize: 14; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight
+                            color: T.StyleManager.text; font.family: T.StyleManager.fontMono; font.pixelSize: 14; horizontalAlignment: Text.AlignRight; elide: Text.ElideRight
                         }
                     }
                 }

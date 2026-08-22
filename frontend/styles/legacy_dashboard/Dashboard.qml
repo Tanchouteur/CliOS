@@ -191,7 +191,7 @@ Item {
             font.pixelSize: 16
             font.bold: true
         }
-        MouseArea { anchors.fill: parent; onClicked: root.settingsRequested("appearance") }
+        MouseArea { anchors.fill: parent; onClicked: root.settingsRequested("menu") }
     }
 
     component LegacyMetric: Column {

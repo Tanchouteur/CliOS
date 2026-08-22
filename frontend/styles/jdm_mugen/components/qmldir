@@ -2,6 +2,5 @@ MugenTachometer 1.0 MugenTachometer.qml
 MugenSpeedometer 1.0 MugenSpeedometer.qml
 MugenCombimeter 1.0 MugenCombimeter.qml
 MugenClusterBezel 1.0 MugenClusterBezel.qml
-MugenMenuDrawer 1.0 MugenMenuDrawer.qml
 MugenSessionOverlay 1.0 MugenSessionOverlay.qml
 MugenConfirmDialog 1.0 MugenConfirmDialog.qml

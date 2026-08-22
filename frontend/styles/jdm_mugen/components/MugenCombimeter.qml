@@ -17,6 +17,8 @@ Item {
     property real maxTemp: S.UiState.tempMax
     property real warnTemp: S.UiState.tempWarning
     property string gear: S.UiState.gear
+    readonly property real auxiliaryGaugeOffset: 158
+    readonly property real auxiliaryTrackRadius: 66
 
     // 0: Range (km), 1: Conso Inst (L/100), 2: Niveau Carburant (L), 3: Coût Trajet (€)
     property int lcdMode: 0
@@ -118,9 +120,9 @@ Item {
             // =================================================================
             // C. JAUGE ESSENCE (GAUCHE) : F (Haut) à E (Bas)
             // =================================================================
-            const fuelPivotX = cx - 130
+            const fuelPivotX = cx - root.auxiliaryGaugeOffset
             const fuelPivotY = cy
-            const fuelTrackR = 76
+            const fuelTrackR = root.auxiliaryTrackRadius
 
             // Angle rad : de -28° (Haut/F) à +28° (Bas/E)
             const fAngleTop = (-28 * Math.PI) / 180
@@ -174,7 +176,7 @@ Item {
             ctx.fillText("E", fuelPivotX + Math.cos(fAngleBottom + 0.12) * (fuelTrackR + 18), fuelPivotY + Math.sin(fAngleBottom + 0.12) * (fuelTrackR + 18))
 
             // Icône pompe à essence
-            const pumpX = cx - 55
+            const pumpX = cx - 75
             const pumpY = cy - 6
             ctx.fillStyle = S.UiState.lowFuel ? "#E62020" : "#475569"
             ctx.fillRect(pumpX, pumpY - 8, 10, 14)
@@ -185,9 +187,9 @@ Item {
             // =================================================================
             // D. JAUGE TEMPÉRATURE D'EAU (DROITE) : H (Haut) à C (Bas)
             // =================================================================
-            const tempPivotX = cx + 130
+            const tempPivotX = cx + root.auxiliaryGaugeOffset
             const tempPivotY = cy
-            const tempTrackR = 76
+            const tempTrackR = root.auxiliaryTrackRadius
 
             // Angles rad vers la gauche : 180° + 28° = 208° (Haut/H), 180° - 28° = 152° (Bas/C)
             const tAngleTop = (208 * Math.PI) / 180
@@ -237,7 +239,7 @@ Item {
             ctx.fillText("C", tempPivotX + Math.cos(tAngleBottom - 0.12) * (tempTrackR + 18), tempPivotY + Math.sin(tAngleBottom - 0.12) * (tempTrackR + 18))
 
             // Icône température liquide de refroidissement
-            const tempIconX = cx + 45
+            const tempIconX = cx + 60
             const tempIconY = cy - 6
             ctx.fillStyle = S.UiState.hotEngine ? "#E62020" : "#475569"
             ctx.fillRect(tempIconX + 4, tempIconY - 8, 3, 10)
@@ -362,7 +364,7 @@ Item {
     // =========================================================================
     Item {
         id: fuelNeedleItem
-        x: parent.width / 2 - 130
+        x: parent.width / 2 - root.auxiliaryGaugeOffset
         y: parent.height / 2
         transform: Rotation {
             origin.x: 0
@@ -410,7 +412,7 @@ Item {
     // =========================================================================
     Item {
         id: tempNeedleItem
-        x: parent.width / 2 + 130
+        x: parent.width / 2 + root.auxiliaryGaugeOffset
         y: parent.height / 2
         transform: Rotation {
             origin.x: 0

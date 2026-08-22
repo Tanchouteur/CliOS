@@ -7,7 +7,7 @@ signal settingsRequested(string route)
 signal commandRequested(string command)
 ```
 
-Les routes communes sont `appearance`, `vehicle`, `services`, `system`, `diagnostic` et `developer`. Le thème ne charge jamais `shared_pages` lui-même et n’appelle jamais `bridge`. `AppShell` possède la navigation, les confirmations et les commandes.
+La route d'entrée commune est `menu`. Les routes détaillées sont `appearance`, `vehicle`, `services`, `system`, `diagnostic` et `developer`. Un thème doit ouvrir `menu` depuis son bouton principal et ne charge jamais `shared_pages` lui-même. `AppShell` possède la navigation, les confirmations et les commandes.
 
 Le manifeste suit `schemas/v1/theme-manifest.schema.json` avec `apiVersion: 1`, `minCliOSVersion`, `supportedResolutions: ["1920x720"]` et `capabilities`.
 

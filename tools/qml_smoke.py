@@ -326,7 +326,7 @@ def main():
     window.setWidth(1920)
     window.setHeight(720)
     routes_by_style = {
-        style: ["home", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
+        style: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
         for style in ("apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard")
     }
     styles = ["apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard"]
@@ -357,7 +357,7 @@ def main():
                 failures.append(f"capture impossible: {target}")
 
     updater_states = ["IDLE", "CHECKING", "AVAILABLE", "DOWNLOADING", "STAGED", "ACTIVATING", "UP_TO_DATE", "ERROR"]
-    specials = ["warnings", "paused", "missing-data", "confirmation", "legacy-dashboard"] + ["updater-" + value for value in updater_states]
+    specials = ["warnings", "paused", "missing-data", "confirmation", "legacy-dashboard", "jdm-motion"] + ["updater-" + value for value in updater_states]
     special_index = {"value": 0}
 
     def run_special():
@@ -385,6 +385,32 @@ def main():
                 QTimer.singleShot(100, run_special)
 
             QTimer.singleShot(350, finish_legacy)
+            return
+
+        if name == "jdm-motion":
+            bridge.save_setting("ui.visual_style", "jdm_mugen")
+            shell = window.findChild(QObject, "appShell")
+            if shell is not None:
+                shell.openRoute("home")
+            global_confirm = window.findChild(QObject, "globalConfirmDialog")
+            if global_confirm is not None:
+                global_confirm.setProperty("visible", False)
+            bridge._vehicle_state["powertrain"]["rpm"] = 1200
+            bridge._vehicle_state["motion"]["speed"] = 35.0
+            emit_runtime()
+
+            def sweep_needles():
+                bridge._vehicle_state["powertrain"]["rpm"] = 5600
+                bridge._vehicle_state["motion"]["speed"] = 155.0
+                emit_runtime()
+                QTimer.singleShot(24, finish_motion)
+
+            def finish_motion():
+                save_frame("state-jdm-motion")
+                special_index["value"] += 1
+                QTimer.singleShot(100, run_special)
+
+            QTimer.singleShot(750, sweep_needles)
             return
 
         if name.startswith("updater-"):

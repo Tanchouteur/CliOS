@@ -6,10 +6,11 @@ from src.services.base_service import BaseService
 class UsbStorageService(BaseService):
     """Publie l'état du stockage résilient dans le domaine système."""
 
-    def __init__(self, runtime, storage, storage_manager):
+    def __init__(self, runtime, storage, storage_manager, *, development_mode: bool = False):
         super().__init__("USB_Storage", storage)
         self.runtime = runtime
         self._storage_manager = storage_manager
+        self._development_mode = development_mode
 
     def start(self, stop_event: threading.Event, implemented=False):
         super().start(stop_event, implemented=True)
@@ -30,6 +31,10 @@ class UsbStorageService(BaseService):
                     self.set_warning(f"Espace faible : {free_mb:.0f} MB restants")
                 else:
                     self.set_ok(f"USB OK — {free_mb:.0f} MB libres")
+            elif status.get("mode") == "INTERNAL":
+                self.set_ok(f"Carte SD interne — {free_mb:.0f} MB libres")
+            elif self._development_mode:
+                self.set_ok(f"Stockage temporaire de développement — {free_mb:.0f} MB libres")
             else:
                 diagnostic = str(status.get("usb_diagnostic", "Stockage USB indisponible"))
                 self.set_warning(f"{status.get('mode', 'RAM')} — {diagnostic}")

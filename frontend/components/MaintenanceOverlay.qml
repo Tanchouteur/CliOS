@@ -157,7 +157,7 @@ Item {
                             readonly property bool isOnline: root.maintenanceData.ip_address && root.maintenanceData.ip_address !== "Hors-ligne" && !root.maintenanceData.ip_address.startsWith("127.")
                             text: isOnline ? root.maintenanceData.ip_address : "Hors-ligne"
                             color: isOnline ? T.StyleManager.success : "#EF4444"
-                            font.pixelSize: 16; font.bold: true; font.family: "Monospace"
+                            font.pixelSize: 16; font.bold: true; font.family: T.StyleManager.fontMono
                         }
                     }
                 }
@@ -194,7 +194,7 @@ Item {
                         Text { text: "CHARGE SYSTÈME"; color: "#9CA3AF"; font.pixelSize: 11; font.bold: true }
                         Text {
                             text: S.UiState.fixed(S.UiState.appCpuTotalPct, 0, "0") + "% CPU · " + S.UiState.fixed(S.UiState.appRamMb, 0, "0") + " MB" + (root.maintenanceData.cpu_temp ? " · " + root.maintenanceData.cpu_temp : "")
-                            color: "#E5E7EB"; font.pixelSize: 14; font.bold: true; font.family: "Monospace"
+                            color: "#E5E7EB"; font.pixelSize: 14; font.bold: true; font.family: T.StyleManager.fontMono
                         }
                     }
                 }

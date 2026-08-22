@@ -223,7 +223,13 @@ class PhysicsMockProvider:
                     StatePatch("powertrain", {
                         "rpm": int(state.rpm),
                         "engine_temp": state.engine_temp_c,
-                        "fuel_used": round(state.fuel_used_total_l, 4),
+                        # Même compteur 8 bits rebouclant que la trame CAN 0x551.
+                        # Publier le total absolu ici ferait alterner deux unités
+                        # dans le Runtime lorsque CanService décode la simulation.
+                        "fuel_used": round(
+                            (int(round(state.fuel_used_total_l / 0.00008)) & 0xFF) * 0.00008,
+                            5,
+                        ),
                         "fuel_level": round(state.fuel_level_l, 1),
                         "accel_pos": state.throttle_pedal,
                         "accel_computed": state.throttle_pedal,

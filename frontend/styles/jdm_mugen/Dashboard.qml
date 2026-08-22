@@ -27,6 +27,8 @@ Item {
         if (viewId === "drive" || viewId === "cockpit" || viewId === "main") {
             subPageOverlay.visible = false
             subPageLoader.source = ""
+        } else if (viewId === "menu") {
+            root.settingsRequested("menu")
         } else if (["appearance", "vehicle", "services", "system", "diagnostic", "developer"].indexOf(viewId) >= 0) {
             root.settingsRequested(viewId)
         }
@@ -48,7 +50,7 @@ Item {
             root.commandRequested(S.UiState.sessionState === "PAUSED" ? "resume_trip" : "pause_trip")
             event.accepted = true
         } else if (event.key === Qt.Key_M) {
-            menuDrawer.open()
+            root.settingsRequested("menu")
             event.accepted = true
         }
     }
@@ -68,7 +70,7 @@ Item {
     MugenClusterBezel {
         id: clusterBezel
         z: 40
-        onOpenMenuRequested: menuDrawer.open()
+        onOpenMenuRequested: root.settingsRequested("menu")
         onActionRequested: (action) => root.askConfirmation(action)
     }
 
@@ -179,7 +181,7 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: menuDrawer.open()
+                            onClicked: root.settingsRequested("menu")
                         }
                     }
 
@@ -211,16 +213,6 @@ Item {
             function onNavigateRequested(target) { root.navigate(target) }
             function onActionRequested(action) { root.askConfirmation(action) }
         }
-    }
-
-    // =========================================================================
-    // 4. MENU TIROIR TACTILE FLOTTANT ("un bouton en plus pour le menu qui mène vers tout le reste")
-    // =========================================================================
-    MugenMenuDrawer {
-        id: menuDrawer
-        z: 800
-        onNavigateRequested: (target) => root.navigate(target)
-        onActionRequested: (action) => root.askConfirmation(action)
     }
 
     // =========================================================================

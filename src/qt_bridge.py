@@ -106,6 +106,12 @@ class DashboardBridge(QObject):
         self.timer_slow.timeout.connect(self._update_health)
         self.timer_slow.start(1000)
 
+        # Le téléchargement est effectué par le helper root dans un autre
+        # processus. Son statut doit être relu à intervalle fixe.
+        self.timer_updater = QTimer()
+        self.timer_updater.timeout.connect(self._poll_updater_status)
+        self.timer_updater.start(1000)
+
         self._setup_network_information()
 
         self.needs_restart = False
@@ -116,6 +122,8 @@ class DashboardBridge(QObject):
 
     # Boucles de rafraîchissement.
     def _update_fast_data(self):
+        if self._closed:
+            return
         snapshot = self.runtime.snapshot()
         new_vehicle_state = self._sanitize_for_qml(snapshot.as_dict(VEHICLE_DOMAINS))
         if new_vehicle_state != self._vehicle_state:
@@ -148,6 +156,8 @@ class DashboardBridge(QObject):
             self.presentationStateChanged.emit()
 
     def _update_health(self):
+        if self._closed:
+            return
         system = self.runtime.snapshot().domain("system")
         version = system.get("system_version", "unknown")
         telemetry = {key: value for key, value in system.items() if key != "system_version"}
@@ -170,8 +180,6 @@ class DashboardBridge(QObject):
         if new_quality != self._data_quality:
             self._data_quality = new_quality
             self.dataQualityChanged.emit()
-        if int(time.monotonic()) % 5 == 0:
-            self._poll_updater_status()
 
     def _setup_network_information(self):
         if QNetworkInformation is None:
@@ -372,6 +380,9 @@ class DashboardBridge(QObject):
         if self._closed:
             return True
         self._closed = True
+        self.timer_fast.stop()
+        self.timer_slow.stop()
+        self.timer_updater.stop()
         saved = self._write_current_config()
         self._config_writer_stop.set()
         self._config_write_requested.set()

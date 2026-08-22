@@ -123,6 +123,47 @@ class ArchitectureContractTest(unittest.TestCase):
                         offenders.append(os.path.relpath(os.path.join(base, filename), ROOT))
         self.assertEqual(offenders, [])
 
+    def test_every_official_theme_enters_the_shared_menu(self):
+        styles = os.path.join(ROOT, "frontend", "styles")
+        for style_id in ("gt_modern", "apex", "atelier_luxe", "jdm_mugen", "legacy_dashboard"):
+            dashboard = os.path.join(styles, style_id, "Dashboard.qml")
+            with open(dashboard, encoding="utf-8") as stream:
+                source = stream.read()
+            self.assertIn('settingsRequested("menu")', source, style_id)
+
+        with open(os.path.join(ROOT, "frontend", "components", "SettingsShell.qml"), encoding="utf-8") as stream:
+            settings_shell = stream.read()
+        with open(os.path.join(ROOT, "frontend", "shared_pages", "MenuPage.qml"), encoding="utf-8") as stream:
+            menu = stream.read()
+        self.assertIn('menu: "../shared_pages/MenuPage.qml"', settings_shell)
+        for action in ("reset_a", "reset_b", "pause_trip", "resume_trip", "end_trip"):
+            self.assertIn(action, menu)
+
+    def test_every_shared_detail_page_can_return_to_the_menu(self):
+        pages = os.path.join(ROOT, "frontend", "shared_pages")
+        for filename in ("AppearancePage.qml", "VehiclePage.qml", "ServicesPage.qml", "SystemPage.qml", "DiagnosticPage.qml", "DeveloperPage.qml"):
+            with open(os.path.join(pages, filename), encoding="utf-8") as stream:
+                source = stream.read()
+            self.assertIn("signal backRequested()", source, filename)
+            self.assertIn("PageHeader", source, filename)
+
+    def test_jdm_needles_are_instantaneous_with_visual_motion_trails(self):
+        components = os.path.join(ROOT, "frontend", "styles", "jdm_mugen", "components")
+        for filename, direct_value in (("MugenTachometer.qml", "currentRpm / dialMaxRpm"), ("MugenSpeedometer.qml", "currentSpeed / dialMaxSpeed")):
+            with open(os.path.join(components, filename), encoding="utf-8") as stream:
+                source = stream.read()
+            self.assertIn(direct_value, source, filename)
+            self.assertIn("motionTrailOpacity", source, filename)
+            self.assertNotIn("smoothRpm", source, filename)
+            self.assertNotIn("smoothSpeed", source, filename)
+
+        with open(os.path.join(components, "MugenCombimeter.qml"), encoding="utf-8") as stream:
+            combimeter = stream.read()
+        with open(os.path.join(components, "MugenClusterBezel.qml"), encoding="utf-8") as stream:
+            bezel = stream.read()
+        self.assertIn("auxiliaryGaugeOffset: 158", combimeter)
+        self.assertIn("id: buttonFace", bezel)
+
 
 if __name__ == "__main__":
     unittest.main()

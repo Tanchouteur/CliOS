@@ -131,7 +131,7 @@ Item {
             Layout.fillWidth: true; Layout.fillHeight: true; title: "Journal système"
             ScrollView {
                 anchors.fill: parent; clip: true
-                TextArea { readOnly: true; text: root.logsText; wrapMode: TextEdit.NoWrap; color: T.StyleManager.textSecondary; font.family: "Monospace"; font.pixelSize: 14; background: null }
+                TextArea { readOnly: true; text: root.logsText; wrapMode: TextEdit.NoWrap; color: T.StyleManager.textSecondary; font.family: T.StyleManager.fontMono; font.pixelSize: 14; background: null }
             }
         }
         RowLayout {

@@ -16,17 +16,33 @@ Item {
     readonly property real dialMaxSpeed: Math.max(160, Math.ceil(configMaxSpeed / 20) * 20)
     readonly property int totalMajorSteps: Math.round(dialMaxSpeed / 20)
 
-    // Lissage réactif de la vitesse
-    property real smoothSpeed: currentSpeed
-    Behavior on smoothSpeed {
-        NumberAnimation { duration: 55; easing.type: Easing.OutQuad }
-    }
-
-    readonly property real speedRatio: Math.max(0.0, Math.min(1.0, smoothSpeed / dialMaxSpeed))
+    // Position directe : aucune interpolation ni retard sur la valeur CAN.
+    readonly property real speedRatio: Math.max(0.0, Math.min(1.0, currentSpeed / dialMaxSpeed))
     // 225° = 7h30 (bas-gauche), 495° = 4h30 (bas-droite) -> 270° de débattement
     readonly property real startAngleDeg: 225
     readonly property real spanAngleDeg: 270
     readonly property real needleAngleDeg: (startAngleDeg - 360) + spanAngleDeg * speedRatio
+    property real previousNeedleAngleDeg: needleAngleDeg
+    property real motionTrailOffset: 0.0
+    property real motionTrailOpacity: 0.0
+
+    onNeedleAngleDegChanged: {
+        const delta = needleAngleDeg - previousNeedleAngleDeg
+        previousNeedleAngleDeg = needleAngleDeg
+        if (Math.abs(delta) < 0.10) return
+        motionTrailOffset = Math.max(-10, Math.min(10, delta))
+        motionTrailOpacity = Math.min(0.32, 0.07 + Math.abs(delta) * 0.025)
+        trailFade.restart()
+    }
+
+    NumberAnimation {
+        id: trailFade
+        target: root
+        property: "motionTrailOpacity"
+        to: 0.0
+        duration: 90
+        easing.type: Easing.OutQuad
+    }
 
     // Redessine le cadran automatiquement si le profil ou la vitesse max changent
     onDialMaxSpeedChanged: dialCanvas.requestPaint()
@@ -247,6 +263,33 @@ Item {
     // =========================================================================
     // 3. AIGUILLE ROUGE FLUO MUGEN (Rotation Matérielle GPU Pure)
     // =========================================================================
+    Repeater {
+        model: 4
+        delegate: Item {
+            x: root.width / 2
+            y: root.height / 2
+            opacity: root.motionTrailOpacity * (1.0 - index * 0.18)
+            transform: Rotation {
+                origin.x: 0
+                origin.y: 0
+                angle: root.needleAngleDeg - root.motionTrailOffset * ((index + 1) / 4.0)
+            }
+            Shape {
+                anchors.centerIn: parent
+                ShapePath {
+                    fillColor: "#FF3828"
+                    strokeColor: "transparent"
+                    startX: -7.5; startY: 32
+                    PathLine { x: 7.5; y: 32 }
+                    PathLine { x: 2.8; y: -208 }
+                    PathLine { x: 0; y: -222 }
+                    PathLine { x: -2.8; y: -208 }
+                    PathLine { x: -7.5; y: 32 }
+                }
+            }
+        }
+    }
+
     Item {
         id: needleItem
         x: parent.width / 2

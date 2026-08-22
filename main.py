@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import platform
 import threading
 
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -138,7 +139,7 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
             power_executor=SystemPowerExecutor(mock=mock),
         ), "services.PowerManager.enabled", True),
         (session_manager, "services.SessionManager.enabled", True),
-        (UsbStorageService(runtime, storage, storage_manager), None, True),
+        (UsbStorageService(runtime, storage, storage_manager, development_mode=mock), None, True),
     ]
     if can_service is not None:
         services_to_register.insert(0, (can_service, "services.CAN_Moteur.enabled", True))
@@ -162,9 +163,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ui', choices=['cli', 'gui'], default='gui')
     parser.add_argument('--mock', action='store_true')
+    parser.add_argument('--show-cursor', action='store_true', help='Affiche le pointeur en développement')
     parser.add_argument('--allow-unsupported-pyside', action='store_true')
     parser.add_argument('--log-level', default='INFO', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'])
     args = parser.parse_args()
+
+    if platform.system() != "Linux" and not args.mock:
+        print("[INFO] Plateforme desktop détectée : activation automatique du mode --mock.")
+        args.mock = True
 
     ensure_supported_pyside(is_gui=(args.ui == 'gui'), allow_unsupported=args.allow_unsupported_pyside)
 
@@ -275,7 +281,7 @@ def main():
         elif args.ui == 'gui':
             QQuickStyle.setStyle("Basic")
             app = QApplication(sys.argv)
-            if os.environ.get("CLIOS_HIDE_CURSOR") == "1":
+            if not args.show_cursor:
                 QApplication.setOverrideCursor(Qt.CursorShape.BlankCursor)
             engine = QQmlApplicationEngine()
 

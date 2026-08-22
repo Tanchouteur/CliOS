@@ -1,9 +1,12 @@
 import hashlib
 import json
+import os
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from src.release_manager import ReleaseError, ReleaseManager
 
@@ -79,6 +82,25 @@ class ReleaseManagerTest(unittest.TestCase):
         with self.assertRaises(OSError):
             manager.stage(str(self.make_release("2.1.0")))
         self.assertFalse((self.install / "releases/2.1.0").exists())
+
+    def test_staging_is_traversable_by_the_self_check_group(self):
+        observed_modes = []
+
+        def inspect_environment(release_root, _platform):
+            observed_modes.append(os.stat(release_root.parent.parent).st_mode & 0o777)
+
+        manager = ReleaseManager(str(self.install), str(self.state), downloader=self._copy_download)
+        manager._install_environment = inspect_environment
+        manager.stage(str(self.make_release("2.0.0")))
+
+        self.assertEqual(observed_modes, [0o750])
+
+    def test_privilege_drop_does_not_request_setgroups(self):
+        account = SimpleNamespace(pw_uid=123, pw_gid=456)
+        with mock.patch("src.release_manager.os.geteuid", return_value=0), \
+                mock.patch("pwd.getpwnam", return_value=account):
+            options = self.manager._run_as_options("clios")
+        self.assertEqual(set(options), {"user", "group"})
 
     def test_channel_is_stable_by_default_and_persists(self):
         self.assertEqual(self.manager.get_channel(), "stable")

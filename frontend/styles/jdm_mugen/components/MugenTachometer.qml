@@ -21,17 +21,33 @@ Item {
     // 0: Trip A, 1: Trip B, 2: Odomètre Total
     property int tripMode: 0
 
-    // Lissage rapide et réactif pour le compte-tours (latence minimale)
-    property real smoothRpm: currentRpm
-    Behavior on smoothRpm {
-        NumberAnimation { duration: 45; easing.type: Easing.OutQuad }
-    }
-
-    readonly property real rpmRatio: Math.max(0.0, Math.min(1.0, smoothRpm / dialMaxRpm))
+    // Position directe : aucune interpolation afin de ne jamais retarder l'aiguille.
+    readonly property real rpmRatio: Math.max(0.0, Math.min(1.0, currentRpm / dialMaxRpm))
     // 225° = 7h30 (bas-gauche), 495° = 4h30 (bas-droite) -> 270° de débattement
     readonly property real startAngleDeg: 225
     readonly property real spanAngleDeg: 270
     readonly property real needleAngleDeg: (startAngleDeg - 360) + spanAngleDeg * rpmRatio
+    property real previousNeedleAngleDeg: needleAngleDeg
+    property real motionTrailOffset: 0.0
+    property real motionTrailOpacity: 0.0
+
+    onNeedleAngleDegChanged: {
+        const delta = needleAngleDeg - previousNeedleAngleDeg
+        previousNeedleAngleDeg = needleAngleDeg
+        if (Math.abs(delta) < 0.12) return
+        motionTrailOffset = Math.max(-16, Math.min(16, delta))
+        motionTrailOpacity = Math.min(0.48, 0.10 + Math.abs(delta) * 0.035)
+        trailFade.restart()
+    }
+
+    NumberAnimation {
+        id: trailFade
+        target: root
+        property: "motionTrailOpacity"
+        to: 0.0
+        duration: 105
+        easing.type: Easing.OutQuad
+    }
 
     // Redessine le cadran automatiquement si le profil ou les limites changent
     onDialMaxRpmChanged: dialCanvas.requestPaint()
@@ -236,7 +252,7 @@ Item {
         width: 60
         height: 12
         radius: 6
-        visible: S.UiState.redline || root.smoothRpm >= root.redlineRpm
+        visible: S.UiState.redline || root.currentRpm >= root.redlineRpm
         color: "#FF2B1C"
         border.width: 1.5
         border.color: "#FFFFFF"
@@ -319,6 +335,35 @@ Item {
     // =========================================================================
     // 4. AIGUILLE ROUGE FLUO MUGEN (Rotation Matérielle GPU Pure)
     // =========================================================================
+    // Copies translucides entre l'ancienne et la nouvelle position. La vraie
+    // aiguille reste instantanée ; seules ces traces disparaissent rapidement.
+    Repeater {
+        model: 5
+        delegate: Item {
+            x: root.width / 2
+            y: root.height / 2
+            opacity: root.motionTrailOpacity * (1.0 - index * 0.15)
+            transform: Rotation {
+                origin.x: 0
+                origin.y: 0
+                angle: root.needleAngleDeg - root.motionTrailOffset * ((index + 1) / 5.0)
+            }
+            Shape {
+                anchors.centerIn: parent
+                ShapePath {
+                    fillColor: "#FF3828"
+                    strokeColor: "transparent"
+                    startX: -7.5; startY: 28
+                    PathLine { x: 7.5; y: 28 }
+                    PathLine { x: 2.7; y: -174 }
+                    PathLine { x: 0; y: -187 }
+                    PathLine { x: -2.7; y: -174 }
+                    PathLine { x: -7.5; y: 28 }
+                }
+            }
+        }
+    }
+
     Item {
         id: needleItem
         x: parent.width / 2
