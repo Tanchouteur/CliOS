@@ -189,7 +189,12 @@ def validate_profile_references(payload: object, config_dir: str | Path, can_dir
         if isinstance(config_name, str) and JSON_NAME.fullmatch(config_name) and (config_root / config_name).is_file():
             try:
                 config_path = config_root / config_name
-                config = migrate_to_v1(config_path, load_json(config_path))
+                loaded_config = load_json(config_path)
+                config = (
+                    migrate_to_v1(config_path, loaded_config)
+                    if isinstance(loaded_config, dict)
+                    else loaded_config
+                )
                 errors.extend(f"profiles.{profile_id}.{error}" for error in validate_vehicle_config(config, available_themes))
             except (OSError, json.JSONDecodeError) as exc:
                 errors.append(f"profiles.{profile_id}.config_file: {exc}")
