@@ -96,6 +96,13 @@ Item {
 
                     Item { Layout.fillHeight: true }
 
+                    Button {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 56
+                        text: "GÉRER LES ÉCLAIRAGES ›"
+                        onClicked: root.navigateRequested("leds")
+                    }
+
                     // Roue Chromatique Canvas
                     Item {
                         id: wheelBox

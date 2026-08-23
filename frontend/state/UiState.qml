@@ -34,6 +34,13 @@ QtObject {
         "channel": "stable", "progress": 0, "message": "", "can_activate": false,
         "last_manifest": ({}), "error": ({})
     })
+    readonly property var ledDevices: systemState.led_devices || []
+    readonly property var ledGroups: systemState.led_groups || []
+    readonly property int ledMaxDevices: number(systemState.led_max_devices, 4)
+    readonly property bool bleScanning: systemState.ble_scanning === true
+    readonly property var bleScanResults: systemState.ble_scan_results || []
+    readonly property var bleCharacteristics: systemState.ble_characteristics || []
+    readonly property var bleTestState: systemState.ble_test_state || ({})
 
     // =========================================================================
     // 2. CONFIGURATION DU VÉHICULE & CALIBRATIONS

@@ -15,7 +15,8 @@ Item {
         services: "../shared_pages/ServicesPage.qml",
         system: "../shared_pages/SystemPage.qml",
         diagnostic: "../shared_pages/DiagnosticPage.qml",
-        developer: "../shared_pages/DeveloperPage.qml"
+        developer: "../shared_pages/DeveloperPage.qml",
+        leds: "../shared_pages/LedManagerPage.qml"
     })
 
     Rectangle { anchors.fill: parent; color: T.StyleManager.background }

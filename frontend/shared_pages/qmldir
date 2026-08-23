@@ -4,3 +4,4 @@ ServicesPage 1.0 ServicesPage.qml
 SystemPage 1.0 SystemPage.qml
 DeveloperPage 1.0 DeveloperPage.qml
 DiagnosticPage 1.0 DiagnosticPage.qml
+LedManagerPage 1.0 LedManagerPage.qml
