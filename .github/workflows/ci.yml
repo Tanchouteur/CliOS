@@ -79,6 +79,49 @@ jobs:
       - name: Installer contract (Bookworm and Trixie ARM64)
         run: tools/test_install_docker.sh
 
+  windows-mock:
+    timeout-minutes: 35
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: First-time Windows setup
+        shell: cmd
+        run: clios-windows.cmd -SetupOnly
+      - name: Idempotent Windows setup
+        shell: cmd
+        run: clios-windows.cmd -SetupOnly
+      - name: Compile sources and validate data
+        shell: cmd
+        run: |
+          .venv\Scripts\python.exe -m compileall -q main.py src tools tests
+          .venv\Scripts\python.exe tools\validate_data.py --all
+      - name: Windows architecture, simulation, and QML tests
+        shell: cmd
+        run: >-
+          .venv\Scripts\python.exe -m unittest -v
+          tests.test_architecture_contract
+          tests.test_launcher_systemd
+          tests.test_windows_launcher_contract
+          tests.test_simulation_can_encoder
+          tests.test_simulation_isotp_obd
+          tests.test_simulation_physics
+          tests.test_simulation_scenarios
+          tests.test_ui_smoothing
+          tests.test_ui_structure
+          tests.test_ui_style_catalog
+      - name: QML route smoke test
+        shell: cmd
+        run: .venv\Scripts\python.exe tools\qml_smoke.py
+      - name: One-click application smoke test
+        shell: cmd
+        run: clios-windows.cmd -SmokeTest
+
   dependency-audit:
     timeout-minutes: 15
     runs-on: ubuntu-24.04

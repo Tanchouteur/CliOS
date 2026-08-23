@@ -1,7 +1,7 @@
 bleak~=0.22.3
 numpy~=2.2.6
 sounddevice~=0.5.2
-pyo~=1.0.5
+pyo~=1.0.5; sys_platform != "win32"
 psutil~=7.0.0
 python-can~=4.6.1
 PySide6~=6.8.0

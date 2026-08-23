@@ -61,18 +61,19 @@ Parcours communauté : [créer un thème, adapter un véhicule et développer un
 
 Aucun materiel ni vehicule n'est requis pour tester ou developper sur CliOS :
 
-```bash
-# 1. Cloner le depot
-git clone https://github.com/Tanchouteur/CliOS.git
-cd CliOS
-
-# 2. Lancer en mode simulation (configure automatiquement le .venv)
-./clios --mock
-```
+1. Clonez le depot puis ouvrez le dossier `CliOS`.
+2. Sous Windows 10/11, double-cliquez sur **`clios-windows.cmd`**. Au premier
+   lancement, Python 3.12 et les dependances sont installes pour votre compte si necessaire.
+3. Sous Linux ou macOS, lancez `./clios --mock` apres avoir cree `.venv` avec
+   les instructions Python adaptees a votre plateforme.
 
 > [!TIP]
 > Sur les ecrans d'ordinateurs portables, ajustez la taille avec :  
-> `QT_SCALE_FACTOR=0.65 ./clios --mock` pour adapter la fenetre 1920x720 a votre ecran.
+> `QT_SCALE_FACTOR=0.65 ./clios --mock` sous Linux/macOS, ou
+> `clios-windows.cmd -Scale 0.65` sous Windows.
+
+Le [guide du mode mock sous Windows](docs/windows_mock.md) detaille le depannage
+et les options avancees.
 
 ---
 

@@ -327,6 +327,8 @@ def main():
             from PySide6.QtCore import QTimer
             QTimer.singleShot(0, orchestrator.start_all)
             QTimer.singleShot(1000, write_health_marker)
+            if os.environ.get("CLIOS_SMOKE_TEST") == "1":
+                QTimer.singleShot(3000, app.quit)
 
             # Outils de Mock
             mock_panel = None

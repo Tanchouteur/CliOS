@@ -64,18 +64,19 @@ Maintainer workflow: [CI, branches, releases and update channels (French)](docs/
 
 You do not need a vehicle or a Raspberry Pi to run CliOS. Use the built-in mock simulation:
 
-```bash
-# 1. Clone repository
-git clone https://github.com/Tanchouteur/CliOS.git
-cd CliOS
-
-# 2. Run universal launcher with mock mode (auto-configures virtualenv)
-./clios --mock
-```
+1. Clone the repository and open the `CliOS` folder.
+2. On Windows 10/11, double-click **`clios-windows.cmd`**. The first run installs
+   Python 3.12 and the required packages for your user account when needed.
+3. On Linux or macOS, run `./clios --mock` after creating `.venv` with the
+   platform-appropriate Python installation steps.
 
 > [!TIP]
 > On laptop or desktop screens with high DPI scaling, run:  
-> `QT_SCALE_FACTOR=0.65 ./clios --mock` to comfortably fit the 1920x720 window.
+> `QT_SCALE_FACTOR=0.65 ./clios --mock` on Linux/macOS, or
+> `clios-windows.cmd -Scale 0.65` on Windows, to comfortably fit the 1920x720 window.
+
+Windows troubleshooting and advanced options are documented in the
+[Windows mock guide](docs/windows_mock.md).
 
 ---
 
