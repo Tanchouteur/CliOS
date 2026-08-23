@@ -220,7 +220,7 @@ Item {
                                 Text { text: protocols.length ? protocols[protocolIndex].identifier : "Aucun protocole"; color: T.StyleManager.text; font.pixelSize: 20; font.bold: true }
                                 Text { text: protocols.length ? "Couleur attendue : " + protocols[protocolIndex].witness_name : ""; color: T.StyleManager.textSecondary; font.pixelSize: 14 }
                             }
-                            C.Button { Layout.preferredWidth: 150; Layout.preferredHeight: 58; text: "TESTER"; primary: true; enabled: !!selectedChar.uuid && !S.UiState.bleTestState.running; onClicked: root.runProtocol(protocolIndex) }
+                            C.Button { Layout.preferredWidth: 150; Layout.preferredHeight: 58; text: "RE-TESTER"; primary: true; enabled: !!selectedChar.uuid && !S.UiState.bleTestState.running; onClicked: root.runProtocol(protocolIndex) }
                             C.Button { Layout.preferredWidth: 160; Layout.preferredHeight: 58; text: "C'EST BON"; enabled: !!selectedChar.uuid; onClicked: root.confirmedProtocol = protocols[protocolIndex].identifier }
                             C.Button { Layout.preferredWidth: 130; Layout.preferredHeight: 58; text: "SUIVANT"; enabled: protocols.length > 0; onClicked: { protocolIndex = (protocolIndex + 1) % protocols.length; root.runProtocol(protocolIndex) } }
                         }
