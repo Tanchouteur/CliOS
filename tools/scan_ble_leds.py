@@ -10,7 +10,20 @@ Usage sur Raspberry Pi:
 """
 
 import asyncio
+import pathlib
+import sys
 from typing import NamedTuple
+
+# Permet de conserver l'usage documente `python3 tools/scan_ble_leds.py`.
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.ble.protocol_registry import (  # noqa: E402
+    KNOWN_LED_NAMES,
+    PREFERRED_CHAR_UUIDS,
+    registry,
+)
 
 try:
     from bleak import BleakScanner, BleakClient
@@ -33,12 +46,6 @@ def require_bleak():
         ) from BLEAK_IMPORT_ERROR
 
 
-KNOWN_LED_NAMES = [
-    "elk", "lotus", "led", "qhm", "melk", "sp110", "sp107", "banlan",
-    "triones", "ble", "lamp", "dream", "slg", "hj", "zengge"
-]
-
-
 class ProtocolTest(NamedTuple):
     identifier: str
     label: str
@@ -46,102 +53,31 @@ class ProtocolTest(NamedTuple):
     color: tuple[int, int, int]
 
 
-PROTOCOLS = {
-    "1": ProtocolTest(
-        "LOTUS_9B", "Lotus Lantern / ELK-BLEDOM 9 octets", "ROUGE", (255, 0, 0),
-    ),
-    "2": ProtocolTest(
-        "TRIONES_7B", "LED BLE / Triones / Magic 7 octets", "VERT", (0, 255, 0),
-    ),
-    "3": ProtocolTest(
-        "SP110E_4B", "BanlanX / SP110E DreamColor 4 octets", "BLEU", (0, 0, 255),
-    ),
-    "4": ProtocolTest(
-        "LED_LAMP_9B", "HiLighting / LED Lamp 9 octets", "MAGENTA", (255, 0, 255),
-    ),
-    "5": ProtocolTest(
-        "LEDCAR_A_9B", "LEDCAR-01 sortie analogique / LED BLE", "JAUNE", (255, 255, 0),
-    ),
-    "6": ProtocolTest(
-        "LEDCAR_DMX_9B", "LEDCAR-01 barres RGBIC / LED DMX", "CYAN", (0, 255, 255),
-    ),
-    "7": ProtocolTest(
-        "LEDCAR_ALL_9B", "LEDCAR-01 canal combiné", "ORANGE", (255, 96, 0),
-    ),
-    "8": ProtocolTest(
-        "LEDCAR_B_CLASSIC_9B", "LEDCAR / LEDDMX dialecte B classique", "BLANC", (255, 255, 255),
-    ),
+_PROTOCOL_KEYS = {
+    "1": "LOTUS_9B", "2": "TRIONES_7B", "3": "SP110E_4B",
+    "4": "LED_LAMP_9B", "5": "LEDCAR_A_9B", "6": "LEDCAR_DMX_9B",
+    "7": "LEDCAR_ALL_9B", "8": "LEDCAR_B_CLASSIC_9B",
 }
-
-PREFERRED_CHAR_UUIDS = [
-    "0000fff3-0000-1000-8000-00805f9b34fb",
-    "0000ffe1-0000-1000-8000-00805f9b34fb",
-    "0000ffd9-0000-1000-8000-00805f9b34fb",
-    "0000ae01-0000-1000-8000-00805f9b34fb",
-    "0000fa02-0000-1000-8000-00805f9b34fb",
-]
+PROTOCOLS = {
+    key: ProtocolTest(proto.identifier, proto.label, proto.witness_name, proto.witness_color)
+    for key, identifier in _PROTOCOL_KEYS.items()
+    for proto in [registry.get(identifier)]
+}
 
 
 def build_protocol_payloads(protocol_key: str, r: int, g: int, b: int) -> list[bytearray]:
     """Construit la commande d'allumage et la couleur d'un protocole de test."""
-    if protocol_key == "1":
-        return [
-            bytearray([0x7E, 0x00, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
-            bytearray([0x7E, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xEF]),
-            bytearray([0x7E, 0x00, 0x01, 100, 0x00, 0x00, 0x00, 0x00, 0xEF]),
-        ]
-    if protocol_key == "2":
-        return [
-            bytearray([0xCC, 0x23, 0x33]),
-            bytearray([0x56, r, g, b, 0x00, 0xF0, 0xAA]),
-        ]
-    if protocol_key == "3":
-        return [
-            bytearray([0xAA, 0x02, 0x01, 0xAD]),
-            bytearray([0x38, r, g, b]),
-        ]
-    if protocol_key == "4":
-        return [
-            bytearray([0x7E, 0x04, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
-            bytearray([0x7E, 0x04, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
-        ]
-    if protocol_key == "5":
-        return [
-            bytearray([0x7E, 0xFF, 0x04, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xEF]),
-            bytearray([0x7E, 0xFF, 0x01, 32, 100, 0xFF, 0xFF, 0xFF, 0xEF]),
-            bytearray([0x7E, 0xFF, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
-        ]
-    if protocol_key == "6":
-        return [
-            bytearray([0x7B, 0xFF, 0x04, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
-            bytearray([0x7B, 0xFF, 0x01, 32, 100, 0x00, 0xFF, 0xFF, 0xBF]),
-            bytearray([0x7B, 0x00, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
-        ]
-    if protocol_key == "7":
-        return [
-            bytearray([0x7B, 0x01, 0x04, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
-            bytearray([0x7B, 0xFF, 0x01, 32, 100, 0x02, 0xFF, 0xFF, 0xBF]),
-            bytearray([0x7B, 0x01, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
-        ]
-    if protocol_key == "8":
-        return [
-            bytearray([0x7B, 0xFF, 0x04, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
-            bytearray([0x7B, 0xFF, 0x01, 32, 100, 0x01, 0xFF, 0xFF, 0xBF]),
-            bytearray([0x7B, 0xFF, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
-        ]
-    raise ValueError(f"Protocole de test inconnu: {protocol_key}")
+    try:
+        identifier = _PROTOCOL_KEYS[protocol_key]
+    except KeyError as exc:
+        raise ValueError(f"Protocole de test inconnu: {protocol_key}") from exc
+    return registry.build_payloads(identifier, r, g, b, 100.0, power_on=True)
 
 
 def protocol_order(device_name: str) -> list[str]:
     """Teste d'abord les dialectes correspondant au nom annoncé."""
-    keys = list(PROTOCOLS)
-    upper_name = device_name.strip().upper()
-    if upper_name.startswith("LEDCAR-01"):
-        priorities = ["6", "7", "8", "5"]
-        return priorities + [key for key in keys if key not in priorities]
-    if upper_name.startswith("ELK-BLEDOM"):
-        return ["1"] + [key for key in keys if key != "1"]
-    return keys
+    by_identifier = {identifier: key for key, identifier in _PROTOCOL_KEYS.items()}
+    return [by_identifier[identifier] for identifier in registry.guess_protocol_order(device_name)]
 
 
 def preferred_characteristic_index(characteristics) -> int:

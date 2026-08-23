@@ -15,7 +15,8 @@ Item {
         { id: "vehicle", number: "03", label: "VÉHICULE", sub: "Profil actif, capteurs et étalonnage" },
         { id: "diagnostic", number: "04", label: "DIAGNOSTIC", sub: "Codes défaut et état des calculateurs" },
         { id: "services", number: "05", label: "SERVICES", sub: "Modules et fonctions embarquées" },
-        { id: "system", number: "06", label: "SYSTÈME", sub: "Stockage, mises à jour et alimentation" }
+        { id: "system", number: "06", label: "SYSTÈME", sub: "Stockage, mises à jour et alimentation" },
+        { id: "leds", number: "07", label: "ÉCLAIRAGES", sub: "Bandeaux LED Bluetooth, scan et groupes" }
     ]
 
     Rectangle { anchors.fill: parent; color: T.StyleManager.background }

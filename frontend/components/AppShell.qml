@@ -10,7 +10,7 @@ Item {
     property string pendingCommand: ""
     property bool recoveryOpened: false
 
-    readonly property var routes: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
+    readonly property var routes: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer", "leds"]
     readonly property var confirmations: ({
         reset_a: ["Remettre Trip A à zéro ?", "La distance Trip A sera effacée.", "REMETTRE À ZÉRO", true],
         reset_b: ["Remettre Trip B à zéro ?", "La distance et la moyenne Trip B seront effacées.", "REMETTRE À ZÉRO", true],

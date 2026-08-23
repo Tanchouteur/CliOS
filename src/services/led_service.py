@@ -1,3 +1,9 @@
+"""Gestionnaire BLE des controleurs LED.
+
+Pilote un catalogue variable d'appareils BLE confirmes via le DeviceCatalog.
+Les couleurs, luminosites et groupes sont geres dynamiquement.
+"""
+
 import asyncio
 import threading
 from typing import Dict, List, Optional, Tuple
@@ -6,85 +12,67 @@ try:
     from bleak import BleakClient
     from bleak.exc import BleakError
 except ImportError:
-    BleakClient = None
+    BleakClient = None  # type: ignore
     BleakError = Exception
 
 from src.services.base_service import BaseService
 from src.services.param_types import ServiceParamType
+from src.ble.protocol_registry import ProtocolRegistry, registry as _default_registry
+from src.ble.device_catalog import DeviceCatalog, BleDevice
+from src.ble.scanner import BleScanner, scanner as _ble_scanner
 
-DEFAULT_MAC_DASHBOARD = "A060C742-6A5E-53EB-4196-099CF978EB2E"
-DEFAULT_MAC_FOOTWELL = "1ED496B4-A08D-40AD-5D1F-01C1DEC86072"
-DEFAULT_DASH_PROTOCOL = "LEDCAR_DMX_9B"
-DEFAULT_FOOT_PROTOCOL = "LOTUS_9B"
-
-SUPPORTED_PROTOCOLS = [
-    "LOTUS_9B",
-    "LEDCAR_DMX_9B",
-    "LED_LAMP_9B",
-    "TRIONES_7B",
-    "SP110E_4B",
-]
-
-PREFERRED_CHAR_UUIDS = [
-    "0000fff3-0000-1000-8000-00805f9b34fb",
-    "0000ffe1-0000-1000-8000-00805f9b34fb",
-    "0000ffd9-0000-1000-8000-00805f9b34fb",
-    "0000ae01-0000-1000-8000-00805f9b34fb",
-    "0000fa02-0000-1000-8000-00805f9b34fb",
-]
+# Conserves pour la retrocompatibilite (imports externes eventuels)
+SUPPORTED_PROTOCOLS: List[str] = [p.identifier for p in _default_registry.runtime_protocols()]
 
 
 class BleLedController(BaseService):
-    """Gestionnaire BLE pour les contrôleurs Lotus et LEDCAR validés."""
+    """Gestionnaire BLE pour les controleurs LED confirmes du catalogue."""
 
-    def __init__(self, storage=None):
+    def __init__(self, storage=None, catalog: Optional[DeviceCatalog] = None,
+                 registry: Optional[ProtocolRegistry] = None):
         super().__init__("Leds", storage)
+        self._catalog: DeviceCatalog = catalog or DeviceCatalog(storage)
+        self._registry: ProtocolRegistry = registry or _default_registry
+        self._scanner: BleScanner = _ble_scanner
+
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
         self._queue: Optional[asyncio.Queue] = None
         self._running = False
+
+        # Connexions BLE persistantes indexees par device_id
         self._clients: Dict[str, BleakClient] = {}
-        self._char_cache: Dict[str, str] = {}
+        # Cache de caracteristiques GATT indexe par device_id
+        self._char_cache: Dict[str, Tuple[str, bool]] = {}  # device_id -> (char_uuid, write_response)
+
         self._current_color = "#48B8FF"
 
-        # Paramètres exposés
-        self.register_param("dash_on", "Activer Habitacle", ServiceParamType.TOGGLE, True)
-        self.register_param("foot_on", "Activer Plancher", ServiceParamType.TOGGLE, True)
-        self.register_param("brightness", "Luminosité (%)", ServiceParamType.SLIDER, 100.0, min_val=0.0, max_val=100.0)
-        self.register_param(
-            "dash_proto", "Protocole Habitacle", ServiceParamType.LIST, DEFAULT_DASH_PROTOCOL,
-            options=SUPPORTED_PROTOCOLS,
-        )
-        self.register_param(
-            "foot_proto", "Protocole Plancher", ServiceParamType.LIST, DEFAULT_FOOT_PROTOCOL,
-            options=SUPPORTED_PROTOCOLS,
-        )
-        self.register_param("dash_mac", "Adresse Habitacle", ServiceParamType.TEXT, DEFAULT_MAC_DASHBOARD)
-        self.register_param("foot_mac", "Adresse Plancher", ServiceParamType.TEXT, DEFAULT_MAC_FOOTWELL)
-        self._migrate_validated_protocols()
+        # Etat du scan BLE (expose au bridge via scan_state)
+        self._scan_lock = threading.Lock()
+        self._scan_state: dict = {
+            "scanning": False, "results": [], "characteristics": [], "test_state": {},
+        }
+        self._scan_task: Optional[asyncio.Task] = None
+        self._test_task: Optional[asyncio.Task] = None
 
-    def _migrate_validated_protocols(self):
-        """Corrige l'ancien protocole par défaut du contrôleur LEDCAR connu."""
-        dash_mac = str(self._params["dash_mac"]["value"]).strip().upper()
-        dash_proto = str(self._params["dash_proto"]["value"])
-        if dash_mac != DEFAULT_MAC_DASHBOARD.upper():
-            return
-        if dash_proto not in {"LOTUS_9B", "LED_LAMP_9B"}:
-            return
-        self._params["dash_proto"]["value"] = DEFAULT_DASH_PROTOCOL
-        if self.storage:
-            self.storage.set(
-                f"services.{self.service_name}.params.dash_proto",
-                DEFAULT_DASH_PROTOCOL,
-            )
+        # Parametre de luminosite globale (reste visible dans ServicesPage)
+        self.register_param(
+            "global_brightness", "Luminosite globale (%)",
+            ServiceParamType.SLIDER, 100.0, min_val=0.0, max_val=100.0,
+        )
+
+    # -------------------------------------------------------------------------
+    # Cycle de vie
+    # -------------------------------------------------------------------------
 
     def start(self, stop_event=None):
         if self._running:
             return
         self._running = True
         self.stop_event = stop_event
-
-        self._thread = threading.Thread(target=self._run_event_loop, daemon=True, name=self.service_name)
+        self._thread = threading.Thread(
+            target=self._run_event_loop, daemon=True, name=self.service_name,
+        )
         self._thread.start()
         super().start(stop_event, implemented=True)
 
@@ -96,22 +84,69 @@ class BleLedController(BaseService):
             self._thread.join(timeout=2.0)
         super().stop()
 
-    def set_color(self, hex_color: str):
-        """Met à jour la couleur active et envoie l'ordre en arrière-plan."""
+    # -------------------------------------------------------------------------
+    # API publique (thread-safe)
+    # -------------------------------------------------------------------------
+
+    def set_color(self, hex_color: str) -> None:
+        """Met a jour la couleur d'accent et propage aux appareils."""
         self._current_color = hex_color
         if self._loop and self._queue and self._running:
             asyncio.run_coroutine_threadsafe(self._queue.put(hex_color), self._loop)
 
-    def update_param(self, key: str, value):
-        """Réagit immédiatement aux changements de paramètres (luminosité, on/off)."""
+    def update_param(self, key: str, value) -> None:
+        """Reagit aux changements de parametres (luminosite globale)."""
         super().update_param(key, value)
-        if key in (
-            "brightness", "dash_on", "foot_on", "dash_proto", "foot_proto",
-            "dash_mac", "foot_mac",
-        ):
+        if key == "global_brightness":
             self.set_color(self._current_color)
 
-    def _run_event_loop(self):
+    def refresh_devices(self) -> None:
+        """Rejoue la couleur courante apres une modification du catalogue."""
+        self.set_color(self._current_color)
+
+    @property
+    def scan_state(self) -> dict:
+        """Retourne l'etat courant du scan BLE (thread-safe)."""
+        with self._scan_lock:
+            return dict(self._scan_state)
+
+    def request_scan(self) -> None:
+        """Lance un scan BLE asynchrone (delegue a la boucle asyncio du service)."""
+        if self._loop and self._running:
+            asyncio.run_coroutine_threadsafe(self._async_scan(), self._loop)
+
+    def stop_scan(self) -> None:
+        """Interrompt un scan en cours."""
+        if self._loop and self._running and self._scan_task:
+            self._loop.call_soon_threadsafe(self._scan_task.cancel)
+
+    def request_characteristics(self, address: str) -> None:
+        """Decouvre les caracteristiques GATT writables d'un appareil."""
+        if self._loop and self._running:
+            asyncio.run_coroutine_threadsafe(
+                self._async_discover_characteristics(address), self._loop,
+            )
+
+    def start_protocol_test(
+        self, address: str, char_uuid: str, protocol_id: str, write_with_response: bool,
+    ) -> None:
+        """Lance le test d'un protocole BLE (delegue a la boucle asyncio du service)."""
+        if self._loop and self._running:
+            asyncio.run_coroutine_threadsafe(
+                self._async_test_protocol(address, char_uuid, protocol_id, write_with_response),
+                self._loop,
+            )
+
+    def stop_protocol_test(self) -> None:
+        """Interrompt un test de protocole en cours."""
+        if self._loop and self._running and self._test_task:
+            self._loop.call_soon_threadsafe(self._test_task.cancel)
+
+    # -------------------------------------------------------------------------
+    # Boucle asyncio interne
+    # -------------------------------------------------------------------------
+
+    def _run_event_loop(self) -> None:
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         self._queue = asyncio.Queue()
@@ -121,174 +156,226 @@ class BleLedController(BaseService):
         finally:
             self._loop.close()
 
-    def _hex_to_rgb(self, hex_color: str) -> Tuple[int, int, int]:
-        hex_color = hex_color.lstrip('#')
-        if len(hex_color) != 6:
-            return (255, 255, 255)
-
-        bright_factor = max(0.0, min(100.0, float(self._params["brightness"]["value"]))) / 100.0
-        r = int(int(hex_color[0:2], 16) * bright_factor)
-        g = int(int(hex_color[2:4], 16) * bright_factor)
-        b = int(int(hex_color[4:6], 16) * bright_factor)
-        return (r, g, b)
-
-    def _build_payloads(self, proto: str, r: int, g: int, b: int, power_on: bool) -> List[bytearray]:
-        """Génère les trames BLE correctes selon le protocole de l'appareil."""
-        brightness_val = max(0, min(100, int(self._params["brightness"]["value"])))
-
-        if proto == "LOTUS_9B":
-            # Protocole Lotus Lantern / ELK-BLEDOM officiel
-            if not power_on or brightness_val <= 0:
-                return [bytearray([0x7E, 0x00, 0x04, 0x00, 0x00, 0x00, 0xFF, 0x00, 0xEF])]
-            return [
-                bytearray([0x7E, 0x00, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]), # Power ON
-                bytearray([0x7E, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xEF]),         # Set RGB Color
-                bytearray([0x7E, 0x00, 0x01, brightness_val, 0x00, 0x00, 0x00, 0x00, 0xEF]), # Set Brightness
-            ]
-
-        elif proto == "LED_LAMP_9B":
-            # Protocole LED Lamp / HiLighting 9 octets
-            if not power_on or brightness_val <= 0:
-                return [bytearray([0x7E, 0x04, 0x04, 0x00, 0x00, 0x00, 0xFF, 0x00, 0xEF])]
-            return [
-                bytearray([0x7E, 0x04, 0x04, 0xF0, 0x00, 0x01, 0xFF, 0x00, 0xEF]),
-                bytearray([0x7E, 0x04, 0x05, 0x03, r, g, b, 0xFF, 0xEF]),
-            ]
-
-        elif proto == "LEDCAR_DMX_9B":
-            # LEDCAR-01 / LED LAMP, sortie barres RGBIC confirmée sur FFE1.
-            if not power_on or brightness_val <= 0:
-                return [bytearray([0x7B, 0xFF, 0x04, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF])]
-            adjusted_brightness = (brightness_val * 32) // 100
-            return [
-                bytearray([0x7B, 0xFF, 0x04, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xBF]),
-                bytearray([
-                    0x7B, 0xFF, 0x01, adjusted_brightness, brightness_val,
-                    0x00, 0xFF, 0xFF, 0xBF,
-                ]),
-                bytearray([0x7B, 0x00, 0x07, r, g, b, 0x00, 0xFF, 0xBF]),
-            ]
-
-        elif proto == "TRIONES_7B":
-            # Protocole Triones / Magic Home 7 octets
-            if not power_on or brightness_val <= 0:
-                return [bytearray([0xCC, 0x24, 0x33])]
-            return [
-                bytearray([0xCC, 0x23, 0x33]),
-                bytearray([0x56, r, g, b, 0x00, 0xF0, 0xAA]),
-            ]
-
-        elif proto == "SP110E_4B":
-            # Protocole BanlanX / SP110E Addressable 4 octets
-            if not power_on or brightness_val <= 0:
-                return [bytearray([0xAA, 0x02, 0x00, 0xAC])]
-            return [
-                bytearray([0xAA, 0x02, 0x01, 0xAD]),
-                bytearray([0x38, r, g, b]),
-            ]
-
-        # Fallback par défaut (Lotus 9B)
-        return [bytearray([0x7E, 0x00, 0x05, 0x03, r, g, b, 0x00, 0xEF])]
-
-    async def _resolve_write_char(self, client: BleakClient, mac: str) -> Optional[str]:
-        """Découvre dynamiquement la caractéristique d'écriture GATT sur le périphérique."""
-        if mac in self._char_cache:
-            return self._char_cache[mac]
-
-        # 1. Vérifier les UUIDs connus prioritaires
-        for service in client.services:
-            for char in service.characteristics:
-                if char.uuid.lower() in PREFERRED_CHAR_UUIDS:
-                    self._char_cache[mac] = char.uuid
-                    return char.uuid
-
-        # 2. Fallback: premier char writable
-        for service in client.services:
-            for char in service.characteristics:
-                if "write-without-response" in char.properties or "write" in char.properties:
-                    self._char_cache[mac] = char.uuid
-                    return char.uuid
-
-        return None
-
-    async def _send_to_device(self, mac: str, proto: str, r: int, g: int, b: int, power_on: bool):
-        if not BleakClient:
-            self.set_warning("Bleak non installé")
-            return
-
-        if not mac or mac.strip() == "":
-            return
-
-        client = self._clients.get(mac)
-
-        if not client or not client.is_connected:
-            try:
-                client = BleakClient(mac)
-                await client.connect(timeout=4.0)
-                self._clients[mac] = client
-                self.set_ok(f"Connecté à {mac}")
-            except Exception:
-                self.set_warning(f"Connexion échouée: {mac[:8]}")
-                return
-
-        write_char = await self._resolve_write_char(client, mac)
-        if not write_char:
-            self.set_error(f"GATT introuvable sur {mac[:8]}")
-            return
-
-        payloads = self._build_payloads(proto, r, g, b, power_on)
-
-        for payload in payloads:
-            try:
-                await client.write_gatt_char(write_char, payload, response=False)
-                await asyncio.sleep(0.04)
-            except Exception:
-                self.set_error(f"Échec envoi sur {mac[:8]}")
-                self._clients.pop(mac, None)
-                self._char_cache.pop(mac, None)
-                break
-
-    async def _ble_worker(self):
+    async def _ble_worker(self) -> None:
+        """Consomme la file des mises a jour de couleur et les envoie aux appareils."""
         while self._running:
             hex_color = await self._queue.get()
             if hex_color is None:
                 break
 
-            # Conserve la dernière commande pour éviter l'accumulation de retard
+            # Coalescing: conserve la derniere commande uniquement
             while not self._queue.empty():
                 try:
-                    hex_color = self._queue.get_nowait()
+                    next_color = self._queue.get_nowait()
                     self._queue.task_done()
+                    if next_color is None:
+                        self._queue.task_done()
+                        # Arret demande
+                        await self._disconnect_all()
+                        return
+                    hex_color = next_color
                 except asyncio.QueueEmpty:
                     break
 
             if hex_color is None:
                 break
 
-            r, g, b = self._hex_to_rgb(hex_color)
+            global_brightness = float(self._params["global_brightness"]["value"])
+            # Inclut les appareils desactives pour leur envoyer une commande
+            # d'extinction avant de conserver leur configuration.
+            devices = self._catalog.list_devices()
 
             tasks = []
-            dash_mac = str(self._params["dash_mac"]["value"]).strip()
-            foot_mac = str(self._params["foot_mac"]["value"]).strip()
-            dash_proto = str(self._params["dash_proto"]["value"])
-            foot_proto = str(self._params["foot_proto"]["value"])
-            dash_on = bool(self._params["dash_on"]["value"])
-            foot_on = bool(self._params["foot_on"]["value"])
-
-            if dash_mac:
-                tasks.append(self._send_to_device(dash_mac, dash_proto, r, g, b, dash_on))
-            if foot_mac:
-                tasks.append(self._send_to_device(foot_mac, foot_proto, r, g, b, foot_on))
+            for device in devices:
+                effective_color = self._catalog.get_effective_color(device, hex_color)
+                device_brightness = self._catalog.get_effective_brightness(device)
+                effective_brightness = (global_brightness * device_brightness) / 100.0
+                # Le registre applique la luminosite selon les capacites du
+                # protocole (commande dediee ou attenuation RGB).
+                r, g, b = self._hex_to_rgb(effective_color, 100.0)
+                tasks.append(self._send_to_device(
+                    device, r, g, b, effective_brightness,
+                    power_on=self._catalog.is_effectively_enabled(device),
+                ))
 
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
             self._queue.task_done()
 
-        # Déconnexion propre
-        for mac, client in list(self._clients.items()):
+        await self._disconnect_all()
+
+    async def _disconnect_all(self) -> None:
+        """Deconnexion propre de tous les clients BLE."""
+        for device_id, client in list(self._clients.items()):
             if client and client.is_connected:
                 try:
                     await client.disconnect()
                 except Exception:
                     pass
+        self._clients.clear()
+        self._char_cache.clear()
+
+    # -------------------------------------------------------------------------
+    # Envoi BLE par appareil
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _hex_to_rgb(hex_color: str, brightness_pct: float) -> Tuple[int, int, int]:
+        """Convertit une couleur hex en RGB avec application de la luminosite."""
+        hex_color = hex_color.lstrip("#")
+        if len(hex_color) != 6:
+            return (255, 255, 255)
+        factor = max(0.0, min(100.0, brightness_pct)) / 100.0
+        r = int(int(hex_color[0:2], 16) * factor)
+        g = int(int(hex_color[2:4], 16) * factor)
+        b = int(int(hex_color[4:6], 16) * factor)
+        return (r, g, b)
+
+    async def _resolve_write_char(
+        self, client: "BleakClient", device_id: str
+    ) -> Optional[Tuple[str, bool]]:
+        """Decouvre la caracteristique GATT writable et le mode d'ecriture."""
+        if device_id in self._char_cache:
+            return self._char_cache[device_id]
+
+        preferred = set(self._registry.preferred_char_uuids())
+        # 1. Chercher un UUID prefere
+        for service in client.services:
+            for char in service.characteristics:
+                if char.uuid.lower() in preferred:
+                    write_response = "write" in char.properties and "write-without-response" not in char.properties
+                    self._char_cache[device_id] = (char.uuid, write_response)
+                    return self._char_cache[device_id]
+        # 2. Fallback: premier char writable
+        for service in client.services:
+            for char in service.characteristics:
+                if "write-without-response" in char.properties or "write" in char.properties:
+                    write_response = "write" in char.properties and "write-without-response" not in char.properties
+                    self._char_cache[device_id] = (char.uuid, write_response)
+                    return self._char_cache[device_id]
+        return None
+
+    async def _send_to_device(
+        self, device: BleDevice, r: int, g: int, b: int,
+        brightness_pct: float, power_on: bool,
+    ) -> None:
+        """Envoie les trames de couleur a un appareil BLE."""
+        if not BleakClient:
+            self.set_warning("Bleak non installe")
+            return
+        if not device.ble_address or not device.ble_address.strip():
+            return
+
+        client = self._clients.get(device.id)
+        if not client or not client.is_connected:
+            try:
+                client = BleakClient(device.ble_address)
+                await client.connect(timeout=4.0)
+                self._clients[device.id] = client
+                self._catalog.update_device_health(device.id, "connected")
+                self.set_ok(f"Connecte: {device.name}")
+            except Exception:
+                self._catalog.update_device_health(device.id, "disconnected")
+                self.set_warning(f"Connexion echouee: {device.name}")
+                return
+
+        # Determine la caracteristique GATT a utiliser
+        char_info = None
+        if device.gatt_char_uuid:
+            # Utilise la char confirmee lors du wizard
+            char_info = (device.gatt_char_uuid, device.write_with_response)
+            self._char_cache[device.id] = char_info
+        else:
+            char_info = await self._resolve_write_char(client, device.id)
+
+        if not char_info:
+            self._catalog.update_device_health(device.id, "error")
+            self.set_error(f"GATT introuvable: {device.name}")
+            return
+
+        char_uuid, write_response = char_info
+        payloads = self._registry.build_payloads(
+            device.protocol, r, g, b, brightness_pct, power_on,
+        )
+        for payload in payloads:
+            try:
+                await client.write_gatt_char(char_uuid, payload, response=write_response)
+                await asyncio.sleep(0.04)
+            except Exception:
+                self._catalog.update_device_health(device.id, "error")
+                self.set_error(f"Echec envoi: {device.name}")
+                self._clients.pop(device.id, None)
+                self._char_cache.pop(device.id, None)
+                break
+
+    # -------------------------------------------------------------------------
+    # Scan et test de protocoles (async, appeles depuis le worker asyncio)
+    # -------------------------------------------------------------------------
+
+    async def _async_scan(self) -> None:
+        """Execute un scan BLE et met a jour scan_state."""
+        with self._scan_lock:
+            self._scan_state.update({"scanning": True, "results": [], "characteristics": []})
+        try:
+            self._scan_task = asyncio.current_task()
+            results = await self._scanner.scan()
+            with self._scan_lock:
+                self._scan_state = {
+                    "scanning": False,
+                    "results": [r.to_dict() for r in results],
+                    "characteristics": [], "test_state": {},
+                }
+        except asyncio.CancelledError:
+            with self._scan_lock:
+                self._scan_state["scanning"] = False
+        except Exception as exc:
+            self.set_warning(f"Erreur scan BLE: {exc}")
+            with self._scan_lock:
+                self._scan_state["scanning"] = False
+        finally:
+            self._scan_task = None
+
+    async def _async_discover_characteristics(self, address: str) -> None:
+        with self._scan_lock:
+            self._scan_state["test_state"] = {
+                "running": True, "stage": "connecting", "address": address,
+            }
+            self._scan_state["characteristics"] = []
+        chars = await self._scanner.discover_characteristics(address)
+        with self._scan_lock:
+            self._scan_state["characteristics"] = [char.to_dict() for char in chars]
+            self._scan_state["test_state"] = {
+                "running": False,
+                "stage": "characteristics" if chars else "error",
+                "address": address,
+                "message": "" if chars else "Aucune caracteristique GATT writable trouvee",
+            }
+
+    async def _async_test_protocol(
+        self, address: str, char_uuid: str, protocol_id: str, write_with_response: bool,
+    ) -> None:
+        """Execute le test d'un protocole et met a jour scan_state.test_state."""
+        try:
+            self._test_task = asyncio.current_task()
+            with self._scan_lock:
+                self._scan_state["test_state"] = {
+                    "running": True, "protocol": protocol_id, "success": None,
+                }
+            success = await self._scanner.test_protocol(
+                address, char_uuid, write_with_response, protocol_id,
+            )
+            with self._scan_lock:
+                self._scan_state["test_state"] = {
+                    "running": False, "protocol": protocol_id, "success": success,
+                }
+        except asyncio.CancelledError:
+            with self._scan_lock:
+                self._scan_state["test_state"]["running"] = False
+        except Exception:
+            with self._scan_lock:
+                self._scan_state["test_state"] = {
+                    "running": False, "protocol": protocol_id, "success": False,
+                }
+        finally:
+            self._test_task = None

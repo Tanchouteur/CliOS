@@ -102,6 +102,12 @@ class FakeBridge(QObject):
             "health": health,
             "storage": storage,
             "updater": {"state": "IDLE", "installed_version": "2.0.0", "available_version": "", "progress": 0},
+            "led_devices": [], "led_groups": [
+                {"id": "all", "name": "Tout", "enabled": True, "brightness": 100,
+                 "color_override": None, "device_count": 0},
+            ],
+            "led_max_devices": 4, "ble_scanning": False,
+            "ble_scan_results": [], "ble_characteristics": [], "ble_test_state": {},
         }
         self.commands = []
         self._update_channel = "stable"
@@ -275,6 +281,17 @@ class FakeBridge(QObject):
             {"key": "action", "label": "Action", "type": "button", "value": False},
         ])
 
+    @Slot(result="QVariantList")
+    def getBleProtocols(self):
+        return [{
+            "identifier": "LOTUS_9B", "label": "Lotus Lantern",
+            "witness_color": "#FF0000", "witness_name": "ROUGE",
+        }]
+
+    @Slot(result="QVariantList")
+    def getLedPredefinedNames(self):
+        return ["Tableau de bord", "Plancher", "Console centrale", "Coffre"]
+
     @Slot(str, result=bool)
     def setActiveProfile(self, _profile):
         return True
@@ -337,7 +354,7 @@ def main():
     window.setWidth(1920)
     window.setHeight(720)
     routes_by_style = {
-        style: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer"]
+        style: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer", "leds"]
         for style in ("apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard")
     }
     styles = ["apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard"]

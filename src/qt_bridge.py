@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import threading
 import time
 
@@ -14,6 +15,7 @@ from src.bridge.profile_theme_controller import ProfileThemeController
 from src.bridge.system_controller import SystemController
 from src.bridge.updater_controller import UpdaterController
 from src.bridge.ui_command_router import UiCommandRouter
+from src.ble.device_catalog import BleDevice, MAX_DEVICES, PREDEFINED_NAMES
 
 
 class DashboardBridge(QObject):
@@ -32,7 +34,8 @@ class DashboardBridge(QObject):
     openMaintenanceRequested = Signal()
     exitRequested = Signal()
 
-    def __init__(self, runtime, config_path, orchestrator, led_service=None, stats_service=None, diag_service=None,
+    def __init__(self, runtime, config_path, orchestrator, led_service=None, led_catalog=None,
+                 stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
         super().__init__()
         self.logger = get_logger("DashboardBridge")
@@ -40,12 +43,14 @@ class DashboardBridge(QObject):
         self.runtime = runtime
         self.storage = getattr(runtime, "storage", None)
         self.led_service = led_service
+        self.led_catalog = led_catalog
         self.stats_service = stats_service
         self.diag_service = diag_service
         self.orchestrator = orchestrator
         self.profile_manager = profile_manager
         self.gear_calib_service = gear_calib_service
         self._storage_manager = storage_manager
+
         self._config_lock = threading.RLock()
         self._config_write_lock = threading.Lock()
         self._config_write_requested = threading.Event()
@@ -161,6 +166,7 @@ class DashboardBridge(QObject):
         system = self.runtime.snapshot().domain("system")
         version = system.get("system_version", "unknown")
         telemetry = {key: value for key, value in system.items() if key != "system_version"}
+        led_scan = self.led_service.scan_state if self.led_service else {}
         new_system = self._sanitize_for_qml({
             "version": version,
             "telemetry": telemetry,
@@ -172,6 +178,13 @@ class DashboardBridge(QObject):
                 "message": self.profile_manager.error_message if self.profile_manager else "",
             },
             "updater": self._updater_state,
+            "led_devices": self.led_catalog.devices_to_json() if self.led_catalog else [],
+            "led_groups": self.led_catalog.groups_to_json() if self.led_catalog else [],
+            "led_max_devices": MAX_DEVICES,
+            "ble_scanning": bool(led_scan.get("scanning", False)),
+            "ble_scan_results": led_scan.get("results", []),
+            "ble_characteristics": led_scan.get("characteristics", []),
+            "ble_test_state": led_scan.get("test_state", {}),
         })
         if new_system != self._system_state:
             self._system_state = new_system
@@ -290,6 +303,175 @@ class DashboardBridge(QObject):
     def requestDiagnosticScan(self):
         if self.diag_service:
             self.diag_service.request_scan()
+
+    # Gestionnaire d'eclairages BLE -----------------------------------------
+
+    @Slot()
+    def requestBleScan(self):
+        if self.led_service:
+            self.led_service.request_scan()
+
+    @Slot()
+    def stopBleScan(self):
+        if self.led_service:
+            self.led_service.stop_scan()
+
+    @Slot(str)
+    def requestBleCharacteristics(self, address):
+        if self.led_service and address:
+            self.led_service.request_characteristics(address)
+
+    @Slot(result=str)
+    def getLedDevices(self):
+        return json.dumps(self.led_catalog.devices_to_json() if self.led_catalog else [])
+
+    @Slot(result=str)
+    def getLedGroups(self):
+        return json.dumps(self.led_catalog.groups_to_json() if self.led_catalog else [])
+
+    @Slot(result=str)
+    def getBleScanResults(self):
+        state = self.led_service.scan_state if self.led_service else {}
+        return json.dumps(state.get("results", []))
+
+    @Slot(result='QVariantList')
+    def getBleProtocols(self):
+        if not self.led_service:
+            return []
+        return [
+            {
+                "identifier": protocol.identifier,
+                "label": protocol.label,
+                "witness_color": "#%02X%02X%02X" % protocol.witness_color,
+                "witness_name": protocol.witness_name,
+            }
+            for protocol in self.led_service._registry.all()
+        ]
+
+    @Slot(result='QVariantList')
+    def getLedPredefinedNames(self):
+        return list(PREDEFINED_NAMES)
+
+    @Slot(str, str, str, bool)
+    def testBleProtocol(self, address, char_uuid, protocol, write_response):
+        if self.led_service:
+            self.led_service.start_protocol_test(
+                address, char_uuid, protocol, bool(write_response),
+            )
+
+    @Slot()
+    def stopBleTest(self):
+        if self.led_service:
+            self.led_service.stop_protocol_test()
+
+    @Slot(str, str, str, str, bool, str, result=bool)
+    def addLedDevice(self, address, name, protocol, char_uuid, write_response, advertised_name):
+        if not self.led_catalog or not self.led_service:
+            return False
+        try:
+            self.led_service._registry.get(protocol)
+            if not address.strip() or not char_uuid.strip():
+                raise ValueError("Adresse ou caracteristique GATT manquante")
+            self.led_catalog.add_device(BleDevice(
+                id="", name=name.strip() or "Eclairage", ble_address=address.strip(),
+                protocol=protocol, gatt_char_uuid=char_uuid.strip(),
+                write_with_response=bool(write_response), advertised_name=advertised_name.strip(),
+            ))
+        except (KeyError, ValueError) as exc:
+            self.send_notification("WARNING", str(exc), 4000)
+            return False
+        self.led_service.refresh_devices()
+        self._update_health()
+        return True
+
+    @Slot(str, result=bool)
+    def removeLedDevice(self, device_id):
+        if not self.led_catalog:
+            return False
+        removed = self.led_catalog.remove_device(device_id)
+        if removed and self.led_service:
+            self.led_service.refresh_devices()
+        self._update_health()
+        return removed
+
+    @Slot(str, str, str, result=bool)
+    def updateLedDevice(self, device_id, key, value):
+        if not self.led_catalog:
+            return False
+        try:
+            if key == "enabled":
+                parsed = value.strip().lower() in {"1", "true", "yes", "on"}
+            elif key == "brightness":
+                parsed = max(0.0, min(100.0, float(value)))
+            elif key == "color_override":
+                parsed = value.upper() or None
+                if parsed and not re.fullmatch(r"#[0-9A-F]{6}", parsed):
+                    raise ValueError("Couleur invalide")
+            elif key == "name":
+                parsed = value.strip()[:64] or "Eclairage"
+            else:
+                return False
+        except ValueError:
+            return False
+        updated = self.led_catalog.update_device(device_id, **{key: parsed})
+        if updated and self.led_service:
+            self.led_service.refresh_devices()
+        self._update_health()
+        return updated
+
+    @Slot(str, result=str)
+    def addLedGroup(self, name):
+        if not self.led_catalog or not name.strip():
+            return ""
+        group_id = self.led_catalog.add_group(name.strip()[:64])
+        self._update_health()
+        return group_id
+
+    @Slot(str, result=bool)
+    def removeLedGroup(self, group_id):
+        if not self.led_catalog:
+            return False
+        removed = self.led_catalog.remove_group(group_id)
+        if removed and self.led_service:
+            self.led_service.refresh_devices()
+        self._update_health()
+        return removed
+
+    @Slot(str, str, str, result=bool)
+    def updateLedGroup(self, group_id, key, value):
+        if not self.led_catalog or key not in {"name", "enabled", "brightness", "color_override"}:
+            return False
+        try:
+            if key == "enabled":
+                parsed = value.strip().lower() in {"1", "true", "yes", "on"}
+            elif key == "brightness":
+                parsed = max(0.0, min(100.0, float(value)))
+            elif key == "color_override":
+                parsed = value.upper() or None
+                if parsed and not re.fullmatch(r"#[0-9A-F]{6}", parsed):
+                    raise ValueError("Couleur invalide")
+            else:
+                parsed = value.strip()[:64] or "Groupe"
+        except ValueError:
+            return False
+        updated = self.led_catalog.update_group(group_id, **{key: parsed})
+        if updated and self.led_service:
+            self.led_service.refresh_devices()
+        self._update_health()
+        return updated
+
+    @Slot(str, str, bool, result=bool)
+    def setLedDeviceGroup(self, device_id, group_id, member):
+        if not self.led_catalog:
+            return False
+        if member:
+            self.led_catalog.add_device_to_group(device_id, group_id)
+        else:
+            self.led_catalog.remove_device_from_group(device_id, group_id)
+        if self.led_service:
+            self.led_service.refresh_devices()
+        self._update_health()
+        return True
 
     @Slot(str)
     def setSessionState(self, state: str):

@@ -27,6 +27,8 @@ from src.services.can_service import CanService
 from src.services.diagnostic_service import DiagnosticService
 from src.services.engine_sound_service import EngineSoundService
 from src.services.led_service import BleLedController
+from src.ble.device_catalog import DeviceCatalog
+from src.ble.protocol_registry import ProtocolRegistry
 from src.services.notification_service import NotificationService
 from src.orchestrator import SystemOrchestrator
 from src.services.system_monitor_service import SystemMonitorService
@@ -119,7 +121,9 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
             activity_source=can_activity,
         )
 
-    led_service = BleLedController(storage)
+    led_catalog = DeviceCatalog(storage)
+    led_registry = ProtocolRegistry()
+    led_service = BleLedController(storage, catalog=led_catalog, registry=led_registry)
     stats_service = TripStatsService(runtime, vehicle_config, storage)
     dynamics_service = DynamicsService(runtime, vehicle_config, storage)
     gear_calib_service = GearCalibrationService(runtime, storage, profile_manager, dynamics_service)
@@ -294,6 +298,7 @@ def main():
                 profile_manager.get_config_path(),
                 orchestrator=orchestrator,
                 led_service=led_srv,
+                led_catalog=led_srv._catalog,
                 stats_service=stats_srv,
                 diag_service=diag_srv,
                 profile_manager=profile_manager,
