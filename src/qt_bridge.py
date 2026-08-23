@@ -80,9 +80,14 @@ class DashboardBridge(QObject):
         self._updater_state = {
             "state": "IDLE", "installed_version": self._clios_version_text,
             "available_version": "", "channel": "stable", "progress": 0,
-            "message": "", "can_activate": False, "last_manifest": {}, "error": {},
+            "message": "", "detail": "", "phase": "idle",
+            "can_activate": False, "can_rollback": False, "rollback_target": "",
+            "last_manifest": {}, "error": {}, "helper_error": {},
+            "started_at": 0, "updated_at": 0,
         }
         self._updater_poll_running = False
+        self._updater_operation_started_at = 0.0
+        self._last_updater_status_signature = None
         self._network_was_online = False
         self._network_information = None
 

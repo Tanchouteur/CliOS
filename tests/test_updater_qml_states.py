@@ -12,6 +12,10 @@ class UpdaterQmlStatesTest(unittest.TestCase):
         self.assertIn("bridge.stageUpdate", source)
         self.assertIn("bridge.activateUpdate", source)
         self.assertIn("bridge.rollbackUpdate", source)
+        self.assertIn("can_rollback", source)
+        self.assertIn("rollback_target", source)
+        self.assertIn("elapsedSeconds", source)
+        self.assertIn("updateError.phase", source)
 
 
 if __name__ == "__main__":

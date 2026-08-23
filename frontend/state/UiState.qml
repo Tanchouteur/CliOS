@@ -32,7 +32,9 @@ QtObject {
     readonly property var updaterState: systemState.updater || ({
         "state": "IDLE", "installed_version": systemVersion, "available_version": "",
         "channel": "stable", "progress": 0, "message": "", "can_activate": false,
-        "last_manifest": ({}), "error": ({})
+        "can_rollback": false, "rollback_target": "", "phase": "idle", "detail": "",
+        "started_at": 0, "updated_at": 0, "last_manifest": ({}), "error": ({}),
+        "helper_error": ({})
     })
     readonly property var ledDevices: systemState.led_devices || []
     readonly property var ledGroups: systemState.led_groups || []

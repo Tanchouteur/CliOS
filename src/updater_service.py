@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import socket
@@ -100,11 +101,22 @@ class UpdaterEngine:
             raise ReleaseError(
                 "protection SD active: désactivez OverlayFS et redémarrez avant la mise à jour"
             )
-        self._write_status({"state": "DOWNLOADING", "version": version, "progress": 0, "message": "Résolution GitHub", "error": None})
+        self._write_status({
+            "state": "DOWNLOADING", "operation": "stage", "version": version,
+            "phase": "catalog", "progress": 1,
+            "message": "Résolution de la release sur GitHub",
+            "detail": "Lecture du catalogue et sélection des artefacts signés",
+            "error": None,
+        })
         try:
             manifest = self.catalog.find(version)
-            self._write_status({"state": "DOWNLOADING", "version": version, "progress": 0,
-                                "message": "Métadonnées GitHub vérifiées", "last_manifest": manifest, "error": None})
+            self._write_status({
+                "state": "DOWNLOADING", "operation": "stage", "version": version,
+                "phase": "manifest", "progress": 4,
+                "message": "Métadonnées GitHub vérifiées",
+                "detail": "Le manifeste correspond à la version et à la plateforme",
+                "last_manifest": manifest, "error": None,
+            })
             target = self.manager.stage(manifest, strict=True)
             return {"state": "STAGED", "version": version, "path": str(target)}
         except Exception as exc:
@@ -112,8 +124,10 @@ class UpdaterEngine:
             raise
 
     def activate(self, version: str) -> dict:
-        self._write_status({"state": "ACTIVATING", "version": version, "progress": 100,
-                            "message": "Activation atomique", "error": None})
+        self._write_status({"state": "ACTIVATING", "operation": "activate", "version": version,
+                            "phase": "activate", "progress": 100,
+                            "message": "Activation atomique", "detail": "Bascule du lien current",
+                            "error": None})
         try:
             target = self.manager.activate(version)
             marker = self.manager.state_root / f"health-{version}"
@@ -135,7 +149,9 @@ class UpdaterEngine:
             raise
 
     def rollback(self, stable_only: bool) -> dict:
-        self._write_status({"state": "ACTIVATING", "progress": 100, "message": "Rollback", "error": None})
+        self._write_status({"state": "ACTIVATING", "operation": "rollback", "progress": 100,
+                            "phase": "rollback", "message": "Rollback",
+                            "detail": "Restauration de la release précédente", "error": None})
         try:
             target = self.manager.rollback(stable_only=stable_only)
             self.restart()
@@ -155,13 +171,39 @@ class UpdaterEngine:
 
     def _progress(self, state: str, progress: int, message: str) -> None:
         current = self._read_status()
-        current.update({"state": state, "progress": progress, "message": message, "error": None})
+        lowered = message.lower()
+        phase = "archive"
+        if "manifeste" in lowered:
+            phase = "manifest"
+        elif "sign" in lowered or "sha-256" in lowered or "somme" in lowered:
+            phase = "signature" if "sign" in lowered or "somme" in lowered else "hash"
+        elif "extract" in lowered:
+            phase = "extract"
+        elif "environnement" in lowered or "wheelhouse" in lowered or "dépendance" in lowered:
+            phase = "environment"
+        elif "self-check" in lowered:
+            phase = "self_check"
+        elif "précompil" in lowered:
+            phase = "precompile"
+        elif state == "STAGED":
+            phase = "complete"
+        current.update({
+            "state": state, "progress": progress, "message": message,
+            "phase": phase, "detail": message, "error": None,
+        })
         self._write_status(current)
 
     def _record_error(self, exc: Exception) -> None:
         code = self.error_code(exc)
         current = self._read_status()
-        current.update({"state": "ERROR", "message": str(exc), "error": {"code": code, "message": str(exc)}})
+        phase = str(current.get("phase", "operation"))
+        raw_message = str(exc)
+        message = f"Échec pendant {self._phase_label(phase)} : {raw_message}"
+        current.update({
+            "state": "ERROR", "message": message,
+            "detail": self._error_hint(code, exc),
+            "error": {"code": code, "message": raw_message, "phase": phase},
+        })
         self._write_status(current)
 
     @staticmethod
@@ -170,17 +212,45 @@ class UpdaterEngine:
         if explicit:
             return str(explicit)
         message = str(exc).lower()
-        if isinstance(exc, PermissionError) or "permission" in message or "privil" in message:
+        if (
+            isinstance(exc, PermissionError)
+            or getattr(exc, "errno", None) in {errno.EPERM, errno.EACCES}
+            or "permission" in message or "not permitted" in message or "privil" in message
+        ):
             return "PRIVILEGE"
         if "sha-256" in message or "sha256" in message:
             return "SHA256"
-        if "espace disque" in message or "no space" in message:
+        if getattr(exc, "errno", None) == errno.ENOSPC or "espace disque" in message or "no space" in message:
             return "DISK_SPACE"
         if "self-check" in message:
             return "SELF_CHECK"
-        if isinstance(exc, OSError) or "réseau" in message or "github inaccessible" in message:
+        if "réseau" in message or "github inaccessible" in message or "timed out" in message:
             return "NETWORK"
         return "UPDATE_ERROR"
+
+    @staticmethod
+    def _phase_label(phase: str) -> str:
+        return {
+            "catalog": "la résolution GitHub", "manifest": "la vérification du manifeste",
+            "signature": "la vérification de signature", "archive": "le téléchargement de l'archive",
+            "hash": "la vérification SHA-256", "extract": "l'extraction",
+            "environment": "l'installation de l'environnement", "self_check": "le self-check",
+            "precompile": "la précompilation", "activate": "l'activation",
+            "rollback": "le rollback",
+        }.get(phase, "la mise à jour")
+
+    @staticmethod
+    def _error_hint(code: str, exc: Exception) -> str:
+        if code == "PRIVILEGE":
+            return (
+                "Le helper a été bloqué par une permission système. Consultez le journal "
+                "clios-updater pour connaître l'appel refusé."
+            )
+        if code == "NETWORK":
+            return "Vérifiez la connexion Internet ; aucun fichier actif n'a été remplacé."
+        if code == "DISK_SPACE":
+            return "Libérez de l'espace dans /opt/clios puis relancez le téléchargement."
+        return f"Aucune release active n'a été remplacée. Détail système : {exc}"
 
     def _read_status(self) -> dict:
         try:
@@ -190,7 +260,19 @@ class UpdaterEngine:
             return {"state": "IDLE", "progress": 0, "message": ""}
 
     def _write_status(self, payload: dict) -> None:
-        self.manager._write_json_atomic(self.status_path, payload)
+        enriched = dict(payload)
+        now = int(time.time())
+        if str(enriched.get("state", "")) in ACTIVE_UPDATE_STATES:
+            previous = self._read_status()
+            new_operation = str(enriched.get("operation", ""))
+            previous_operation = str(previous.get("operation", ""))
+            previous_active = str(previous.get("state", "")) in ACTIVE_UPDATE_STATES
+            if new_operation and (new_operation != previous_operation or not previous_active):
+                enriched["started_at"] = now
+            else:
+                enriched.setdefault("started_at", int(previous.get("started_at", 0) or now))
+        enriched["updated_at"] = now
+        self.manager._write_json_atomic(self.status_path, enriched)
 
     def _restart_service(self) -> None:
         result = subprocess.run(["systemctl", "restart", self.service_name], capture_output=True, text=True, timeout=30)

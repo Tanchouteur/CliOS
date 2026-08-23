@@ -103,6 +103,14 @@ class ReleaseManagerTest(unittest.TestCase):
             options = self.manager._run_as_options("clios")
         self.assertEqual(set(options), {"user", "group"})
 
+    def test_privilege_drop_keeps_the_existing_service_group(self):
+        account = SimpleNamespace(pw_uid=123, pw_gid=456)
+        with mock.patch("src.release_manager.os.geteuid", return_value=0), \
+                mock.patch("src.release_manager.os.getgid", return_value=456), \
+                mock.patch("pwd.getpwnam", return_value=account):
+            options = self.manager._run_as_options("clios")
+        self.assertEqual(options, {"user": 123})
+
     def test_runtime_precompile_uses_the_release_python(self):
         release = self.root / "release"
         python = release / ".venv/bin/python3"

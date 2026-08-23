@@ -1,4 +1,5 @@
 import hashlib
+import errno
 import tarfile
 import tempfile
 import threading
@@ -95,6 +96,22 @@ class UpdaterServiceTest(unittest.TestCase):
 
         self.assertEqual(engine.status()["state"], "ERROR")
         self.assertEqual(engine.status()["error"]["code"], "UPDATE_INTERRUPTED")
+
+    def test_permission_error_reports_phase_and_actionable_detail(self):
+        engine = self.engine({})
+        engine._write_status({
+            "state": "DOWNLOADING", "operation": "stage", "phase": "self_check",
+            "version": "2.0.1", "progress": 94, "message": "Self-check",
+        })
+        failure = OSError(errno.EPERM, "Operation not permitted")
+        engine._record_error(failure)
+
+        status = engine.status()
+        self.assertEqual(status["error"]["code"], "PRIVILEGE")
+        self.assertEqual(status["error"]["phase"], "self_check")
+        self.assertIn("self-check", status["message"])
+        self.assertIn("permission système", status["detail"])
+        self.assertGreater(status["updated_at"], 0)
 
     def test_protocol_rejects_urls_paths_and_extra_fields(self):
         engine = self.engine({})

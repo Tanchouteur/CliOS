@@ -13,7 +13,15 @@ Item {
     property string exportPath: ""
     property string updateChannel: bridge.getUpdateChannel()
     property string pendingUpdateAction: ""
+    property double currentEpoch: Date.now() / 1000
     readonly property var updater: S.UiState.updaterState
+    readonly property var updateError: root.updater.error || ({})
+
+    function elapsedSeconds() {
+        const started = Number(root.updater.started_at || 0)
+        if (started <= 0 || ["CHECKING", "DOWNLOADING", "ACTIVATING"].indexOf(root.updater.state) < 0) return 0
+        return Math.max(0, Math.floor(root.currentEpoch - started))
+    }
 
     function updaterLabel(state) {
         const labels = {
@@ -22,6 +30,17 @@ Item {
             "ACTIVATING": "ACTIVATION", "UP_TO_DATE": "À JOUR", "ERROR": "ERREUR"
         }
         return labels[state] || state
+    }
+
+    function phaseLabel(phase) {
+        const labels = {
+            "idle": "attente", "catalog": "catalogue GitHub", "request": "transmission au helper",
+            "manifest": "manifeste", "signature": "signature", "archive": "archive",
+            "hash": "contrôle SHA-256", "extract": "extraction", "environment": "environnement Python",
+            "self_check": "auto-vérification", "precompile": "précompilation", "complete": "terminé",
+            "activate": "activation", "rollback": "retour arrière"
+        }
+        return labels[phase] || phase
     }
 
     ConfirmDialog {
@@ -43,6 +62,7 @@ Item {
     Timer {
         interval: 1000; running: root.visible; repeat: true
         onTriggered: {
+            root.currentEpoch = Date.now() / 1000
             const raw = bridge.getRecentLogs(120)
             const entries = raw ? JSON.parse(raw) : []
             const lines = []
@@ -89,7 +109,7 @@ Item {
             }
         }
         Card {
-            Layout.fillWidth: true; Layout.preferredHeight: 158
+            Layout.fillWidth: true; Layout.preferredHeight: 196
             title: "Mise à jour — " + root.updaterLabel(root.updater.state || "IDLE")
             highlighted: root.updater.state === "AVAILABLE" || root.updater.state === "STAGED"
             RowLayout {
@@ -105,9 +125,24 @@ Item {
                         Layout.fillWidth: true
                         text: root.updater.message || "Aucune opération en cours"
                         color: root.updater.state === "ERROR" ? T.StyleManager.danger : T.StyleManager.textSecondary
-                        font.pixelSize: 16; elide: Text.ElideRight
+                        font.pixelSize: 16; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
                     }
                     Progress { Layout.fillWidth: true; value: Number(root.updater.progress || 0); visible: ["CHECKING", "DOWNLOADING", "STAGED", "ACTIVATING"].indexOf(root.updater.state) >= 0 }
+                    Text {
+                        Layout.fillWidth: true
+                        visible: !!root.updater.detail || root.elapsedSeconds() > 0
+                        text: (root.updater.phase ? "Étape " + root.phaseLabel(root.updater.phase) + " • " : "")
+                              + Math.round(Number(root.updater.progress || 0)) + "%"
+                              + (root.elapsedSeconds() > 0 ? " • " + root.elapsedSeconds() + " s écoulées" : "")
+                              + (root.updater.detail ? " — " + root.updater.detail : "")
+                        color: T.StyleManager.textSecondary; font.pixelSize: 13
+                        wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
+                    }
+                    Text {
+                        Layout.fillWidth: true; visible: root.updater.state === "ERROR" && !!root.updateError.code
+                        text: "Code " + (root.updateError.code || "") + (root.updateError.phase ? " • phase " + root.updateError.phase : "")
+                        color: T.StyleManager.warning; font.pixelSize: 12; font.family: T.StyleManager.fontMono
+                    }
                     Text {
                         Layout.fillWidth: true; visible: S.UiState.speed > 5
                         text: "⚠ Véhicule en mouvement : confirmation obligatoire, vitesse journalisée"
@@ -115,14 +150,16 @@ Item {
                     }
                 }
                 Button { Layout.preferredWidth: 190; text: "RECHERCHER"; subtext: "Recherche manuelle"; onClicked: bridge.checkForUpdates() }
-                Button { Layout.preferredWidth: 190; text: "TÉLÉCHARGER"; primary: true; enabled: root.updater.state === "AVAILABLE"; onClicked: bridge.stageUpdate(S.UiState.speed) }
+                Button { Layout.preferredWidth: 190; text: "TÉLÉCHARGER"; primary: true; enabled: root.updater.state === "AVAILABLE" && !!root.updater.available_version; onClicked: bridge.stageUpdate(S.UiState.speed) }
                 Button {
                     Layout.preferredWidth: 170; text: "ACTIVER"; destructive: true
                     enabled: root.updater.state === "STAGED" || root.updater.can_activate === true
                     onClicked: { root.pendingUpdateAction = "activate"; updateConfirm.visible = true }
                 }
                 Button {
-                    Layout.preferredWidth: 170; text: "ROLLBACK"; destructive: true
+                    Layout.preferredWidth: 190; text: "ROLLBACK"; destructive: true
+                    subtext: root.updater.can_rollback ? ("Vers " + root.updater.rollback_target) : "Aucune version précédente"
+                    enabled: root.updater.can_rollback === true
                     onClicked: { root.pendingUpdateAction = "rollback"; updateConfirm.visible = true }
                 }
             }
