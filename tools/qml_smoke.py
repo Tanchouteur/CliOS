@@ -5,6 +5,7 @@ import copy
 import json
 import os
 import sys
+import time
 
 from PySide6.QtCore import QObject, Property, QTimer, Signal, Slot, qInstallMessageHandler
 from PySide6.QtGui import QGuiApplication
@@ -450,8 +451,12 @@ def main():
                 "channel": "beta",
                 "progress": 62 if update_state in {"DOWNLOADING", "ACTIVATING"} else 100 if update_state in {"STAGED", "UP_TO_DATE"} else 0,
                 "message": "SHA-256 incorrect" if update_state == "ERROR" else "État updater de qualification",
+                "detail": "Téléchargement de l'archive — 62%" if update_state == "DOWNLOADING" else "Détail de qualification updater",
+                "phase": "archive" if update_state == "DOWNLOADING" else "complete",
+                "started_at": int(time.time()) - 42 if update_state in {"CHECKING", "DOWNLOADING", "ACTIVATING"} else 0,
                 "can_activate": update_state == "STAGED",
-                "error": {"code": "SHA256", "message": "SHA-256 incorrect"} if update_state == "ERROR" else {},
+                "can_rollback": True, "rollback_target": "2.0.0",
+                "error": {"code": "SHA256", "message": "SHA-256 incorrect", "phase": "hash"} if update_state == "ERROR" else {},
             }
             emit_runtime()
             shell = window.findChild(QObject, "appShell")

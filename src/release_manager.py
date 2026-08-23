@@ -38,7 +38,7 @@ class ReleaseManager:
         self.state_root = Path(state_root)
         self.state_path = self.state_root / "release-state.json"
         self._default_downloader = downloader is None
-        self.downloader = downloader or urllib.request.urlretrieve
+        self.downloader = downloader or self._download_url
         self.progress_callback = progress_callback
         self.self_check_user = self_check_user
         self.platform = get_release_platform(platform_id) if platform_id else None
@@ -55,6 +55,26 @@ class ReleaseManager:
                 return json.loads(response.read().decode("utf-8"))
         with open(path_or_url, encoding="utf-8") as stream:
             return json.load(stream)
+
+    @staticmethod
+    def _download_url(source: str, destination: str, reporthook=None):
+        """Télécharge avec un timeout d'inactivité borné et une progression fiable."""
+        request = urllib.request.Request(source, headers={"User-Agent": "CliOS-Updater/2"})
+        with urllib.request.urlopen(request, timeout=30) as response, open(destination, "wb") as stream:
+            total_size = int(response.headers.get("Content-Length", 0) or 0)
+            block_size = 256 * 1024
+            blocks = 0
+            if reporthook:
+                reporthook(0, block_size, total_size)
+            while True:
+                block = response.read(block_size)
+                if not block:
+                    break
+                stream.write(block)
+                blocks += 1
+                if reporthook:
+                    reporthook(blocks, block_size, total_size)
+        return destination, response.headers
 
     def get_channel(self) -> str:
         """Retourne le canal persistant, avec repli sûr sur stable."""
@@ -82,6 +102,7 @@ class ReleaseManager:
         return sorted(candidates, key=lambda item: self._version_tuple(item.get("version", "0.0.0")))[-1]
 
     def stage(self, manifest_source: str | dict, *, strict: bool = False) -> Path:
+        self._progress("DOWNLOADING", 5, "Validation du manifeste de release")
         manifest_location = None
         if isinstance(manifest_source, dict):
             manifest = dict(manifest_source)
@@ -92,6 +113,7 @@ class ReleaseManager:
         version = self._validate_manifest(manifest, strict=strict)
         signed_hashes = None
         if strict and SemVer.parse(version) > self.SIGNATURE_BOOTSTRAP_VERSION:
+            self._progress("DOWNLOADING", 7, "Vérification des métadonnées signées")
             signed_hashes = self._verify_signed_metadata(manifest, manifest_location)
         target = self.releases_dir / version
         if target.exists():
@@ -105,7 +127,7 @@ class ReleaseManager:
         work.chmod(0o750)
         archive_part = work / "release.tar.part"
         try:
-            self._progress("DOWNLOADING", 0, "Téléchargement de l'archive")
+            self._progress("DOWNLOADING", 10, "Téléchargement de l'archive (connexion)")
             required = int(manifest.get("archive_size", 0) or 0)
             if required:
                 free = shutil.disk_usage(self.releases_dir).free
@@ -114,27 +136,39 @@ class ReleaseManager:
             if self._default_downloader:
                 def reporthook(blocks: int, block_size: int, total_size: int) -> None:
                     if total_size > 0:
-                        self._progress("DOWNLOADING", min(99, int(blocks * block_size * 100 / total_size)), "Téléchargement de l'archive")
+                        archive_pct = min(100, int(blocks * block_size * 100 / total_size))
+                        overall_pct = 10 + int(archive_pct * 0.5)
+                        self._progress(
+                            "DOWNLOADING", overall_pct,
+                            f"Téléchargement de l'archive — {archive_pct}%",
+                        )
                 self.downloader(manifest["archive_url"], str(archive_part), reporthook=reporthook)
             else:
                 self.downloader(manifest["archive_url"], str(archive_part))
-            self._progress("DOWNLOADING", 100, "Archive téléchargée")
+            self._progress("DOWNLOADING", 60, "Archive téléchargée")
             if shutil.disk_usage(self.releases_dir).free < archive_part.stat().st_size * 2:
                 raise ReleaseError("espace disque insuffisant pour extraire la release")
-            if self.sha256(archive_part) != manifest["archive_sha256"].lower():
+            self._progress("DOWNLOADING", 64, "Vérification SHA-256 de l'archive")
+            archive_sha256 = self.sha256(archive_part)
+            if archive_sha256 != manifest["archive_sha256"].lower():
                 raise ReleaseError("SHA-256 de l'archive incorrect")
             if signed_hashes is not None:
+                self._progress("DOWNLOADING", 67, "Comparaison avec les sommes signées")
                 archive_name = Path(str(manifest["archive_url"])).name
-                if self.sha256(archive_part) != signed_hashes[archive_name]:
+                if archive_sha256 != signed_hashes[archive_name]:
                     raise ReleaseError("hash signé de l'archive incorrect")
+            self._progress("DOWNLOADING", 70, "Extraction sécurisée de la release")
             unpacked = work / "unpacked"
             unpacked.mkdir()
             self._safe_extract(archive_part, unpacked)
             release_root = self._single_root(unpacked)
+            self._progress("DOWNLOADING", 75, "Vérification des fichiers manifestés")
             self._verify_files(release_root, manifest.get("files", {}))
-            self._progress("DOWNLOADING", 100, "Installation de l'environnement")
+            self._progress("DOWNLOADING", 80, "Création de l'environnement Python")
             self._install_environment(release_root, str(manifest.get("platform", "")))
+            self._progress("DOWNLOADING", 94, "Self-check Python, données et interface QML")
             self.self_check(release_root, run_as=self.self_check_user)
+            self._progress("DOWNLOADING", 98, "Précompilation du runtime Python")
             self._precompile_runtime(release_root)
             os.replace(release_root, target)
             self._write_json_atomic(target / "release-manifest.json", manifest)
@@ -346,8 +380,7 @@ class ReleaseManager:
         if result.returncode:
             raise ReleaseError("précompilation Python: " + (result.stderr or result.stdout))
 
-    @staticmethod
-    def _install_environment(release_root: Path, platform_id: str = "") -> None:
+    def _install_environment(self, release_root: Path, platform_id: str = "") -> None:
         if not platform_id:
             return
         try:
@@ -365,6 +398,7 @@ class ReleaseManager:
         pip = str(release_root / ".venv/bin/pip")
         wheel_files = sorted(wheels.glob("*.whl")) if wheels.is_dir() else []
         if wheel_files:
+            self._progress("DOWNLOADING", 84, f"Installation du wheelhouse ({len(wheel_files)} paquets)")
             # Les wheels ont déjà été contrôlées par le manifeste de release.
             result = subprocess.run(
                 [pip, "install", "--no-index", "--no-deps", *map(str, wheel_files)],
@@ -375,6 +409,7 @@ class ReleaseManager:
         # Les paquets déjà présents sont conservés. Une éventuelle dépendance
         # absente peut venir de PyPI uniquement si son artefact correspond à un
         # hash du lock.
+        self._progress("DOWNLOADING", 88, "Vérification et installation des dépendances verrouillées")
         command = [pip, "install", "--require-hashes", "-r", str(lock)]
         result = subprocess.run(command, cwd=release_root, capture_output=True, text=True, timeout=600)
         if result.returncode:
@@ -457,10 +492,13 @@ class ReleaseManager:
         except KeyError as exc:
             raise ReleaseError(f"utilisateur de self-check absent: {username}") from exc
 
-        # Ne pas passer extra_groups=[] ici. Python appellerait setgroups(2),
-        # opération refusée par certains profils systemd durcis (EPERM), alors
-        # que changer l'UID/GID primaire suffit pour ce self-check en lecture.
-        return {"user": account.pw_uid, "group": account.pw_gid}
+        # Le service systemd tourne déjà avec Group=clios. Dans ce cas, ne pas
+        # redemander setgid(2): certains noyaux/profils durcis le refusent avec
+        # EPERM malgré une transition vers le même GID. setuid(2) suffit.
+        options = {"user": account.pw_uid}
+        if os.getgid() != account.pw_gid:
+            options["group"] = account.pw_gid
+        return options
 
     def _channel(self, release: Path) -> str:
         try:
