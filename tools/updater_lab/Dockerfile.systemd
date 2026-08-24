@@ -1,0 +1,13 @@
+ARG DEBIAN_SUITE=bookworm
+FROM debian:${DEBIAN_SUITE}-slim
+
+ENV container=docker DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    systemd systemd-sysv dbus python3 python3-venv openssl util-linux findutils ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system clios \
+    && useradd --system --gid clios --home-dir /var/lib/clios --shell /usr/sbin/nologin clios \
+    && systemctl mask systemd-remount-fs.service getty@.service console-getty.service
+
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

@@ -1,0 +1,65 @@
+name: Updater systemd lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Qualification depth
+        required: true
+        default: fixture
+        type: choice
+        options: [fixture, full]
+
+permissions:
+  contents: read
+
+jobs:
+  updater-systemd:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - if: inputs.mode == 'full'
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: arm64
+      - id: bookworm-cache
+        name: Restore Bookworm ARM64 wheelhouse
+        if: inputs.mode == 'full'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: wheelhouses/bookworm-arm64
+          key: wheelhouse-v2-bookworm-arm64-${{ hashFiles('requirements-bookworm-arm64.lock', 'tools/build_wheelhouse.sh') }}
+      - id: trixie-cache
+        name: Restore Trixie ARM64 wheelhouse
+        if: inputs.mode == 'full'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: wheelhouses/trixie-arm64
+          key: wheelhouse-v2-trixie-arm64-${{ hashFiles('requirements-trixie-arm64.lock', 'tools/build_wheelhouse.sh') }}
+      - name: Build missing cached wheelhouses
+        if: inputs.mode == 'full' && (steps.bookworm-cache.outputs.cache-hit != 'true' || steps.trixie-cache.outputs.cache-hit != 'true')
+        run: |
+          set -euo pipefail
+          build_target() {
+            local suite="$1" target="$2"
+            docker run --rm --platform linux/arm64 \
+              -v "${GITHUB_WORKSPACE}:/work" -w /work "debian:${suite}" \
+              bash -ceu 'apt-get update; apt-get install -y python3 python3-pip python3-venv python3-wheel build-essential libjack-jackd2-dev portaudio19-dev libsndfile1-dev liblo-dev libportmidi-dev; ./tools/build_wheelhouse.sh "$1"' -- "${target}"
+          }
+          if [[ "${{ steps.bookworm-cache.outputs.cache-hit }}" != true ]]; then build_target bookworm bookworm-arm64; fi
+          if [[ "${{ steps.trixie-cache.outputs.cache-hit }}" != true ]]; then build_target trixie trixie-arm64; fi
+      - name: Save Bookworm ARM64 wheelhouse
+        if: inputs.mode == 'full' && steps.bookworm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745b974a628896c90dbdf5c8093 # v4
+        with:
+          path: wheelhouses/bookworm-arm64
+          key: wheelhouse-v2-bookworm-arm64-${{ hashFiles('requirements-bookworm-arm64.lock', 'tools/build_wheelhouse.sh') }}
+      - name: Save Trixie ARM64 wheelhouse
+        if: inputs.mode == 'full' && steps.trixie-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745b974a628896c90dbdf5c8093 # v4
+        with:
+          path: wheelhouses/trixie-arm64
+          key: wheelhouse-v2-trixie-arm64-${{ hashFiles('requirements-trixie-arm64.lock', 'tools/build_wheelhouse.sh') }}
+      - name: Run updater lab
+        run: tools/test_updater_lab.sh --${{ inputs.mode }}

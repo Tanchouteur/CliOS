@@ -8,6 +8,8 @@ Type=simple
 User=root
 Group=clios
 UMask=0007
+StateDirectory=clios
+StateDirectoryMode=0770
 ExecStart=/usr/bin/python3 -u /opt/clios/current/src/updater_service.py
 Environment=PYTHONPATH=/opt/clios/current
 NoNewPrivileges=yes
@@ -26,6 +28,9 @@ MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 ReadWritePaths=/opt/clios /var/lib/clios /run/clios
 CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SETGID CAP_SETUID
+# systemd 257 retire CAP_SETUID des capacités effectives avec PrivateDevices.
+# Le self-check doit uniquement pouvoir descendre de root vers l'utilisateur clios.
+AmbientCapabilities=CAP_SETUID
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]
