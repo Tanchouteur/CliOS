@@ -4,7 +4,7 @@ import re
 import threading
 import time
 
-from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication
+from PySide6.QtCore import QObject, Signal, Property, QTimer, Slot, QCoreApplication, QEvent, QThread
 try:
     from PySide6.QtNetwork import QNetworkInformation
 except ImportError:  # Qt < 6.4 ou backend réseau non fourni
@@ -17,6 +17,22 @@ from src.bridge.updater_controller import UpdaterController
 from src.bridge.ui_command_router import UiCommandRouter
 from src.bridge.network_controller import NetworkController
 from src.ble.device_catalog import BleDevice, MAX_DEVICES, PREDEFINED_NAMES
+
+
+_UPDATER_PATCH_EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
+_OWNER_CALL_EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
+
+
+class _UpdaterPatchEvent(QEvent):
+    def __init__(self, changes):
+        super().__init__(_UPDATER_PATCH_EVENT_TYPE)
+        self.changes = dict(changes)
+
+
+class _OwnerCallEvent(QEvent):
+    def __init__(self, callback):
+        super().__init__(_OWNER_CALL_EVENT_TYPE)
+        self.callback = callback
 
 
 class DashboardBridge(QObject):
@@ -87,10 +103,15 @@ class DashboardBridge(QObject):
             "message": "", "detail": "", "phase": "idle",
             "can_activate": False, "can_rollback": False, "rollback_target": "",
             "last_manifest": {}, "error": {}, "helper_error": {},
-            "started_at": 0, "updated_at": 0,
+            "started_at": 0, "updated_at": 0, "started_at_ns": 0, "updated_at_ns": 0,
+            "updated_at_iso": "", "operation_id": "", "sequence": 0,
+            "indeterminate": False, "heartbeat_at_ns": 0,
+            "bytes_received": 0, "bytes_total": 0,
         }
         self._updater_poll_running = False
         self._updater_operation_started_at = 0.0
+        self._updater_operation_id = ""
+        self._last_updater_sequence = 0
         self._last_updater_status_signature = None
         self._network_was_online = False
         self._network_information = None
@@ -243,6 +264,35 @@ class DashboardBridge(QObject):
         updated["installed_version"] = self._clios_version_text
         updated["channel"] = self.getUpdateChannel()
         self._updater_state = self._sanitize_for_qml(updated)
+        operation_id = str(changes.get("operation_id", "") or "")
+        if operation_id and operation_id == self._updater_operation_id and "sequence" in changes:
+            self._last_updater_sequence = max(
+                self._last_updater_sequence, int(changes.get("sequence", 0) or 0),
+            )
+        # This method only runs on the QObject owner thread. Publish now so QML
+        # does not wait for the next one-second health timer tick.
+        self._update_health()
+
+    def _queue_updater_patch(self, changes):
+        if QThread.currentThread() == self.thread():
+            self._set_updater_state(**changes)
+            return
+        QCoreApplication.postEvent(self, _UpdaterPatchEvent(changes))
+
+    def _queue_owner_call(self, callback):
+        if QThread.currentThread() == self.thread():
+            callback()
+            return
+        QCoreApplication.postEvent(self, _OwnerCallEvent(callback))
+
+    def event(self, event):
+        if event.type() == _UPDATER_PATCH_EVENT_TYPE:
+            self._set_updater_state(**event.changes)
+            return True
+        if event.type() == _OWNER_CALL_EVENT_TYPE:
+            event.callback()
+            return True
+        return super().event(event)
 
     def _poll_updater_status(self):
         self._updater_controller.poll_status()

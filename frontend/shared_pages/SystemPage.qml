@@ -71,7 +71,8 @@ Item {
                 Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "Mise à jour · " + (root.updaterLabels[root.updater.state] || root.updater.state || "IDLE"); highlighted: root.updater.state === "AVAILABLE" || root.updater.state === "STAGED"
                     ColumnLayout { anchors.fill: parent; spacing: 12
                         Text { Layout.fillWidth: true; text: root.updater.message || "Aucune opération en cours"; color: root.updater.state === "ERROR" ? T.StyleManager.danger : T.StyleManager.text; font.pixelSize: 20; wrapMode: Text.WordWrap }
-                        Progress { Layout.fillWidth: true; value: Number(root.updater.progress || 0); visible: ["CHECKING","DOWNLOADING","STAGED","ACTIVATING"].indexOf(root.updater.state) >= 0 }
+                        Progress { Layout.fillWidth: true; value: Number(root.updater.progress || 0); indeterminate: root.updater.indeterminate === true; visible: ["CHECKING","DOWNLOADING","STAGED","ACTIVATING"].indexOf(root.updater.state) >= 0 }
+                        Text { Layout.fillWidth: true; visible: Number(root.updater.bytes_received || 0) > 0; text: Math.round(Number(root.updater.bytes_received || 0) / 1048576 * 10) / 10 + " MB reçus" + (Number(root.updater.bytes_total || 0) > 0 ? " / " + (Math.round(Number(root.updater.bytes_total || 0) / 1048576 * 10) / 10) + " MB" : ""); color: T.StyleManager.textSecondary; font.pixelSize: 14 }
                         Text { Layout.fillWidth: true; text: root.updater.detail || (root.updateError.phase ? "Erreur pendant " + root.updateError.phase : "Version disponible : " + (root.updater.available_version || "—")); color: T.StyleManager.textSecondary; font.pixelSize: 15; wrapMode: Text.WordWrap }
                         Item { Layout.fillHeight: true }
                         RowLayout { Layout.fillWidth: true; Layout.preferredHeight: 72; spacing: 12

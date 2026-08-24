@@ -16,6 +16,8 @@ class UpdaterQmlStatesTest(unittest.TestCase):
         self.assertIn("rollback_target", source)
         self.assertIn("elapsedSeconds", source)
         self.assertIn("updateError.phase", source)
+        self.assertIn("indeterminate:", source)
+        self.assertIn("bytes_received", source)
 
 
 if __name__ == "__main__":
