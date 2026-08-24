@@ -26,7 +26,7 @@ ApplicationWindow {
         focus: true
         Keys.onPressed: (event) => {
             if (event.key === Qt.Key_F12 || (event.key === Qt.Key_M && (event.modifiers & Qt.ControlModifier))) {
-                shell.openRoute("system")
+                shell.openRoute("maintenance")
                 event.accepted = true
             }
         }

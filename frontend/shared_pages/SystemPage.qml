@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "components"
 import "../style" as T
@@ -7,177 +6,107 @@ import "../state" as S
 
 Item {
     id: root
-    signal backRequested()
-    signal actionRequested(string action)
-    property string logsText: ""
-    property string exportPath: ""
+    property string initialRoute: "system"
+    property int tab: initialRoute === "maintenance" || initialRoute === "storage" ? 2 : (initialRoute === "updates" ? 1 : (initialRoute === "power" ? 3 : 0))
     property string updateChannel: bridge.getUpdateChannel()
-    property string pendingUpdateAction: ""
-    property double currentEpoch: Date.now() / 1000
+    readonly property var tabs: ["RÉSEAU", "MISES À JOUR", "STOCKAGE", "ALIMENTATION"]
+    readonly property var network: S.UiState.networkState
+    readonly property var maintenance: S.UiState.maintenanceState
     readonly property var updater: S.UiState.updaterState
-    readonly property var updateError: root.updater.error || ({})
-
+    readonly property var updateError: updater.error || ({})
+    readonly property bool vehicleMoving: S.UiState.speed > 5
+    readonly property var updaterLabels: ({
+        "IDLE":"PRÊT", "CHECKING":"RECHERCHE", "AVAILABLE":"DISPONIBLE",
+        "DOWNLOADING":"TÉLÉCHARGEMENT", "STAGED":"PRÉPARÉE", "ACTIVATING":"ACTIVATION",
+        "UP_TO_DATE":"À JOUR", "ERROR":"ERREUR"
+    })
+    signal actionRequested(string action)
+    signal backRequested()
+    onInitialRouteChanged: tab = initialRoute === "maintenance" || initialRoute === "storage" ? 2 : (initialRoute === "updates" ? 1 : (initialRoute === "power" ? 3 : 0))
     function elapsedSeconds() {
-        const started = Number(root.updater.started_at || 0)
-        if (started <= 0 || ["CHECKING", "DOWNLOADING", "ACTIVATING"].indexOf(root.updater.state) < 0) return 0
-        return Math.max(0, Math.floor(root.currentEpoch - started))
+        const started = Number(updater.started_at || 0)
+        return started > 0 ? Math.max(0, Math.floor(Date.now()/1000-started)) : 0
     }
-
-    function updaterLabel(state) {
-        const labels = {
-            "IDLE": "PRÊT", "CHECKING": "RECHERCHE", "AVAILABLE": "DISPONIBLE",
-            "DOWNLOADING": "TÉLÉCHARGEMENT", "STAGED": "PRÉPARÉE",
-            "ACTIVATING": "ACTIVATION", "UP_TO_DATE": "À JOUR", "ERROR": "ERREUR"
-        }
-        return labels[state] || state
-    }
-
-    function phaseLabel(phase) {
-        const labels = {
-            "idle": "attente", "catalog": "catalogue GitHub", "request": "transmission au helper",
-            "manifest": "manifeste", "signature": "signature", "archive": "archive",
-            "hash": "contrôle SHA-256", "extract": "extraction", "environment": "environnement Python",
-            "self_check": "auto-vérification", "precompile": "précompilation", "complete": "terminé",
-            "activate": "activation", "rollback": "retour arrière"
-        }
-        return labels[phase] || phase
-    }
-
-    ConfirmDialog {
-        id: updateConfirm
-        z: 100
-        title: root.pendingUpdateAction === "activate" ? "Activer la mise à jour ?" : "Revenir à la version stable ?"
-        message: (S.UiState.speed > 5 ? "Véhicule en mouvement à " + S.UiState.fixed(S.UiState.speed, 1, "0,0") + " km/h. " : "")
-                 + "CliOS va redémarrer. Confirmez explicitement cette opération."
-        acceptText: root.pendingUpdateAction === "activate" ? "ACTIVER" : "ROLLBACK"
-        onAccepted: {
-            visible = false
-            if (root.pendingUpdateAction === "activate") bridge.activateUpdate(S.UiState.speed)
-            else bridge.rollbackUpdate(S.UiState.speed, root.updateChannel === "beta")
-            root.pendingUpdateAction = ""
-        }
-        onRejected: { visible = false; root.pendingUpdateAction = "" }
-    }
-
-    Timer {
-        interval: 1000; running: root.visible; repeat: true
-        onTriggered: {
-            root.currentEpoch = Date.now() / 1000
-            const raw = bridge.getRecentLogs(120)
-            const entries = raw ? JSON.parse(raw) : []
-            const lines = []
-            for (let i = 0; i < entries.length; ++i) {
-                const e = entries[i]
-                lines.push("[" + e.ts + "] [" + e.level + "] " + e.logger + " — " + e.message)
-            }
-            root.logsText = lines.join("\n")
-        }
-    }
+    // Les actions bridge.activateUpdate / bridge.rollbackUpdate sont routées
+    // vers l'unique ConfirmDialog global de AppShell.
 
     ColumnLayout {
-        anchors.fill: parent; anchors.margins: 16; spacing: 12
-        PageHeader { Layout.fillWidth: true; title: "Système"; subtitle: "CliOS " + S.UiState.systemVersion; onBackClicked: root.backRequested() }
-        RowLayout {
-            Layout.fillWidth: true; Layout.preferredHeight: 150; spacing: 12
-            Layout.maximumHeight: 150
-            Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "CPU"; Metric { anchors.centerIn: parent; width: parent.width; label: "Charge application"; value: S.UiState.fixed(S.UiState.appCpuTotalPct, 1, "0,0"); unit: "%"; alignment: Text.AlignHCenter } }
-            Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "RAM"; Metric { anchors.centerIn: parent; width: parent.width; label: "Mémoire application"; value: S.UiState.fixed(S.UiState.appRamMb, 0, "0"); unit: "MB"; alignment: Text.AlignHCenter } }
-            Card {
-                Layout.fillWidth: true; Layout.fillHeight: true; title: "Stockage"; highlighted: S.UiState.ramMode
-                Column { anchors.centerIn: parent; spacing: 5
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.usbConnected ? "CLÉ USB" : (S.UiState.internalStorage ? "CARTE SD" : "MODE RAM"); color: S.UiState.usbConnected ? T.StyleManager.success : (S.UiState.internalStorage ? T.StyleManager.warning : T.StyleManager.danger); font.pixelSize: 25; font.bold: true }
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.fixed(S.UiState.storageFreeMb, 0, "0") + " MB libres"; color: T.StyleManager.textSecondary; font.pixelSize: 16 }
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: S.UiState.usbConnected ? S.UiState.storageMount : (S.UiState.storageDiagnostic || S.UiState.storageMode); color: T.StyleManager.textSecondary; font.pixelSize: 11; elide: Text.ElideRight; width: 250; horizontalAlignment: Text.AlignHCenter }
-                }
-            }
-            Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "CAN"; Metric { anchors.centerIn: parent; width: parent.width; label: "Service moteur"; value: S.UiState.serviceHealth.CAN_Moteur ? S.UiState.serviceHealth.CAN_Moteur.status : "—"; alignment: Text.AlignHCenter; valueSize: 26 } }
-            Card {
-                Layout.fillWidth: true; Layout.fillHeight: true; title: "Canal de mise à jour"; highlighted: root.updateChannel === "beta"
-                RowLayout {
-                    anchors.fill: parent; spacing: 8
-                    Button {
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        text: "STABLE"; subtext: "Recommandé"; primary: root.updateChannel === "stable"
-                        onClicked: if (bridge.setUpdateChannel("stable")) root.updateChannel = "stable"
-                    }
-                    Button {
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        text: "BÊTA"; subtext: "Préversions"; destructive: root.updateChannel === "beta"
-                        onClicked: if (bridge.setUpdateChannel("beta")) root.updateChannel = "beta"
-                    }
-                }
-            }
+        anchors.fill: parent; anchors.margins: 20; spacing: 12
+        PageHeader { Layout.fillWidth: true; title: "Système"; subtitle: "Réseau, logiciel, stockage et alimentation"; showBack: false }
+        RowLayout { Layout.fillWidth: true; Layout.preferredHeight: 60; spacing: 10
+            Repeater { model: root.tabs; Button { Layout.fillWidth: true; Layout.fillHeight: true; text: modelData; primary: root.tab === index; onClicked: root.tab = index } }
         }
-        Card {
-            Layout.fillWidth: true; Layout.preferredHeight: 196
-            title: "Mise à jour — " + root.updaterLabel(root.updater.state || "IDLE")
-            highlighted: root.updater.state === "AVAILABLE" || root.updater.state === "STAGED"
-            RowLayout {
-                anchors.fill: parent; spacing: 16
-                ColumnLayout {
-                    Layout.fillWidth: true; spacing: 6
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.updater.available_version ? "Installée " + root.updater.installed_version + "  →  " + root.updater.available_version : "Version installée " + root.updater.installed_version
-                        color: T.StyleManager.text; font.pixelSize: 22; font.bold: true
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.updater.message || "Aucune opération en cours"
-                        color: root.updater.state === "ERROR" ? T.StyleManager.danger : T.StyleManager.textSecondary
-                        font.pixelSize: 16; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
-                    }
-                    Progress { Layout.fillWidth: true; value: Number(root.updater.progress || 0); visible: ["CHECKING", "DOWNLOADING", "STAGED", "ACTIVATING"].indexOf(root.updater.state) >= 0 }
-                    Text {
-                        Layout.fillWidth: true
-                        visible: !!root.updater.detail || root.elapsedSeconds() > 0
-                        text: (root.updater.phase ? "Étape " + root.phaseLabel(root.updater.phase) + " • " : "")
-                              + Math.round(Number(root.updater.progress || 0)) + "%"
-                              + (root.elapsedSeconds() > 0 ? " • " + root.elapsedSeconds() + " s écoulées" : "")
-                              + (root.updater.detail ? " — " + root.updater.detail : "")
-                        color: T.StyleManager.textSecondary; font.pixelSize: 13
-                        wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
-                    }
-                    Text {
-                        Layout.fillWidth: true; visible: root.updater.state === "ERROR" && !!root.updateError.code
-                        text: "Code " + (root.updateError.code || "") + (root.updateError.phase ? " • phase " + root.updateError.phase : "")
-                        color: T.StyleManager.warning; font.pixelSize: 12; font.family: T.StyleManager.fontMono
-                    }
-                    Text {
-                        Layout.fillWidth: true; visible: S.UiState.speed > 5
-                        text: "⚠ Véhicule en mouvement : confirmation obligatoire, vitesse journalisée"
-                        color: T.StyleManager.danger; font.pixelSize: 15; font.bold: true
+        Item { Layout.fillWidth: true; Layout.fillHeight: true
+            RowLayout { anchors.fill: parent; visible: root.tab === 0; spacing: 14
+                Card { Layout.preferredWidth: 410; Layout.fillHeight: true; title: "Connexion active"; highlighted: !!root.network.active_ssid
+                    ColumnLayout { anchors.fill: parent; spacing: 14
+                        Text { Layout.fillWidth: true; text: root.network.available === false ? "NETWORKMANAGER INDISPONIBLE" : (root.network.active_ssid || "HORS LIGNE"); color: root.network.active_ssid ? T.StyleManager.success : T.StyleManager.warning; font.pixelSize: 25; font.bold: true; wrapMode: Text.WordWrap }
+                        Text { Layout.fillWidth: true; text: root.network.ip_address ? "Adresse IP  " + root.network.ip_address : "Aucune adresse IP"; color: T.StyleManager.textSecondary; font.pixelSize: 16 }
+                        Text { Layout.fillWidth: true; visible: !!root.network.error; text: root.network.error || ""; color: T.StyleManager.danger; font.pixelSize: 15; wrapMode: Text.WordWrap }
+                        RowLayout { Layout.fillWidth: true
+                            Text { Layout.fillWidth: true; text: "Radio Wi-Fi"; color: T.StyleManager.text; font.pixelSize: 18 }
+                            Toggle { checked: root.network.wifi_enabled === true; enabled: root.network.available !== false && !root.network.busy; onToggled: value => root.actionRequested("wifi_radio:" + (value ? "on" : "off")) }
+                        }
+                        Item { Layout.fillHeight: true }
+                        Button { Layout.fillWidth: true; text: root.network.busy ? "OPÉRATION EN COURS" : "ACTUALISER"; primary: true; enabled: !root.network.busy; onClicked: root.actionRequested("wifi_refresh") }
+                        Button { Layout.fillWidth: true; text: "DÉCONNECTER"; enabled: !!root.network.active_ssid && !root.network.busy; onClicked: root.actionRequested("wifi_disconnect") }
                     }
                 }
-                Button { Layout.preferredWidth: 190; text: "RECHERCHER"; subtext: "Recherche manuelle"; onClicked: bridge.checkForUpdates() }
-                Button { Layout.preferredWidth: 190; text: "TÉLÉCHARGER"; primary: true; enabled: root.updater.state === "AVAILABLE" && !!root.updater.available_version; onClicked: bridge.stageUpdate(S.UiState.speed) }
-                Button {
-                    Layout.preferredWidth: 170; text: "ACTIVER"; destructive: true
-                    enabled: root.updater.state === "STAGED" || root.updater.can_activate === true
-                    onClicked: { root.pendingUpdateAction = "activate"; updateConfirm.visible = true }
-                }
-                Button {
-                    Layout.preferredWidth: 190; text: "ROLLBACK"; destructive: true
-                    subtext: root.updater.can_rollback ? ("Vers " + root.updater.rollback_target) : "Aucune version précédente"
-                    enabled: root.updater.can_rollback === true
-                    onClicked: { root.pendingUpdateAction = "rollback"; updateConfirm.visible = true }
+                Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "Réseaux mémorisés à portée"
+                    ListView { anchors.fill: parent; clip: true; spacing: 10; model: root.network.saved_networks || []
+                        delegate: Button { width: ListView.view.width; height: 72; text: modelData.name || modelData.ssid; subtext: modelData.active ? "Connecté · " + modelData.signal + "%" : (modelData.available ? "Disponible · " + modelData.signal + "%" : "Hors de portée"); primary: modelData.active; enabled: modelData.available && !modelData.active && !root.network.busy; onClicked: root.actionRequested("wifi_connect:" + modelData.uuid) }
+                        Text { anchors.centerIn: parent; visible: (root.network.saved_networks || []).length === 0; text: "Aucun profil Wi-Fi mémorisé à afficher"; color: T.StyleManager.textSecondary; font.pixelSize: 20 }
+                    }
                 }
             }
-        }
-        Card {
-            Layout.fillWidth: true; Layout.fillHeight: true; title: "Journal système"
-            ScrollView {
-                anchors.fill: parent; clip: true
-                TextArea { readOnly: true; text: root.logsText; wrapMode: TextEdit.NoWrap; color: T.StyleManager.textSecondary; font.family: T.StyleManager.fontMono; font.pixelSize: 14; background: null }
+            ColumnLayout { anchors.fill: parent; visible: root.tab === 1; spacing: 14
+                Card { Layout.fillWidth: true; Layout.preferredHeight: 150; title: "Version et canal"
+                    RowLayout { anchors.fill: parent; spacing: 12
+                        Metric { Layout.fillWidth: true; label: "Installée"; value: root.updater.installed_version || S.UiState.systemVersion; alignment: Text.AlignHCenter; valueSize: 27 }
+                        Button { Layout.preferredWidth: 220; text: "STABLE"; primary: root.updateChannel === "stable"; onClicked: if (bridge.setUpdateChannel("stable")) root.updateChannel="stable" }
+                        Button { Layout.preferredWidth: 220; text: "BÊTA"; primary: root.updateChannel === "beta"; onClicked: if (bridge.setUpdateChannel("beta")) root.updateChannel="beta" }
+                    }
+                }
+                Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "Mise à jour · " + (root.updaterLabels[root.updater.state] || root.updater.state || "IDLE"); highlighted: root.updater.state === "AVAILABLE" || root.updater.state === "STAGED"
+                    ColumnLayout { anchors.fill: parent; spacing: 12
+                        Text { Layout.fillWidth: true; text: root.updater.message || "Aucune opération en cours"; color: root.updater.state === "ERROR" ? T.StyleManager.danger : T.StyleManager.text; font.pixelSize: 20; wrapMode: Text.WordWrap }
+                        Progress { Layout.fillWidth: true; value: Number(root.updater.progress || 0); visible: ["CHECKING","DOWNLOADING","STAGED","ACTIVATING"].indexOf(root.updater.state) >= 0 }
+                        Text { Layout.fillWidth: true; text: root.updater.detail || (root.updateError.phase ? "Erreur pendant " + root.updateError.phase : "Version disponible : " + (root.updater.available_version || "—")); color: T.StyleManager.textSecondary; font.pixelSize: 15; wrapMode: Text.WordWrap }
+                        Item { Layout.fillHeight: true }
+                        RowLayout { Layout.fillWidth: true; Layout.preferredHeight: 72; spacing: 12
+                            Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "RECHERCHER"; onClicked: bridge.checkForUpdates() }
+                            Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "TÉLÉCHARGER"; primary: true; enabled: root.updater.state === "AVAILABLE"; onClicked: bridge.stageUpdate(S.UiState.speed) }
+                            Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "ACTIVER"; destructive: true; enabled: root.updater.state === "STAGED" || root.updater.can_activate === true; onClicked: root.actionRequested("update_activate") }
+                            Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "RETOUR ARRIÈRE"; subtext: root.updater.rollback_target || "Version précédente"; destructive: true; enabled: root.updater.can_rollback === true; onClicked: root.actionRequested("update_rollback") }
+                        }
+                    }
+                }
             }
-        }
-        RowLayout {
-            Layout.fillWidth: true; Layout.preferredHeight: 72; spacing: 12
-            Button { Layout.fillWidth: true; text: "MAINTENANCE"; primary: true; subtext: "Menu système & OverlayFS"; onClicked: root.actionRequested("maintenance") }
-            Button { Layout.fillWidth: true; text: "DIAGNOSTIC"; subtext: root.exportPath ? root.exportPath : "Exporter les logs"; onClicked: root.exportPath = bridge.exportDiagnosticBundle() }
-            Button { Layout.fillWidth: true; text: "QUITTER"; onClicked: root.actionRequested("quit") }
-            Button { Layout.fillWidth: true; text: "REDÉMARRER"; destructive: true; onClicked: root.actionRequested("restart") }
-            Button { Layout.fillWidth: true; text: "ÉTEINDRE"; destructive: true; onClicked: root.actionRequested("shutdown") }
+            RowLayout { anchors.fill: parent; visible: root.tab === 2; spacing: 14
+                Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "Données CliOS"
+                    ColumnLayout { anchors.fill: parent; spacing: 14
+                        Metric { Layout.fillWidth: true; Layout.fillHeight: true; label: S.UiState.usbConnected ? "Clé USB connectée" : (S.UiState.internalStorage ? "Carte SD interne" : "Mode mémoire volatile"); value: S.UiState.fixed(S.UiState.storageFreeMb, 0, "—"); unit: "MB libres"; alignment: Text.AlignHCenter; valueSize: 42 }
+                        Text { Layout.fillWidth: true; text: S.UiState.storageMount || S.UiState.storageDiagnostic || S.UiState.storageMode; color: T.StyleManager.textSecondary; font.pixelSize: 15; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideMiddle }
+                    }
+                }
+                Card { Layout.fillWidth: true; Layout.fillHeight: true; title: "Protection de la carte SD"; highlighted: root.maintenance.restart_required === true
+                    ColumnLayout { anchors.fill: parent; spacing: 16
+                        RowLayout { Layout.fillWidth: true; Text { Layout.fillWidth: true; text: "État actuel"; color: T.StyleManager.textSecondary; font.pixelSize: 17 } Text { text: root.maintenance.overlay_current ? "PROTÉGÉE" : "LECTURE / ÉCRITURE"; color: root.maintenance.overlay_current ? T.StyleManager.success : T.StyleManager.warning; font.pixelSize: 19; font.bold: true } }
+                        RowLayout { Layout.fillWidth: true; Text { Layout.fillWidth: true; text: "État configuré"; color: T.StyleManager.textSecondary; font.pixelSize: 17 } Text { text: root.maintenance.overlay_configured ? "PROTÉGÉE" : "LECTURE / ÉCRITURE"; color: root.maintenance.overlay_configured ? T.StyleManager.success : T.StyleManager.warning; font.pixelSize: 19; font.bold: true } }
+                        Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 72; radius: T.StyleManager.radiusSmall; color: root.maintenance.restart_required ? T.StyleManager.accentSoft : T.StyleManager.surfaceSoft
+                            Text { anchors.centerIn: parent; text: root.maintenance.restart_required ? "REDÉMARRAGE REQUIS POUR APPLIQUER" : "CONFIGURATION APPLIQUÉE"; color: root.maintenance.restart_required ? T.StyleManager.warning : T.StyleManager.success; font.pixelSize: 17; font.bold: true }
+                        }
+                        Item { Layout.fillHeight: true }
+                        Button { Layout.fillWidth: true; text: root.maintenance.overlay_busy ? "MODIFICATION EN COURS" : "MODIFIER LA PROTECTION"; destructive: true; enabled: !root.maintenance.overlay_busy && !root.maintenance.restart_required; onClicked: root.actionRequested("toggle_overlayfs") }
+                    }
+                }
+            }
+            GridLayout { anchors.fill: parent; visible: root.tab === 3; columns: 2; rowSpacing: 14; columnSpacing: 14
+                Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "QUITTER CLIOS"; subtext: "Fermer l’application"; onClicked: root.actionRequested("quit") }
+                Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "RELANCER CLIOS"; subtext: "Recharger le cockpit et les services"; destructive: true; onClicked: root.actionRequested("restart") }
+                Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "REDÉMARRER LE SYSTÈME"; subtext: "Redémarrer le Raspberry Pi"; destructive: true; onClicked: root.actionRequested("reboot") }
+                Button { Layout.fillWidth: true; Layout.fillHeight: true; text: "ÉTEINDRE LE SYSTÈME"; subtext: "Arrêt complet"; destructive: true; onClicked: root.actionRequested("shutdown") }
+            }
         }
     }
 }

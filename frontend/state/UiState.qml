@@ -28,6 +28,8 @@ QtObject {
     readonly property var tripState: presentedStandaloneDomain("trip", rawTripState)
     readonly property var serviceHealth: systemState.health || ({})
     readonly property var storageState: systemState.storage || ({})
+    readonly property var networkState: systemState.network || ({})
+    readonly property var maintenanceState: systemState.maintenance || ({})
     readonly property var telemetryState: systemState.telemetry || ({})
     readonly property var updaterState: systemState.updater || ({
         "state": "IDLE", "installed_version": systemVersion, "available_version": "",

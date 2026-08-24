@@ -102,6 +102,12 @@ class FakeBridge(QObject):
             "telemetry": {"app_cpu_total_pct": 18.5, "app_ram_mb": 286.0},
             "health": health,
             "storage": storage,
+            "network": {"available": True, "wifi_enabled": True, "busy": False,
+                        "active_ssid": "CliOS-Lab", "ip_address": "192.168.1.42", "error": "",
+                        "saved_networks": [{"uuid": "smoke-wifi", "name": "CliOS-Lab", "ssid": "CliOS-Lab",
+                                            "available": True, "signal": 82, "active": True}]},
+            "maintenance": {"overlay_current": True, "overlay_configured": True,
+                            "overlay_busy": False, "restart_required": False, "overlay_error": ""},
             "updater": {"state": "IDLE", "installed_version": "2.0.0", "available_version": "", "progress": 0},
             "led_devices": [], "led_groups": [
                 {"id": "all", "name": "Tout", "enabled": True, "brightness": 100,
@@ -355,7 +361,8 @@ def main():
     window.setWidth(1920)
     window.setHeight(720)
     routes_by_style = {
-        style: ["home", "menu", "appearance", "vehicle", "services", "system", "diagnostic", "developer", "leds"]
+        style: ["home", "driving", "appearance", "accent", "leds", "vehicle", "diagnostic", "transmission",
+                "system", "updates", "maintenance", "power", "advanced", "services", "developer", "logs"]
         for style in ("apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard")
     }
     styles = ["apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard"]
@@ -461,7 +468,7 @@ def main():
             emit_runtime()
             shell = window.findChild(QObject, "appShell")
             if shell is not None:
-                shell.openRoute("system")
+                shell.openRoute("updates")
 
             def finish_updater():
                 save_frame("state-" + name.lower())
