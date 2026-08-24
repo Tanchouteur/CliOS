@@ -3,7 +3,9 @@ Description=CliOS Automotive Dashboard (Wayland Kiosk via Cage)
 After=systemd-user-sessions.service
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=all
+TimeoutStartSec=45
 User=@USER@
 SupplementaryGroups=clios
 StateDirectory=clios
