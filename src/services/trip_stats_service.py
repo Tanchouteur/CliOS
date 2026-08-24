@@ -34,6 +34,8 @@ class TripStatsService(BaseService):
         fuel_config = config.get("fuel", {})
         # Valeur observée sur le compteur 8 bits de la Clio (256 * 0,00008 L).
         self._fuel_counter_modulus_l = float(fuel_config.get("counter_modulus_l", 0.02048))
+        self._fuel_counter_steps = 256
+        self._fuel_counter_step_l = self._fuel_counter_modulus_l / self._fuel_counter_steps
         self._max_fuel_rate_lph = float(fuel_config.get("max_plausible_rate_lph", 80.0))
 
         # Verrou d'accès aux statistiques partagées.
@@ -215,6 +217,37 @@ class TripStatsService(BaseService):
             units=self.TRIP_UNITS,
         )
 
+    def _fuel_counter_delta(self, raw_fuel, current_time):
+        """Return a quantized 8-bit counter delta, including a real wrap."""
+        current_tick = int(round(float(raw_fuel) / self._fuel_counter_step_l))
+        current_tick %= self._fuel_counter_steps
+        canonical_value = current_tick * self._fuel_counter_step_l
+
+        if self._last_raw_fuel is None:
+            self._last_raw_fuel = canonical_value
+            self._last_raw_fuel_time = current_time
+            return 0.0
+
+        previous_tick = int(round(self._last_raw_fuel / self._fuel_counter_step_l))
+        previous_tick %= self._fuel_counter_steps
+        if current_tick == previous_tick:
+            return 0.0
+
+        delta_ticks = (current_tick - previous_tick) % self._fuel_counter_steps
+        delta_f = delta_ticks * self._fuel_counter_step_l
+        elapsed = max(0.001, current_time - self._last_raw_fuel_time)
+        plausible_max = max(0.002, self._max_fuel_rate_lph / 3600.0 * elapsed * 3.0)
+        if delta_f > plausible_max:
+            self.logger.warning(
+                f"Saut compteur carburant rejeté: {delta_f:.5f} L",
+                extra={"error_code": "FUEL_COUNTER_IMPLAUSIBLE"},
+            )
+            delta_f = 0.0
+
+        self._last_raw_fuel = canonical_value
+        self._last_raw_fuel_time = current_time
+        return delta_f
+
     def finish_session(self, last_odo):
         """Atomically captures the final trip values and resets the accumulator."""
         with self._stats_lock:
@@ -349,26 +382,7 @@ class TripStatsService(BaseService):
                         self._was_active = is_active
 
                     if raw_fuel is not None:
-                        if self._last_raw_fuel is not None and raw_fuel != self._last_raw_fuel:
-                            delta_f = raw_fuel - self._last_raw_fuel
-                            if delta_f < 0:
-                                delta_f += self._fuel_counter_modulus_l
-                            elapsed = max(0.001, current_time - self._last_raw_fuel_time)
-                            plausible_max = max(0.002, self._max_fuel_rate_lph / 3600.0 * elapsed * 3.0)
-                            if delta_f < 0.0 or delta_f > plausible_max:
-                                self.logger.warning(
-                                    f"Saut compteur carburant rejeté: {delta_f:.5f} L",
-                                    extra={"error_code": "FUEL_COUNTER_IMPLAUSIBLE"},
-                                )
-                                delta_f = 0.0
-                            self._last_raw_fuel = raw_fuel
-                            self._last_raw_fuel_time = current_time
-                        elif self._last_raw_fuel is not None:
-                            delta_f = 0.0
-                        else:
-                            delta_f = 0.0
-                            self._last_raw_fuel = raw_fuel
-                            self._last_raw_fuel_time = current_time
+                        delta_f = self._fuel_counter_delta(raw_fuel, current_time)
 
                         if is_active:
                             self._absolute_fuel_session += delta_f

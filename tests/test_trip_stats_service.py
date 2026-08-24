@@ -182,6 +182,39 @@ class TripStatsServiceTest(unittest.TestCase):
         self.assertEqual(published["session_cost"], 1.36)
         self.assertEqual(published["inst_cons"], 0.0)
 
+    def test_equivalent_mock_counter_floats_do_not_fake_a_full_wrap(self):
+        tick = 14
+        decoded_value = tick * 0.00008
+        directly_published_value = round(decoded_value, 5)
+        self.service._last_raw_fuel = decoded_value
+        self.service._last_raw_fuel_time = 10.0
+
+        with unittest.mock.patch.object(self.service.logger, "warning") as warning:
+            delta = self.service._fuel_counter_delta(directly_published_value, 10.02)
+
+        self.assertEqual(delta, 0.0)
+        warning.assert_not_called()
+
+    def test_real_fuel_counter_wrap_adds_one_tick(self):
+        self.service._last_raw_fuel = 255 * 0.00008
+        self.service._last_raw_fuel_time = 10.0
+
+        with unittest.mock.patch.object(self.service.logger, "warning") as warning:
+            delta = self.service._fuel_counter_delta(0.0, 10.02)
+
+        self.assertAlmostEqual(delta, 0.00008)
+        warning.assert_not_called()
+
+    def test_implausible_counter_jump_is_still_rejected(self):
+        self.service._last_raw_fuel = 0.0
+        self.service._last_raw_fuel_time = 10.0
+
+        with unittest.mock.patch.object(self.service.logger, "warning") as warning:
+            delta = self.service._fuel_counter_delta(100 * 0.00008, 10.02)
+
+        self.assertEqual(delta, 0.0)
+        warning.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
