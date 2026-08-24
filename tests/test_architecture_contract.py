@@ -139,6 +139,19 @@ class ArchitectureContractTest(unittest.TestCase):
         for action in ("reset_a", "reset_b", "pause_trip", "resume_trip", "end_trip"):
             self.assertIn(action, menu)
 
+    def test_trip_recovery_is_global_and_apex_displays_live_cost(self):
+        with open(os.path.join(ROOT, "frontend", "components", "AppShell.qml"), encoding="utf-8") as stream:
+            app_shell = stream.read()
+        with open(
+            os.path.join(ROOT, "frontend", "styles", "apex", "pages", "ApexDrivePage.qml"),
+            encoding="utf-8",
+        ) as stream:
+            apex_drive = stream.read()
+        self.assertIn("C.TripRecoveryDialog", app_shell)
+        self.assertIn('executeUiCommand("new_trip"', app_shell)
+        self.assertIn("S.UiState.tripCost", apex_drive)
+        self.assertIn("COÛT EST.", apex_drive)
+
     def test_every_shared_detail_page_can_return_to_the_menu(self):
         pages = os.path.join(ROOT, "frontend", "shared_pages")
         for filename in ("AppearancePage.qml", "VehiclePage.qml", "ServicesPage.qml", "SystemPage.qml", "DiagnosticPage.qml", "DeveloperPage.qml"):

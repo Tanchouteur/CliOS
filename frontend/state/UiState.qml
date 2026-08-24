@@ -133,6 +133,9 @@ QtObject {
     property real fuelLevel: rawFuelLevel
     readonly property real odometer: number(motion.odometer, 0)
     readonly property string sessionState: text(sessionRuntimeState.state, "IDLE")
+    readonly property bool tripResumeAvailable: sessionRuntimeState.resume_available === true
+    readonly property int tripResumeSeconds: intValue(sessionRuntimeState.resume_seconds, 0)
+    readonly property var resumableTrip: sessionRuntimeState.resume_trip || ({})
 
     // Pédales & Couple
     property real throttle: rawThrottle

@@ -119,6 +119,15 @@ Item {
         }
     }
 
+    C.TripRecoveryDialog {
+        z: 9350
+        available: S.UiState.tripResumeAvailable
+        secondsRemaining: S.UiState.tripResumeSeconds
+        tripSummary: S.UiState.resumableTrip
+        onResumeRequested: bridge.executeUiCommand("resume_trip", S.UiState.speed)
+        onNewTripRequested: bridge.executeUiCommand("new_trip", S.UiState.speed)
+    }
+
     NotificationCenter { z: 9400 }
     Timer {
         interval: 500; running: !root.recoveryOpened; repeat: true

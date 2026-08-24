@@ -393,7 +393,7 @@ def main():
                 failures.append(f"capture impossible: {target}")
 
     updater_states = ["IDLE", "CHECKING", "AVAILABLE", "DOWNLOADING", "STAGED", "ACTIVATING", "UP_TO_DATE", "ERROR"]
-    specials = ["warnings", "paused", "missing-data", "confirmation", "services-expanded", "legacy-dashboard", "jdm-motion"] + ["updater-" + value for value in updater_states]
+    specials = ["warnings", "paused", "trip-recovery", "missing-data", "confirmation", "services-expanded", "legacy-dashboard", "jdm-motion"] + ["updater-" + value for value in updater_states]
     special_index = {"value": 0}
 
     def run_special():
@@ -521,6 +521,19 @@ def main():
             emit_runtime()
         elif name == "paused":
             bridge._session_state["state"] = "PAUSED"
+            bridge._trip_state["is_active"] = False
+            emit_runtime()
+        elif name == "trip-recovery":
+            bridge._session_state = {
+                "state": "RECOVERY_PENDING",
+                "resume_available": True,
+                "resume_seconds": 24,
+                "resume_trip": {
+                    "date": "2026-08-24T12:45:00",
+                    "distance_km": 12.3,
+                    "cost_eur": 1.52,
+                },
+            }
             bridge._trip_state["is_active"] = False
             emit_runtime()
         elif name == "missing-data":

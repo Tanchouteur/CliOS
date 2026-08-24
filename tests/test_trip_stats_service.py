@@ -156,6 +156,32 @@ class TripStatsServiceTest(unittest.TestCase):
         self.assertFalse(published["is_active"])
         self.assertEqual(published["distance_km"], 0.0)
 
+    def test_checkpoint_restore_preserves_totals_and_rebases_live_inputs(self):
+        self.service._session_distance_km = 12.3
+        self.service._absolute_fuel_session = 0.8
+        self.service._rpm_integral = 21000.0
+        self.service._engine_time = 10.0
+        self.service._stats.update({
+            "distance_km": 12.3,
+            "session_fuel_l": 0.8,
+            "session_cost": 1.36,
+            "inst_cons": 7.2,
+        })
+        checkpoint = self.service.export_session_checkpoint()
+        self.service.reset_session(10012.3)
+
+        self.service.restore_session_checkpoint(checkpoint)
+
+        self.assertEqual(self.service._session_distance_km, 12.3)
+        self.assertEqual(self.service._absolute_fuel_session, 0.8)
+        self.assertEqual(self.service._rpm_integral, 21000.0)
+        self.assertEqual(self.service._last_raw_fuel, None)
+        self.assertTrue(self.service._accept_running)
+        published = self.runtime.snapshot().domain("trip")
+        self.assertEqual(published["distance_km"], 12.3)
+        self.assertEqual(published["session_cost"], 1.36)
+        self.assertEqual(published["inst_cons"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 from src.services.export_service import ExportService
+from src.services.trip_session_manager import TripSessionManager
 
 
 class FakeStorage:
@@ -63,6 +64,22 @@ class ExportServiceTest(unittest.TestCase):
             self.service._check_usb_drives()
 
         self.assertTrue(os.path.isfile(os.path.join(self.mountpoint, "CliOS_Exports", "trip_2.json")))
+
+    def test_active_trip_checkpoint_is_never_exported(self):
+        checkpoint_name = TripSessionManager.CHECKPOINT_FILENAME
+        with open(os.path.join(self.data_dir, checkpoint_name), "w", encoding="utf-8") as stream:
+            stream.write("{}")
+        with open(os.path.join(self.data_dir, "trip_3.json"), "w", encoding="utf-8") as stream:
+            stream.write("{}")
+        with open(os.path.join(self.mountpoint, "clios_export.json"), "w", encoding="utf-8") as stream:
+            stream.write("{}")
+
+        with mock.patch("src.services.export_service.psutil.disk_partitions", return_value=[self._partition()]):
+            self.service._check_usb_drives()
+
+        export_dir = os.path.join(self.mountpoint, "CliOS_Exports")
+        self.assertTrue(os.path.isfile(os.path.join(export_dir, "trip_3.json")))
+        self.assertFalse(os.path.exists(os.path.join(export_dir, checkpoint_name)))
 
     def test_active_storage_key_is_not_exported_to_itself(self):
         active_data = os.path.join(self.mountpoint, "clios", "trips")
