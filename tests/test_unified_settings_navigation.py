@@ -4,6 +4,7 @@ import unittest
 from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtTest import QTest
 
 from tools.qml_smoke import FakeBridge
 
@@ -27,6 +28,9 @@ class UnifiedSettingsNavigationTest(unittest.TestCase):
         self.assertFalse(self.component.isError(), [error.toString() for error in self.component.errors()])
         self.shell = self.component.create()
         self.assertIsNotNone(self.shell)
+        self.shell.setProperty("width", 1920)
+        self.shell.setProperty("height", 720)
+        self.app.processEvents()
 
     def tearDown(self):
         self.engine.deleteLater()
@@ -72,6 +76,19 @@ class UnifiedSettingsNavigationTest(unittest.TestCase):
         self.shell.openRoute("updates")
         self.app.processEvents()
         self.assertEqual(system.property("tab"), 1)
+
+    def test_services_tab_reuses_expandable_parameter_rows(self):
+        self.shell.openRoute("services")
+        self.app.processEvents()
+        QTest.qWait(50)
+        page = self.shell.findChild(QObject, "servicesSettingsPage")
+        self.assertIsNotNone(page)
+        self.assertTrue(page.property("embedded"))
+
+        self.assertFalse(page.serviceExpanded("CAN_Moteur"))
+        self.assertTrue(page.toggleServiceDetails("CAN_Moteur"))
+        self.app.processEvents()
+        self.assertTrue(page.serviceExpanded("CAN_Moteur"))
 
 
 if __name__ == "__main__":

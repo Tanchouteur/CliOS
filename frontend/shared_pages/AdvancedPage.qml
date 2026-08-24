@@ -13,7 +13,6 @@ Item {
     property string logsText: ""
     property string exportPath: ""
     readonly property var tabs: ["PROFILS VÉHICULE", "SERVICES", "DONNÉES CAN", "JOURNAUX"]
-    readonly property var serviceKeys: Object.keys(S.UiState.serviceHealth)
     signal actionRequested(string action)
     onInitialRouteChanged: tab = initialRoute === "services" ? 1 : (["developer","can"].indexOf(initialRoute) >= 0 ? 2 : (initialRoute === "logs" ? 3 : 0))
     function refreshProfiles() { profiles = bridge.getAvailableProfiles(); activeProfile = bridge.getActiveProfile() }
@@ -49,17 +48,12 @@ Item {
                     }
                 }
             }
-            Card { anchors.fill: parent; visible: root.tab === 1; title: "Services supervisés"
-                ListView { anchors.fill: parent; clip: true; spacing: 10; model: root.serviceKeys
-                    delegate: Rectangle { id: serviceRow; width: ListView.view.width; height: 72; radius: T.StyleManager.radiusSmall; color: T.StyleManager.surfaceRaised; border.width: 1; border.color: T.StyleManager.outline
-                        property var details: S.UiState.serviceHealth[String(modelData)] || ({})
-                        RowLayout { anchors.fill: parent; anchors.margins: 12; spacing: 16
-                            Rectangle { width: 12; height: 12; radius: 6; color: serviceRow.details.status === "ERROR" ? T.StyleManager.danger : (serviceRow.details.status === "WARNING" ? T.StyleManager.warning : T.StyleManager.success) }
-                            ColumnLayout { Layout.fillWidth: true; Text { text: String(modelData); color: T.StyleManager.text; font.pixelSize: 19; font.bold: true } Text { text: serviceRow.details.message || serviceRow.details.status || "État inconnu"; color: T.StyleManager.textSecondary; font.pixelSize: 13 } }
-                            Toggle { checked: serviceRow.details.status !== "DISABLED"; onToggled: enabled => bridge.toggleService(String(modelData), enabled) }
-                        }
-                    }
-                }
+            Loader {
+                anchors.fill: parent
+                visible: root.tab === 1
+                active: root.tab === 1
+                source: "ServicesPage.qml"
+                onLoaded: item.embedded = true
             }
             Card { anchors.fill: parent; visible: root.tab === 2; title: "Données CAN normalisées"
                 GridView { anchors.fill: parent; clip: true; cellWidth: width/3; cellHeight: 72; model: S.UiState.debugSignals

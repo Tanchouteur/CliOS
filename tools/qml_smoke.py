@@ -393,7 +393,7 @@ def main():
                 failures.append(f"capture impossible: {target}")
 
     updater_states = ["IDLE", "CHECKING", "AVAILABLE", "DOWNLOADING", "STAGED", "ACTIVATING", "UP_TO_DATE", "ERROR"]
-    specials = ["warnings", "paused", "missing-data", "confirmation", "legacy-dashboard", "jdm-motion"] + ["updater-" + value for value in updater_states]
+    specials = ["warnings", "paused", "missing-data", "confirmation", "services-expanded", "legacy-dashboard", "jdm-motion"] + ["updater-" + value for value in updater_states]
     special_index = {"value": 0}
 
     def run_special():
@@ -408,6 +408,9 @@ def main():
         bridge._system_state = copy.deepcopy(base_system)
         bridge.save_setting("ui.visual_style", "gt_modern")
         emit_runtime()
+        global_confirm = window.findChild(QObject, "globalConfirmDialog")
+        if global_confirm is not None:
+            global_confirm.setProperty("visible", False)
 
         if name == "legacy-dashboard":
             bridge.save_setting("ui.visual_style", "legacy_dashboard")
@@ -476,6 +479,25 @@ def main():
                 QTimer.singleShot(100, run_special)
 
             QTimer.singleShot(220, finish_updater)
+            return
+
+        if name == "services-expanded":
+            shell = window.findChild(QObject, "appShell")
+            if shell is not None:
+                shell.openRoute("services")
+
+            def expand_service():
+                page = window.findChild(QObject, "servicesSettingsPage")
+                if page is None or not page.toggleServiceDetails("CAN_Moteur"):
+                    failures.append("service CAN non dépliable")
+                QTimer.singleShot(260, finish_services)
+
+            def finish_services():
+                save_frame("state-services-expanded")
+                special_index["value"] += 1
+                QTimer.singleShot(100, run_special)
+
+            QTimer.singleShot(260, expand_service)
             return
 
         dashboard = window.findChild(QObject, "dashboardRoot")
