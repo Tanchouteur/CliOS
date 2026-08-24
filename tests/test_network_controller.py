@@ -82,9 +82,11 @@ class NetworkControllerTest(unittest.TestCase):
     def test_only_known_uuid_can_connect(self):
         runner = FakeRunner()
         controller = NetworkController(runner=runner)
-        controller.refresh(); wait_idle(controller)
+        controller.refresh()
+        wait_idle(controller)
         self.assertFalse(controller.connect("inconnu"))
-        self.assertTrue(controller.connect("u2")); wait_idle(controller)
+        self.assertTrue(controller.connect("u2"))
+        wait_idle(controller)
         self.assertTrue(any(call[:5] == ["nmcli", "connection", "up", "uuid", "u2"] for call, _ in runner.calls))
 
     def test_missing_nmcli_timeout_and_command_error_are_reported(self):
@@ -99,7 +101,8 @@ class NetworkControllerTest(unittest.TestCase):
                     raise result
                 return result
             controller = NetworkController(runner=runner)
-            controller.refresh(); wait_idle(controller)
+            controller.refresh()
+            wait_idle(controller)
             self.assertIn(message, controller.state["error"])
 
     def test_concurrent_operation_is_rejected(self):
@@ -107,14 +110,16 @@ class NetworkControllerTest(unittest.TestCase):
         release = threading.Event()
 
         def runner(args, **kwargs):
-            entered.set(); release.wait(1)
+            entered.set()
+            release.wait(1)
             return subprocess.CompletedProcess(args, 0, "enabled", "")
 
         controller = NetworkController(runner=runner)
         self.assertTrue(controller.refresh())
         self.assertTrue(entered.wait(1))
         self.assertFalse(controller.refresh())
-        release.set(); wait_idle(controller)
+        release.set()
+        wait_idle(controller)
 
 
 if __name__ == "__main__":
