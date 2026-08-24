@@ -20,14 +20,23 @@ class UpdaterClient:
     def status(self) -> dict:
         return self._request({"operation": "status"})
 
-    def stage(self, version: str) -> dict:
-        return self._request({"operation": "stage", "version": version})
+    def stage(self, version: str, operation_id: str | None = None) -> dict:
+        payload = {"operation": "stage", "version": version}
+        if operation_id:
+            payload["operation_id"] = operation_id
+        return self._request(payload)
 
-    def activate(self, version: str) -> dict:
-        return self._request({"operation": "activate", "version": version})
+    def activate(self, version: str, operation_id: str | None = None) -> dict:
+        payload = {"operation": "activate", "version": version}
+        if operation_id:
+            payload["operation_id"] = operation_id
+        return self._request(payload)
 
-    def rollback(self, stable_only: bool = False) -> dict:
-        return self._request({"operation": "rollback", "stable_only": bool(stable_only)})
+    def rollback(self, stable_only: bool = False, operation_id: str | None = None) -> dict:
+        payload = {"operation": "rollback", "stable_only": bool(stable_only)}
+        if operation_id:
+            payload["operation_id"] = operation_id
+        return self._request(payload)
 
     def _request(self, payload: dict) -> dict:
         encoded = (json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8")

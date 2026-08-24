@@ -18,6 +18,7 @@ pour utiliser, développer et livrer CliOS.
 | [10](lot-10-helper-updater.md) | Helper de mise à jour privilégié |
 | [11](lot-11-cockpit-updater.md) | Mise à jour complète dans le cockpit |
 | [12](lot-12-qualification-v2.0.1.md) | Qualification et publication v2.0.1 |
+| [13](lot-13-menu-reglages-unifie.md) | Menu de réglages unifié |
 
 Pour les prochains lots, copier [le modèle](TEMPLATE.md) et le compléter avant
 de considérer l’implémentation terminée.

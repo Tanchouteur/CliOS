@@ -7,15 +7,38 @@ import "../state" as S
 
 Item {
     id: root
+    objectName: "servicesSettingsPage"
+    property bool embedded: false
     signal backRequested()
     readonly property var serviceKeys: Object.keys(S.UiState.serviceHealth)
+    function serviceItem(serviceId) {
+        const items = servicesList.contentItem.children
+        for (let index = 0; index < items.length; ++index) {
+            const item = items[index]
+            if (item && item.serviceId === serviceId)
+                return item
+        }
+        return null
+    }
+    function toggleServiceDetails(serviceId) {
+        const item = serviceItem(serviceId)
+        if (!item || !item.hasParams)
+            return false
+        item.toggleDetails()
+        return true
+    }
+    function serviceExpanded(serviceId) {
+        const item = serviceItem(serviceId)
+        return item ? item.expanded : false
+    }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 12
+        anchors.margins: root.embedded ? 0 : 16
+        spacing: root.embedded ? 0 : 12
 
         PageHeader {
+            visible: !root.embedded
             Layout.fillWidth: true
             title: "Services"
             subtitle: root.serviceKeys.length + " module(s) supervisé(s)"
@@ -23,6 +46,8 @@ Item {
         }
 
         ListView {
+            id: servicesList
+            objectName: "servicesList"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -32,6 +57,7 @@ Item {
 
             delegate: Rectangle {
                 id: serviceRow
+                objectName: "expandableServiceRow"
                 width: ListView.view.width
                 height: header.height + (expanded ? parametersColumn.implicitHeight + 20 : 0)
                 radius: T.StyleManager.radiusSmall
@@ -165,6 +191,7 @@ Item {
 
                 Column {
                     id: parametersColumn
+                    objectName: "serviceParameters"
                     visible: serviceRow.expanded
                     x: 16
                     y: header.height + 2
@@ -267,7 +294,7 @@ Item {
                                 Button {
                                     visible: parameterRow.parameterType === "button"
                                     Layout.preferredWidth: 210
-                                    Layout.preferredHeight: 46
+                                    Layout.preferredHeight: 56
                                     text: "EXÉCUTER"
                                     onClicked: serviceRow.setParameter(modelData.key, true, true)
                                 }

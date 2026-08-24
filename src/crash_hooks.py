@@ -23,6 +23,9 @@ def install_crash_hooks(log_dir: str) -> None:
         if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
             return
         logger.critical("Unhandled exception", exc_info=(exc_type, exc_value, exc_tb), extra={"error_code": "UNHANDLED_EXCEPTION"})
+        # Le nettoyage de main peut fermer les handlers avant l'appel du hook.
+        # Conserver le traceback standard évite alors un arrêt silencieux.
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
 
     def _thread_hook(args: threading.ExceptHookArgs):
         if args.exc_value is None:
@@ -35,6 +38,7 @@ def install_crash_hooks(log_dir: str) -> None:
             exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
             extra={"error_code": "UNHANDLED_THREAD_EXCEPTION"},
         )
+        threading.__excepthook__(args)
 
     sys.excepthook = _sys_hook
     threading.excepthook = _thread_hook

@@ -28,13 +28,18 @@ QtObject {
     readonly property var tripState: presentedStandaloneDomain("trip", rawTripState)
     readonly property var serviceHealth: systemState.health || ({})
     readonly property var storageState: systemState.storage || ({})
+    readonly property var networkState: systemState.network || ({})
+    readonly property var maintenanceState: systemState.maintenance || ({})
     readonly property var telemetryState: systemState.telemetry || ({})
     readonly property var updaterState: systemState.updater || ({
         "state": "IDLE", "installed_version": systemVersion, "available_version": "",
         "channel": "stable", "progress": 0, "message": "", "can_activate": false,
         "can_rollback": false, "rollback_target": "", "phase": "idle", "detail": "",
         "started_at": 0, "updated_at": 0, "last_manifest": ({}), "error": ({}),
-        "helper_error": ({})
+        "helper_error": ({}), "operation_id": "", "sequence": 0,
+        "started_at_ns": 0, "updated_at_ns": 0, "updated_at_iso": "",
+        "indeterminate": false, "heartbeat_at_ns": 0,
+        "bytes_received": 0, "bytes_total": 0
     })
     readonly property var ledDevices: systemState.led_devices || []
     readonly property var ledGroups: systemState.led_groups || []

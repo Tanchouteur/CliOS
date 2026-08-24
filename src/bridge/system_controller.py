@@ -22,6 +22,49 @@ class SystemController:
         self.target = target
         self.project_root = Path(__file__).parents[2]
         self.update_safety = UpdateSafety()
+        current = self._current_overlay_enabled()
+        self._maintenance_lock = threading.RLock()
+        self._maintenance = {
+            "overlay_current": current,
+            "overlay_configured": current,
+            "overlay_busy": False,
+            "restart_required": False,
+            "overlay_error": "",
+        }
+
+    def _current_overlay_enabled(self) -> bool:
+        try:
+            mounts = Path("/proc/mounts").read_text(encoding="utf-8")
+            return "overlay on / " in mounts or "overlay / overlay" in mounts
+        except OSError:
+            return False
+
+    def maintenance_state(self) -> dict:
+        with self._maintenance_lock:
+            return dict(self._maintenance)
+
+    def refresh_maintenance_state(self) -> None:
+        """Read configured OverlayFS state without blocking the caller."""
+        def task() -> None:
+            configured = self._command_text(
+                ["sudo", "-n", "/usr/bin/raspi-config", "nonint", "get_overlay_now"], timeout=3,
+            )
+            if configured in {"0", "1"}:
+                enabled = configured == "0"
+                current = self._current_overlay_enabled()
+                self._set_maintenance(
+                    overlay_current=current,
+                    overlay_configured=enabled,
+                    restart_required=current != enabled,
+                )
+        threading.Thread(target=task, daemon=True, name="OverlayFsProbe").start()
+
+    def _set_maintenance(self, **changes) -> None:
+        with self._maintenance_lock:
+            self._maintenance.update(changes)
+        # The target owns the single public systemState notification channel.
+        if hasattr(self.target, "systemStateChanged"):
+            self.target.systemStateChanged.emit()
 
     def recent_logs(self, limit: int) -> str:
         return json.dumps(get_recent_events(limit=max(1, min(limit, 300))))
@@ -130,16 +173,7 @@ class SystemController:
         return ""
 
     def maintenance_status(self) -> str:
-        overlay_status = "READ_WRITE"
-        try:
-            mounts = Path("/proc/mounts").read_text(encoding="utf-8")
-            if "overlay on / " in mounts or ("/dev/root" not in mounts and "overlay" in mounts):
-                overlay_status = "READ_ONLY"
-        except OSError as exc:
-            self.target.logger.debug(
-                "Lecture des montages impossible: %s", exc,
-                extra={"error_code": "MOUNT_STATUS_UNAVAILABLE"},
-            )
+        overlay_status = "READ_ONLY" if self.maintenance_state()["overlay_current"] else "READ_WRITE"
 
         branch = self._command_text(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=2)
         commit = self._command_text(["git", "rev-parse", "--short", "HEAD"], timeout=2)
@@ -160,14 +194,23 @@ class SystemController:
             "overlay_status": overlay_status,
             "git_info": git_info,
             "cpu_temp": cpu_temp,
+            **self.maintenance_state(),
         })
 
-    def toggle_overlay(self) -> None:
+    def toggle_overlay(self) -> bool:
         target = self.target
         if self.update_safety.update_in_progress():
             target.send_notification("ERROR", "OverlayFS verrouillé pendant la mise à jour", 4500)
-            return
+            return False
+        state = self.maintenance_state()
+        if state["overlay_busy"]:
+            target.send_notification("WARNING", "Modification OverlayFS déjà en cours", 3500)
+            return False
+        if state["restart_required"] or state["overlay_current"] != state["overlay_configured"]:
+            target.send_notification("WARNING", "Redémarrez avant une nouvelle modification OverlayFS", 4500)
+            return False
         target.logger.info("Bascule protection SD demandée", extra={"error_code": "MAINT_SD_TOGGLE"})
+        self._set_maintenance(overlay_busy=True, overlay_error="")
 
         def task() -> None:
             overlay_script = self.project_root / "tools" / "toggle_overlayfs.sh"
@@ -178,12 +221,19 @@ class SystemController:
                         capture_output=True, text=True, timeout=30, check=False,
                     )
                     if result.returncode == 0:
+                        configured = not state["overlay_configured"]
+                        self._set_maintenance(
+                            overlay_configured=configured,
+                            restart_required=configured != state["overlay_current"],
+                            overlay_error="",
+                        )
                         target.send_notification("WARNING", "Protection SD basculée ! Redémarrez le système.", 5000)
                     else:
                         target.logger.error(
                             "Bascule SD refusée (code %s): %s", result.returncode, result.stderr.strip(),
                             extra={"error_code": "SD_TOGGLE_FAILED", "returncode": result.returncode},
                         )
+                        self._set_maintenance(overlay_error=result.stderr.strip()[:240])
                         target.send_notification("ERROR", f"Erreur SD : {result.stderr.strip()[:50]}", 4000)
                     return
                 check = subprocess.run(
@@ -200,17 +250,23 @@ class SystemController:
                 if result.returncode != 0:
                     raise RuntimeError(f"raspi-config {action}: code {result.returncode}")
                 if action == "disable_overlayfs":
+                    self._set_maintenance(overlay_configured=False, restart_required=state["overlay_current"] is True)
                     target.send_notification("WARNING", "Protection SD désactivée (Mode RW). Redémarrez pour valider.", 5000)
                 else:
+                    self._set_maintenance(overlay_configured=True, restart_required=state["overlay_current"] is False)
                     target.send_notification("SUCCESS", "Protection SD activée (Lecture Seule). Redémarrez pour valider.", 5000)
             except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
                 target.logger.error(
                     "Erreur bascule SD: %s", exc,
                     extra={"error_code": "SD_TOGGLE_ERROR", "exception_type": type(exc).__name__},
                 )
+                self._set_maintenance(overlay_error=str(exc)[:240])
                 target.send_notification("ERROR", f"Erreur SD: {str(exc)[:50]}", 4000)
+            finally:
+                self._set_maintenance(overlay_busy=False)
 
         threading.Thread(target=task, daemon=True, name="SdToggleThread").start()
+        return True
 
     def request_exit(self, action: str) -> None:
         target = self.target

@@ -1,4 +1,6 @@
 AppearancePage 1.0 AppearancePage.qml
+DrivingPage 1.0 DrivingPage.qml
+AdvancedPage 1.0 AdvancedPage.qml
 VehiclePage 1.0 VehiclePage.qml
 ServicesPage 1.0 ServicesPage.qml
 SystemPage 1.0 SystemPage.qml

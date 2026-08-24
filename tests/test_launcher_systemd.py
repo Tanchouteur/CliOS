@@ -84,6 +84,17 @@ class LauncherSystemdTest(unittest.TestCase):
         mounted_branch = helper.split('if [[ -n "$source" ]]', 1)[1].split("local clios_root", 1)[0]
         self.assertNotIn("return 0", mounted_branch)
 
+    def test_updater_unit_keeps_hardening_and_prepares_only_its_state_directory(self):
+        unit = (ROOT / "installation/etc/systemd/system/clios-updater.service").read_text(encoding="utf-8")
+        for directive in (
+            "NoNewPrivileges=yes", "PrivateTmp=yes", "PrivateDevices=yes", "ProtectSystem=strict",
+            "ProtectHome=yes", "MemoryDenyWriteExecute=yes", "StateDirectory=clios",
+            "StateDirectoryMode=0770", "ReadWritePaths=/opt/clios /var/lib/clios /run/clios",
+            "AmbientCapabilities=CAP_SETUID",
+        ):
+            self.assertIn(directive, unit)
+        self.assertNotIn("Privileged=yes", unit)
+
     def test_gui_hides_cursor_and_desktop_forces_mock_by_default(self):
         main = (ROOT / "main.py").read_text(encoding="utf-8")
         self.assertIn("--show-cursor", main)

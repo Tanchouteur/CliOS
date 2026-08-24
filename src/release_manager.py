@@ -25,6 +25,27 @@ class ReleaseError(RuntimeError):
     pass
 
 
+class ReleaseDependencyError(ReleaseError):
+    """A runtime required by a release is not installed or packaged."""
+
+    code = "DEPENDENCY_MISSING"
+
+
+class ReleaseCommandError(ReleaseError):
+    """A bounded internal command failed with machine-readable diagnostics."""
+
+    def __init__(self, context: str, command: list[str], *, returncode: int | None = None,
+                 stderr: str = "", code: str = "SUBPROCESS_FAILED"):
+        raw_detail = stderr.strip()
+        detail = raw_detail[:2048] + ("…" if len(raw_detail) > 2048 else "")
+        detail = detail or (f"code retour {returncode}" if returncode is not None else "échec de lancement")
+        super().__init__(f"{context}: {detail}")
+        self.code = code
+        self.command = list(command)
+        self.returncode = returncode
+        self.stderr = stderr
+
+
 class ReleaseManager:
     VALID_CHANNELS = {"stable", "beta"}
     SIGNATURE_BOOTSTRAP_VERSION = SemVer.parse("2.0.1-rc.4")
@@ -102,7 +123,7 @@ class ReleaseManager:
         return sorted(candidates, key=lambda item: self._version_tuple(item.get("version", "0.0.0")))[-1]
 
     def stage(self, manifest_source: str | dict, *, strict: bool = False) -> Path:
-        self._progress("DOWNLOADING", 5, "Validation du manifeste de release")
+        self._progress("DOWNLOADING", 5, "Validation du manifeste de release", phase="manifest")
         manifest_location = None
         if isinstance(manifest_source, dict):
             manifest = dict(manifest_source)
@@ -113,11 +134,20 @@ class ReleaseManager:
         version = self._validate_manifest(manifest, strict=strict)
         signed_hashes = None
         if strict and SemVer.parse(version) > self.SIGNATURE_BOOTSTRAP_VERSION:
-            self._progress("DOWNLOADING", 7, "Vérification des métadonnées signées")
+            self._progress(
+                "DOWNLOADING", 7, "Vérification des métadonnées signées",
+                phase="signature", indeterminate=True,
+            )
             signed_hashes = self._verify_signed_metadata(manifest, manifest_location)
         target = self.releases_dir / version
         if target.exists():
-            raise ReleaseError(f"release déjà préparée: {version}")
+            if self._prepared_release_is_valid(target, manifest):
+                self._progress(
+                    "STAGED", 100, f"Release {version} déjà préparée et revalidée",
+                    phase="complete", reused=True,
+                )
+                return target
+            raise ReleaseError(f"release déjà préparée mais invalide: {version}")
         self.releases_dir.mkdir(parents=True, exist_ok=True)
         self.state_root.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix=f"clios-{version}-", dir=str(self.releases_dir)))
@@ -127,7 +157,11 @@ class ReleaseManager:
         work.chmod(0o750)
         archive_part = work / "release.tar.part"
         try:
-            self._progress("DOWNLOADING", 10, "Téléchargement de l'archive (connexion)")
+            self._progress(
+                "DOWNLOADING", 10, "Téléchargement de l'archive (connexion)",
+                phase="archive", indeterminate=True, bytes_received=0,
+                bytes_total=int(manifest.get("archive_size", 0) or 0),
+            )
             required = int(manifest.get("archive_size", 0) or 0)
             if required:
                 free = shutil.disk_usage(self.releases_dir).free
@@ -135,44 +169,82 @@ class ReleaseManager:
                     raise ReleaseError("espace disque insuffisant pour le staging")
             if self._default_downloader:
                 def reporthook(blocks: int, block_size: int, total_size: int) -> None:
+                    received = blocks * block_size
                     if total_size > 0:
-                        archive_pct = min(100, int(blocks * block_size * 100 / total_size))
+                        received = min(received, total_size)
+                        archive_pct = min(100, int(received * 100 / total_size))
                         overall_pct = 10 + int(archive_pct * 0.5)
                         self._progress(
                             "DOWNLOADING", overall_pct,
                             f"Téléchargement de l'archive — {archive_pct}%",
+                            phase="archive", indeterminate=False,
+                            bytes_received=received, bytes_total=total_size,
+                        )
+                    else:
+                        self._progress(
+                            "DOWNLOADING", 10, "Téléchargement de l'archive",
+                            phase="archive", indeterminate=True,
+                            bytes_received=received, bytes_total=0,
                         )
                 self.downloader(manifest["archive_url"], str(archive_part), reporthook=reporthook)
             else:
                 self.downloader(manifest["archive_url"], str(archive_part))
-            self._progress("DOWNLOADING", 60, "Archive téléchargée")
+            archive_size = archive_part.stat().st_size
+            self._progress(
+                "DOWNLOADING", 60, "Archive téléchargée", phase="archive",
+                bytes_received=archive_size, bytes_total=archive_size, indeterminate=False,
+            )
             if shutil.disk_usage(self.releases_dir).free < archive_part.stat().st_size * 2:
                 raise ReleaseError("espace disque insuffisant pour extraire la release")
-            self._progress("DOWNLOADING", 64, "Vérification SHA-256 de l'archive")
+            self._progress(
+                "DOWNLOADING", 64, "Vérification SHA-256 de l'archive",
+                phase="hash", indeterminate=True,
+            )
             archive_sha256 = self.sha256(archive_part)
             if archive_sha256 != manifest["archive_sha256"].lower():
                 raise ReleaseError("SHA-256 de l'archive incorrect")
             if signed_hashes is not None:
-                self._progress("DOWNLOADING", 67, "Comparaison avec les sommes signées")
+                self._progress(
+                    "DOWNLOADING", 67, "Comparaison avec les sommes signées",
+                    phase="signature", indeterminate=True,
+                )
                 archive_name = Path(str(manifest["archive_url"])).name
                 if archive_sha256 != signed_hashes[archive_name]:
                     raise ReleaseError("hash signé de l'archive incorrect")
-            self._progress("DOWNLOADING", 70, "Extraction sécurisée de la release")
+            self._progress(
+                "DOWNLOADING", 70, "Extraction sécurisée de la release",
+                phase="extract", indeterminate=True,
+            )
             unpacked = work / "unpacked"
             unpacked.mkdir()
             self._safe_extract(archive_part, unpacked)
             release_root = self._single_root(unpacked)
-            self._progress("DOWNLOADING", 75, "Vérification des fichiers manifestés")
+            self._progress(
+                "DOWNLOADING", 75, "Vérification des fichiers manifestés",
+                phase="hash", indeterminate=True,
+            )
             self._verify_files(release_root, manifest.get("files", {}))
-            self._progress("DOWNLOADING", 80, "Création de l'environnement Python")
+            self._progress(
+                "DOWNLOADING", 80, "Création de l'environnement Python",
+                phase="environment", indeterminate=True,
+            )
             self._install_environment(release_root, str(manifest.get("platform", "")))
-            self._progress("DOWNLOADING", 94, "Self-check Python, données et interface QML")
+            self._progress(
+                "DOWNLOADING", 94, "Self-check Python, données et interface QML",
+                phase="self_check", indeterminate=True,
+            )
             self.self_check(release_root, run_as=self.self_check_user)
-            self._progress("DOWNLOADING", 98, "Précompilation du runtime Python")
+            self._progress(
+                "DOWNLOADING", 98, "Précompilation du runtime Python",
+                phase="precompile", indeterminate=True,
+            )
             self._precompile_runtime(release_root)
             os.replace(release_root, target)
             self._write_json_atomic(target / "release-manifest.json", manifest)
-            self._progress("STAGED", 100, f"Release {version} préparée")
+            self._progress(
+                "STAGED", 100, f"Release {version} préparée",
+                phase="complete", indeterminate=False,
+            )
             return target
         except Exception:
             shutil.rmtree(work, ignore_errors=True)
@@ -235,14 +307,22 @@ class ReleaseManager:
                 continue
             key_path = sums_path.parent / f"release-key-{index}.pem"
             key_path.write_text(entry["public_key"], encoding="utf-8")
+            command = [
+                "openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(key_path),
+                "-rawin", "-in", str(sums_path), "-sigfile", str(signature_path),
+            ]
             try:
                 result = subprocess.run(
-                    ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(key_path),
-                     "-rawin", "-in", str(sums_path), "-sigfile", str(signature_path)],
-                    capture_output=True, text=True, timeout=10, check=False,
+                    command, capture_output=True, text=True, timeout=10, check=False,
                 )
-            except (OSError, subprocess.SubprocessError) as exc:
-                raise ReleaseError(f"vérification Ed25519 impossible: {exc}") from exc
+            except FileNotFoundError as exc:
+                raise ReleaseDependencyError("openssl absent pour la vérification Ed25519") from exc
+            except subprocess.TimeoutExpired as exc:
+                raise ReleaseCommandError(
+                    "vérification Ed25519 expirée", command, stderr=str(exc), code="SUBPROCESS_TIMEOUT",
+                ) from exc
+            except OSError:
+                raise
             if result.returncode == 0:
                 return
         raise ReleaseError("signature Ed25519 de SHA256SUMS invalide")
@@ -307,6 +387,19 @@ class ReleaseManager:
             state["healthy"] = version
             self._write_json_atomic(self.state_path, state)
 
+    def _prepared_release_is_valid(self, target: Path, expected_manifest: dict) -> bool:
+        """Accept a previous staging only when its immutable contract still matches."""
+        try:
+            stored = self._read_json(str(target / "release-manifest.json"))
+            for field in ("version", "channel", "platform", "archive_sha256"):
+                if field in expected_manifest and stored.get(field) != expected_manifest.get(field):
+                    return False
+            self._verify_files(target, expected_manifest.get("files", {}))
+            required = ("main.py", "VERSION", "frontend/main.qml", "data/config/profiles.json")
+            return all((target / name).is_file() for name in required)
+        except (OSError, json.JSONDecodeError, ReleaseError, TypeError):
+            return False
+
     def cleanup(self, keep: int = 2) -> list[str]:
         state = self._load_state()
         protected = {state.get("active"), state.get("previous"), state.get("last_stable")}
@@ -333,39 +426,31 @@ class ReleaseManager:
         check_env = dict(os.environ, PYTHONPYCACHEPREFIX=pycache)
         release_python = release_root / ".venv/bin/python3"
         python = str(release_python) if release_python.exists() else os.environ.get("PYTHON", "python3")
-        result = subprocess.run(
+        ReleaseManager._run_checked(
             [python, "-m", "compileall", "-q", "main.py", "src", "tools"],
-            cwd=release_root, env=check_env, capture_output=True, text=True, timeout=60, **run_options,
+            "self-check Python", cwd=release_root, env=check_env, timeout=60, **run_options,
         )
-        if result.returncode:
-            raise ReleaseError("self-check Python: " + (result.stderr or result.stdout))
         if release_python.exists():
-            result = subprocess.run(
+            ReleaseManager._run_checked(
                 [python, "-c", "import PySide6, numpy, psutil, can, serial, pyudev, bleak, sounddevice, pyo, aifc, audioop"],
-                cwd=release_root, env=check_env, capture_output=True, text=True, timeout=60,
+                "self-check dépendances", cwd=release_root, env=check_env, timeout=60,
                 **run_options,
             )
-            if result.returncode:
-                raise ReleaseError("self-check dépendances: " + (result.stderr or result.stdout))
         validator = release_root / "tools/validate_data.py"
         if validator.exists():
-            result = subprocess.run(
+            ReleaseManager._run_checked(
                 [python, str(validator), "--all"],
-                cwd=release_root, env=check_env, capture_output=True, text=True, timeout=60,
+                "self-check données", cwd=release_root, env=check_env, timeout=60,
                 **run_options,
             )
-            if result.returncode:
-                raise ReleaseError("self-check données: " + (result.stderr or result.stdout))
         smoke = release_root / "tools/qml_smoke.py"
         if smoke.exists() and (release_root / ".venv/bin/python3").exists():
             env = dict(check_env, QT_QPA_PLATFORM="offscreen")
-            result = subprocess.run(
-                [python, str(smoke)], cwd=release_root,
-                env=env, capture_output=True, text=True, timeout=120,
+            ReleaseManager._run_checked(
+                [python, str(smoke)], "self-check QML", cwd=release_root,
+                env=env, timeout=120,
                 **run_options,
             )
-            if result.returncode:
-                raise ReleaseError("self-check QML: " + (result.stderr or result.stdout))
 
     @staticmethod
     def _precompile_runtime(release_root: Path) -> None:
@@ -373,12 +458,10 @@ class ReleaseManager:
         python = release_root / ".venv/bin/python3"
         if not python.exists():
             return
-        result = subprocess.run(
+        ReleaseManager._run_checked(
             [str(python), "-m", "compileall", "-q", "main.py", "src", "tools"],
-            cwd=release_root, capture_output=True, text=True, timeout=120,
+            "précompilation Python", cwd=release_root, timeout=120,
         )
-        if result.returncode:
-            raise ReleaseError("précompilation Python: " + (result.stderr or result.stdout))
 
     def _install_environment(self, release_root: Path, platform_id: str = "") -> None:
         if not platform_id:
@@ -390,30 +473,35 @@ class ReleaseManager:
         lock = release_root / f"requirements-{release_platform.target}.lock"
         wheels = release_root / "wheels"
         if not lock.exists():
-            raise ReleaseError(f"lock absent pour {release_platform.target}")
+            raise ReleaseDependencyError(f"lock absent pour {release_platform.target}")
         python = shutil.which(f"python{release_platform.python_minor}")
         if not python:
-            raise ReleaseError(f"Python {release_platform.python_minor} indisponible")
-        subprocess.run([python, "-m", "venv", str(release_root / ".venv")], check=True, timeout=90)
+            raise ReleaseDependencyError(f"Python {release_platform.python_minor} indisponible")
+        self._run_checked(
+            [python, "-m", "venv", str(release_root / ".venv")],
+            "création de l'environnement Python", timeout=90,
+        )
         pip = str(release_root / ".venv/bin/pip")
         wheel_files = sorted(wheels.glob("*.whl")) if wheels.is_dir() else []
         if wheel_files:
-            self._progress("DOWNLOADING", 84, f"Installation du wheelhouse ({len(wheel_files)} paquets)")
-            # Les wheels ont déjà été contrôlées par le manifeste de release.
-            result = subprocess.run(
-                [pip, "install", "--no-index", "--no-deps", *map(str, wheel_files)],
-                cwd=release_root, capture_output=True, text=True, timeout=600,
+            self._progress(
+                "DOWNLOADING", 84, f"Installation du wheelhouse ({len(wheel_files)} paquets)",
+                phase="environment", indeterminate=True,
             )
-            if result.returncode:
-                raise ReleaseError("installation du wheelhouse: " + (result.stderr or result.stdout))
+            # Les wheels ont déjà été contrôlées par le manifeste de release.
+            self._run_checked(
+                [pip, "install", "--no-index", "--no-deps", *map(str, wheel_files)],
+                "installation du wheelhouse", cwd=release_root, timeout=600,
+            )
         # Les paquets déjà présents sont conservés. Une éventuelle dépendance
         # absente peut venir de PyPI uniquement si son artefact correspond à un
         # hash du lock.
-        self._progress("DOWNLOADING", 88, "Vérification et installation des dépendances verrouillées")
+        self._progress(
+            "DOWNLOADING", 88, "Vérification et installation des dépendances verrouillées",
+            phase="environment", indeterminate=True,
+        )
         command = [pip, "install", "--require-hashes", "-r", str(lock)]
-        result = subprocess.run(command, cwd=release_root, capture_output=True, text=True, timeout=600)
-        if result.returncode:
-            raise ReleaseError("installation de l'environnement: " + (result.stderr or result.stdout))
+        self._run_checked(command, "installation de l'environnement", cwd=release_root, timeout=600)
 
     @staticmethod
     def sha256(path: Path) -> str:
@@ -431,7 +519,20 @@ class ReleaseManager:
                 member_path = (destination / member.name).resolve()
                 if root != member_path and root not in member_path.parents:
                     raise ReleaseError("archive contenant un chemin non sûr")
-            bundle.extractall(destination, filter="data")
+                # Python 3.11 (Bookworm) has no ``filter='data'``. Releases do
+                # not need links or special files, so enforce the portable,
+                # stricter subset explicitly on every supported Python.
+                if not (member.isdir() or member.isfile()):
+                    raise ReleaseError(f"archive contenant un type de fichier interdit: {member.name}")
+            for member in bundle.getmembers():
+                options = {"filter": "fully_trusted"} if hasattr(tarfile, "fully_trusted_filter") else {}
+                bundle.extract(member, destination, set_attrs=False, **options)
+                extracted = destination / member.name
+                mode = member.mode & 0o777
+                if member.isdir():
+                    extracted.chmod(mode or 0o755)
+                else:
+                    extracted.chmod(mode or 0o644)
 
     @staticmethod
     def _single_root(unpacked: Path) -> Path:
@@ -478,9 +579,29 @@ class ReleaseManager:
         except ReleaseContractError as exc:
             raise ReleaseError(f"version invalide: {value}") from exc
 
-    def _progress(self, state: str, progress: int, message: str) -> None:
+    def _progress(self, state: str, progress: int, message: str, **details) -> None:
         if self.progress_callback:
-            self.progress_callback(state, progress, message)
+            self.progress_callback(state, progress, message, **details)
+
+    @staticmethod
+    def _run_checked(command: list[str], context: str, **options):
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, check=False, **options,
+            )
+        except FileNotFoundError as exc:
+            raise ReleaseDependencyError(f"commande absente pour {context}: {command[0]}") from exc
+        except subprocess.TimeoutExpired as exc:
+            stderr = str(exc.stderr or exc.stdout or exc)
+            raise ReleaseCommandError(
+                f"{context} expiré", command, stderr=stderr, code="SUBPROCESS_TIMEOUT",
+            ) from exc
+        if result.returncode:
+            raise ReleaseCommandError(
+                context, command, returncode=result.returncode,
+                stderr=str(result.stderr or result.stdout or ""),
+            )
+        return result
 
     @staticmethod
     def _run_as_options(username: str | None) -> dict:
