@@ -1,9 +1,11 @@
 # ⚡ Guide d'Optimisation du Démarrage Rapide (Fast-Boot) — Raspberry Pi 5
 
 > [!TIP]
-> L'étape 6 de l'installateur interactif `./install.sh` permet de désactiver automatiquement les services lents au démarrage (Étape 3 ci-dessous). Les étapes 1 et 2 concernent l'EEPROM et le firmware et s'éditent manuellement.
+> L'étape 6 de `./install.sh` propose séparément les services de fond, le mode
+> kiosque sans LightDM et la désactivation de cloud-init. Elle conserve toujours
+> NetworkManager, Bluetooth, Avahi, SSH, USB, CAN et l'updater CliOS.
 
-Ce guide regroupe les étapes de configuration système et matérielle à effectuer sur un **Raspberry Pi 5** pour réduire son temps de démarrage au minimum (passage de ~31 secondes à ~19 secondes).
+Ce guide regroupe les étapes de configuration système et matérielle à effectuer sur un **Raspberry Pi 5**. Mesurez chaque modification : le temps utile est celui du premier frame CliOS, pas seulement celui où une cible systemd devient active.
 
 ---
 
@@ -45,12 +47,6 @@ Ajoutez ou modifiez les lignes suivantes dans la section `[all]` :
 disable_splash=1
 boot_delay=0
 
-# Fréquence CPU maximale dès les premières secondes
-initial_turbo=30
-
-# Overclocking du bus MicroSD compatible UHS-I
-dtparam=sd_overclock=100
-
 # Désactivation des sondes de détection caméra inutiles
 camera_auto_detect=0
 
@@ -65,6 +61,10 @@ display_auto_detect=1
 
 > [!CAUTION]
 > Sur Raspberry Pi 5, veillez à toujours laisser **`auto_initramfs=1`**. Le pilote graphique 3D matériel (VC4/V3D) et la puce d'E/S RP1 en ont impérativement besoin au démarrage.
+
+N'ajoutez pas `initial_turbo` ou d'overclocking de la carte SD sans validation
+matérielle. Après toute modification, vérifiez la température et les alertes avec
+`vcgencmd get_throttled`.
 
 ---
 
@@ -84,6 +84,32 @@ sudo systemctl disable apt-daily.timer apt-daily-upgrade.timer man-db.timer
 # 3. Désactiver le fichier d'échange swap lent et la vérification de màj EEPROM
 sudo systemctl disable dphys-swapfile.service
 sudo systemctl disable rpi-eeprom-update.service
+
+# 4. Kiosque autonome : ne pas lancer un second gestionnaire graphique
+sudo systemctl disable lightdm.service
+sudo systemctl set-default multi-user.target
+```
+
+CliOS doit rester rattaché à `multi-user.target`. Remplacer son `WantedBy` par
+`basic.target` ne le rend pas prêt plus tôt : cette directive choisit qui active
+le service, elle ne supprime pas ses contraintes d'ordre et de session.
+
+Lorsque la machine est définitivement provisionnée, cloud-init peut être
+désactivé de manière réversible :
+
+```bash
+sudo touch /etc/cloud/cloud-init.disabled
+```
+
+Ne faites pas cette opération sur une image dont la création du compte, les clés
+SSH ou le réseau dépendent encore du premier démarrage cloud-init.
+
+Pour revenir à la configuration de bureau :
+
+```bash
+sudo systemctl set-default graphical.target
+sudo systemctl enable lightdm.service NetworkManager-wait-online.service
+sudo rm -f /etc/cloud/cloud-init.disabled
 ```
 
 ---
@@ -103,4 +129,7 @@ sudo reboot
 Après le redémarrage, vous pouvez mesurer le temps exact de démarrage avec la commande :
 ```bash
 systemd-analyze
+systemd-analyze critical-chain clios.service
+systemctl show clios.service -p ActiveEnterTimestampMonotonic -p NRestarts
+journalctl -b -u clios.service -o short-monotonic --no-pager
 ```

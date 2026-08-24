@@ -41,6 +41,8 @@ NON_INTERACTIVE=0
 DO_UNINSTALL=0
 KIOSK_INSTALLED=0
 KIOSK_AUTOSTART_ENABLED=0
+FAST_BOOT_APPLIED=()
+FAST_BOOT_SKIPPED=()
 
 # ------------------------------------------------------------------------------
 # 2. Couleurs & Mise en page CLI
@@ -160,6 +162,23 @@ safe_systemctl() {
         run_sudo_cmd "$action_desc" systemctl "$@"
     else
         log_info "systemctl non disponible dans cet environnement (${action_desc} ignoré)."
+    fi
+}
+
+systemd_unit_exists() {
+    local unit="$1"
+    if [[ $DRY_RUN -eq 1 ]]; then
+        return 0
+    fi
+    command -v systemctl &>/dev/null && systemctl cat "$unit" &>/dev/null
+}
+
+disable_systemd_unit_if_present() {
+    local unit="$1"
+    if systemd_unit_exists "$unit"; then
+        safe_systemctl "Désactivation de ${unit}" disable "$unit" 2>/dev/null || true
+    else
+        log_info "${unit} absent : aucune action nécessaire."
     fi
 }
 
@@ -879,8 +898,8 @@ log_step "6/6" "Optimisations Fast-Boot (Démarrage Rapide)"
 if [[ $VENV_ONLY -eq 1 || "$OS_NAME" != "Linux" ]]; then
     log_info "Étape Fast-Boot ignorée (mode venv-only ou système non-Linux)."
 else
-    echo -e "Accélération du temps de démarrage (gain estimé : ~10 à 12 secondes) :"
-    echo -e "Désactivation des services de fond lents (NetworkManager-wait-online, timers apt, swap)."
+    echo -e "Accélération prudente du démarrage, sans désactiver le réseau, le BLE, l'USB, le CAN ni l'updater."
+    echo -e "Chaque groupe sensible est confirmé séparément et reste réversible."
     if prompt_confirm "Souhaitez-vous désactiver ces services lents au démarrage ?" "N"; then
         SLOW_SERVICES=(
             NetworkManager-wait-online.service
@@ -891,14 +910,53 @@ else
             rpi-eeprom-update.service
         )
         for srv in "${SLOW_SERVICES[@]}"; do
-            safe_systemctl "Désactivation de ${srv}" disable "${srv}" 2>/dev/null || true
+            disable_systemd_unit_if_present "${srv}"
         done
+        FAST_BOOT_APPLIED+=("services de fond non essentiels")
         log_success "Services lents désactivés avec succès."
-        echo -e "\n ${C_CYAN}ℹ${C_RESET} ${C_BOLD}Astuce Matérielle :${C_RESET} Pour optimiser également l'EEPROM et le fichier /boot/firmware/config.txt,"
-        echo -e "   consultez le guide détaillé : ${C_CYAN}installation/guide_optimisation_boot_rpi5.md${C_RESET}"
     else
-        log_info "Optimisations Fast-Boot ignorées."
+        FAST_BOOT_SKIPPED+=("services de fond non essentiels")
+        log_info "Désactivation des services de fond ignorée."
     fi
+
+    KIOSK_UNIT_AVAILABLE=0
+    if [[ $KIOSK_INSTALLED -eq 1 ]] || systemd_unit_exists clios.service; then
+        KIOSK_UNIT_AVAILABLE=1
+    fi
+    if [[ $KIOSK_UNIT_AVAILABLE -eq 1 ]]; then
+        echo -e "\nLe mode kiosque CliOS n'a pas besoin de LightDM. Le changement prendra effet au prochain démarrage."
+        if prompt_confirm "Désactiver LightDM et démarrer par défaut sur multi-user.target ?" "N"; then
+            disable_systemd_unit_if_present lightdm.service
+            safe_systemctl "Sélection du démarrage kiosque sans bureau" set-default multi-user.target
+            FAST_BOOT_APPLIED+=("mode kiosque sans LightDM")
+            log_success "Mode kiosque configuré sans arrêter la session graphique actuelle."
+        else
+            FAST_BOOT_SKIPPED+=("mode kiosque sans LightDM")
+            log_info "LightDM et la cible par défaut sont inchangés."
+        fi
+    else
+        FAST_BOOT_SKIPPED+=("mode kiosque sans LightDM (CliOS non installé)")
+        log_info "Optimisation LightDM non proposée : clios.service n'est pas installé."
+    fi
+
+    echo -e "\n${C_YELLOW}${C_BOLD}Cloud-init ne doit être désactivé qu'après le provisioning initial.${C_RESET}"
+    echo -e "Cette action conserve sa configuration mais empêche ses unités de ralentir les prochains boots."
+    if prompt_confirm "Cette machine est-elle provisionnée et peut-on désactiver cloud-init ?" "N"; then
+        if [[ -e /etc/cloud/cloud-init.disabled ]]; then
+            log_info "cloud-init est déjà désactivé."
+        else
+            run_sudo_cmd "Désactivation réversible de cloud-init" mkdir -p /etc/cloud
+            run_sudo_cmd "Création du marqueur cloud-init.disabled" touch /etc/cloud/cloud-init.disabled
+        fi
+        FAST_BOOT_APPLIED+=("cloud-init désactivé")
+        log_success "Cloud-init sera ignoré aux prochains démarrages."
+    else
+        FAST_BOOT_SKIPPED+=("cloud-init conservé")
+        log_info "Cloud-init reste actif."
+    fi
+
+    echo -e "\n ${C_CYAN}ℹ${C_RESET} ${C_BOLD}Astuce matérielle :${C_RESET} contrôlez l'EEPROM et config.txt avec"
+    echo -e "   ${C_CYAN}installation/guide_optimisation_boot_rpi5.md${C_RESET}, sans ajouter d'overclocking non validé."
 fi
 
 # ------------------------------------------------------------------------------
@@ -923,4 +981,17 @@ else
     echo -e "  ${C_CYAN}./clios --mock${C_RESET}          # Simulation sans matériel"
     echo -e "  ${C_CYAN}./clios --ui cli --mock${C_RESET} # Terminal interactif"
     echo -e "  ${C_CYAN}./clios --help${C_RESET}          # Options disponibles\n"
+fi
+
+if [[ ${#FAST_BOOT_APPLIED[@]} -gt 0 ]]; then
+    log_success "Fast-Boot appliqué : ${FAST_BOOT_APPLIED[*]}"
+fi
+if [[ ${#FAST_BOOT_SKIPPED[@]} -gt 0 ]]; then
+    log_info "Fast-Boot non appliqué : ${FAST_BOOT_SKIPPED[*]}"
+fi
+if [[ ${#FAST_BOOT_APPLIED[@]} -gt 0 ]]; then
+    echo -e "\n${C_BOLD}Restauration des optimisations Fast-Boot :${C_RESET}"
+    echo -e "  ${C_CYAN}sudo systemctl set-default graphical.target${C_RESET}"
+    echo -e "  ${C_CYAN}sudo systemctl enable lightdm.service NetworkManager-wait-online.service${C_RESET}"
+    echo -e "  ${C_CYAN}sudo rm -f /etc/cloud/cloud-init.disabled${C_RESET}"
 fi

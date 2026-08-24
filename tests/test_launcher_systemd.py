@@ -1,7 +1,7 @@
 import pathlib
 import unittest
 
-from tools.clios_launcher import application_args
+from tools.clios_launcher import application_args, last_startup_phase
 from tools.generate_systemd import render_service
 
 
@@ -20,6 +20,23 @@ class LauncherSystemdTest(unittest.TestCase):
         for payload in (service, installer):
             self.assertNotIn("WantedBy=graphical.target", payload)
             self.assertNotIn("After=graphical.target", payload)
+
+    def test_service_reports_ready_only_after_the_first_frame(self):
+        service = render_service("clios", 1000)
+        self.assertIn("Type=notify", service)
+        self.assertIn("NotifyAccess=all", service)
+        self.assertIn("TimeoutStartSec=45", service)
+        self.assertIn("After=systemd-user-sessions.service", service)
+
+    def test_launcher_reports_the_last_bounded_startup_phase(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            status = pathlib.Path(tmp) / "startup.json"
+            status.write_text('{"phase": "qml_loaded", "elapsed_ms": 4321}', encoding="utf-8")
+            self.assertEqual(last_startup_phase(status), "qml_loaded (4321 ms)")
+            status.write_text("not-json", encoding="utf-8")
+            self.assertEqual(last_startup_phase(status), "inconnue")
 
     def test_installer_and_tests_use_the_authoritative_unit_generator(self):
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
@@ -65,6 +82,17 @@ class LauncherSystemdTest(unittest.TestCase):
         self.assertIn("CliOS est installé dans /opt/clios/current", installer)
         self.assertIn("Voulez-vous démarrer CliOS maintenant ?", installer)
         self.assertIn('start clios.service', installer)
+
+    def test_fast_boot_keeps_hardware_features_and_uses_separate_prompts(self):
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("Souhaitez-vous désactiver ces services lents", installer)
+        self.assertIn("Désactiver LightDM et démarrer par défaut sur multi-user.target", installer)
+        self.assertIn("Cette machine est-elle provisionnée et peut-on désactiver cloud-init", installer)
+        self.assertIn("touch /etc/cloud/cloud-init.disabled", installer)
+        self.assertIn("set-default multi-user.target", installer)
+        self.assertNotIn('disable bluetooth.service', installer)
+        self.assertNotIn('disable NetworkManager.service', installer)
+        self.assertNotIn('disable ssh.service', installer)
 
     def test_overlayfs_permission_is_limited_to_raspi_config_actions(self):
         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
