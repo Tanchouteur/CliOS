@@ -39,6 +39,9 @@ class DashboardBridge(QObject):
                  stats_service=None, diag_service=None,
                  profile_manager=None, gear_calib_service=None, session_manager=None, storage_manager=None):
         super().__init__()
+        # Les contrôleurs asynchrones peuvent publier leur premier état pendant
+        # l'initialisation. Le garde de cycle de vie doit donc exister avant eux.
+        self._closed = False
         self.logger = get_logger("DashboardBridge")
         self.session_manager = session_manager
         self.runtime = runtime
@@ -130,7 +133,6 @@ class DashboardBridge(QObject):
 
         self.needs_restart = False
         self.requested_power_action = ""
-        self._closed = False
         self.exitRequested.connect(self._quit_qt)
         self._update_health()
 

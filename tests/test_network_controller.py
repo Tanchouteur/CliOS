@@ -43,6 +43,20 @@ def wait_idle(controller, timeout=1.0):
 
 
 class NetworkControllerTest(unittest.TestCase):
+    def test_first_publication_can_run_during_owner_initialization(self):
+        owner = type("Owner", (), {})()
+        owner.closed = False
+        publications = []
+
+        def on_change():
+            publications.append(owner.closed)
+
+        controller = NetworkController(on_change=on_change, runner=FakeRunner())
+        self.assertTrue(controller.refresh())
+        wait_idle(controller)
+        self.assertGreaterEqual(len(publications), 2)
+        self.assertEqual(publications, [False] * len(publications))
+
     def test_terse_parser_unescapes_colons_and_backslashes(self):
         self.assertEqual(split_terse(r"uuid:Nom\: maison:802-11-wireless:SSID\\5G"),
                          ["uuid", "Nom: maison", "802-11-wireless", r"SSID\5G"])
