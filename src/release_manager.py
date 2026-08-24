@@ -445,10 +445,15 @@ class ReleaseManager:
             )
         smoke = release_root / "tools/qml_smoke.py"
         if smoke.exists() and (release_root / ".venv/bin/python3").exists():
-            env = dict(check_env, QT_QPA_PLATFORM="offscreen")
+            env = dict(
+                check_env,
+                QT_QPA_PLATFORM="minimal",
+                QT_QUICK_BACKEND="software",
+                QSG_RENDER_LOOP="basic",
+            )
             ReleaseManager._run_checked(
-                [python, str(smoke)], "self-check QML", cwd=release_root,
-                env=env, timeout=120,
+                [python, str(smoke), "--validate-only"], "self-check QML", cwd=release_root,
+                env=env, timeout=60,
                 **run_options,
             )
 

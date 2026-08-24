@@ -323,6 +323,11 @@ class FakeBridge(QObject):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", help="Répertoire des captures PNG")
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Charge le shell QML sans parcourir ni capturer toutes les vues",
+    )
     args = parser.parse_args()
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -360,14 +365,30 @@ def main():
     window.setVisibility(QQuickWindow.Windowed)
     window.setWidth(1920)
     window.setHeight(720)
+    failures = []
+
+    if args.validate_only:
+        def finish_validation():
+            if window.findChild(QObject, "appShell") is None:
+                failures.append("AppShell introuvable")
+            app.quit()
+
+        QTimer.singleShot(500, finish_validation)
+        app.exec()
+        qInstallMessageHandler(previous_handler)
+        failures.extend(qml_messages)
+        if failures:
+            print("\n".join(failures), file=sys.stderr)
+            return 1
+        print("QML OK: shell chargé avec le moteur logiciel")
+        return 0
+
     routes_by_style = {
         style: ["home", "driving", "appearance", "accent", "leds", "vehicle", "diagnostic", "transmission",
                 "system", "updates", "maintenance", "power", "advanced", "services", "developer", "logs"]
         for style in ("apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard")
     }
     styles = ["apex", "atelier_luxe", "gt_modern", "jdm_mugen", "legacy_dashboard"]
-    failures = []
-
     if args.output:
         os.makedirs(args.output, exist_ok=True)
 

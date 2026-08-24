@@ -185,6 +185,29 @@ class ReleaseManagerTest(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][:4], [str(python), "-m", "compileall", "-q"])
         self.assertEqual(run.call_args.kwargs["cwd"], release)
 
+    def test_self_check_uses_short_software_qml_validation(self):
+        release = self.root / "release"
+        for required in ("main.py", "VERSION", "frontend/main.qml", "data/config/profiles.json"):
+            target = release / required
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch()
+        python = release / ".venv/bin/python3"
+        python.parent.mkdir(parents=True)
+        python.touch()
+        smoke = release / "tools/qml_smoke.py"
+        smoke.parent.mkdir(parents=True)
+        smoke.touch()
+
+        with mock.patch.object(ReleaseManager, "_run_checked") as run_checked:
+            ReleaseManager.self_check(release)
+
+        qml_call = next(call for call in run_checked.call_args_list if call.args[1] == "self-check QML")
+        self.assertEqual(qml_call.args[0][-1], "--validate-only")
+        self.assertEqual(qml_call.kwargs["timeout"], 60)
+        self.assertEqual(qml_call.kwargs["env"]["QT_QPA_PLATFORM"], "minimal")
+        self.assertEqual(qml_call.kwargs["env"]["QT_QUICK_BACKEND"], "software")
+        self.assertEqual(qml_call.kwargs["env"]["QSG_RENDER_LOOP"], "basic")
+
     def test_channel_is_stable_by_default_and_persists(self):
         self.assertEqual(self.manager.get_channel(), "stable")
         self.assertEqual(self.manager.set_channel("beta"), "beta")
