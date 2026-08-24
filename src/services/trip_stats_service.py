@@ -145,6 +145,70 @@ class TripStatsService(BaseService):
         with self._stats_lock:
             self._accept_running = True
 
+    def export_session_checkpoint(self):
+        """Return the persistent part of an unfinished trip accumulator."""
+        with self._stats_lock:
+            return {
+                "stats": self._stats.copy(),
+                "start_odo": self._start_odo,
+                "session_distance_km": self._session_distance_km,
+                "absolute_fuel_session": self._absolute_fuel_session,
+                "rpm_integral": self._rpm_integral,
+                "engine_time": self._engine_time,
+                "aggressive_time": self._aggressive_time,
+                "motion_time": self._motion_time,
+                "deceleration_without_throttle_dist": self._deceleration_without_throttle_dist,
+                "shift_time_sum": self._shift_time_sum,
+                "shift_count": self._shift_count,
+            }
+
+    def restore_session_checkpoint(self, checkpoint):
+        """Restore an unfinished trip while rebasing transient CAN values."""
+        required = {
+            "stats", "start_odo", "session_distance_km", "absolute_fuel_session",
+            "rpm_integral", "engine_time", "aggressive_time", "motion_time",
+            "deceleration_without_throttle_dist", "shift_time_sum", "shift_count",
+        }
+        if not isinstance(checkpoint, dict) or not required.issubset(checkpoint):
+            raise ValueError("checkpoint de statistiques incomplet")
+
+        with self._stats_lock:
+            restored_stats = checkpoint["stats"]
+            if not isinstance(restored_stats, dict):
+                raise ValueError("statistiques de checkpoint invalides")
+            self._stats.update(restored_stats)
+            self._stats["is_active"] = False
+            self._stats["inst_cons"] = 0.0
+            self._stats["longitudinal_g"] = 0.0
+            self._start_odo = float(checkpoint["start_odo"])
+            self._session_distance_km = max(0.0, float(checkpoint["session_distance_km"]))
+            self._absolute_fuel_session = max(0.0, float(checkpoint["absolute_fuel_session"]))
+            self._rpm_integral = max(0.0, float(checkpoint["rpm_integral"]))
+            self._engine_time = max(0.0, float(checkpoint["engine_time"]))
+            self._aggressive_time = max(0.0, float(checkpoint["aggressive_time"]))
+            self._motion_time = max(0.0, float(checkpoint["motion_time"]))
+            self._deceleration_without_throttle_dist = max(
+                0.0, float(checkpoint["deceleration_without_throttle_dist"])
+            )
+            self._shift_time_sum = max(0.0, float(checkpoint["shift_time_sum"]))
+            self._shift_count = max(0, int(checkpoint["shift_count"]))
+
+            # Values tied to the live process/CAN stream must be rebased. This
+            # prevents fuel or acceleration jumps after a Raspberry Pi reboot.
+            self._last_raw_fuel = None
+            self._last_raw_fuel_time = None
+            self.last_fuel_avg = self._absolute_fuel_session
+            self.last_fuel_inst = None
+            self.last_time_inst = time.monotonic()
+            self.inst_window.clear()
+            self._was_active = False
+            self._is_shifting = False
+            self._shift_start = 0.0
+            self._prev_speed = 0.0
+            self._last_g_time = time.monotonic()
+            self._accept_running = True
+        self._publish_stats()
+
     def _publish_stats(self):
         self.runtime.publish(
             "trip", self._stats_snapshot(), source="trip-stats", ttl_s=0.25,

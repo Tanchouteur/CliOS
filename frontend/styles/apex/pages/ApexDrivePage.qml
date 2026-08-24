@@ -162,14 +162,14 @@ Item {
                             width: stateText.implicitWidth + 22
                             height: 34
                             radius: 17
-                            color: S.UiState.sessionState === "PAUSED" ? "#2F2310" : "#10281F"
+                            color: S.UiState.sessionState === "PAUSED" || S.UiState.sessionState === "SUSPENDED" ? "#2F2310" : "#10281F"
                             border.width: 1
-                            border.color: S.UiState.sessionState === "PAUSED" ? "#FFB84D" : "#54E3A5"
+                            border.color: S.UiState.sessionState === "PAUSED" || S.UiState.sessionState === "SUSPENDED" ? "#FFB84D" : "#54E3A5"
                             Text {
                                 id: stateText
                                 anchors.centerIn: parent
-                                text: S.UiState.sessionState === "PAUSED" ? "EN PAUSE" : "ACTIVE"
-                                color: S.UiState.sessionState === "PAUSED" ? "#FFD17D" : "#69EDB2"
+                                text: S.UiState.sessionState === "SUSPENDED" ? "SAUVEGARDÉ" : (S.UiState.sessionState === "PAUSED" ? "EN PAUSE" : "ACTIVE")
+                                color: S.UiState.sessionState === "PAUSED" || S.UiState.sessionState === "SUSPENDED" ? "#FFD17D" : "#69EDB2"
                                 font.pixelSize: 12
                                 font.bold: true
                                 font.letterSpacing: 1.3
@@ -182,6 +182,7 @@ Item {
                         spacing: 12
                         ApexMetric { Layout.fillWidth: true; label: "TRIP A"; value: S.UiState.fixed(S.UiState.tripA, 1, "0,0"); unit: "km"; valueSize: 24 }
                         ApexMetric { Layout.fillWidth: true; label: "TRIP B"; value: S.UiState.fixed(S.UiState.tripB, 1, "0,0"); unit: "km"; valueSize: 24 }
+                        ApexMetric { Layout.fillWidth: true; label: "COÛT EST."; value: S.UiState.fixed(S.UiState.tripCost, 2, "0,00"); unit: "€"; valueSize: 24 }
                     }
 
                     Item { Layout.fillHeight: true }
@@ -199,7 +200,7 @@ Item {
                             spacing: 12
                             Rectangle { width: 10; height: 10; radius: 5; color: T.StyleManager.accent; anchors.verticalCenter: parent.verticalCenter }
                             Text {
-                                text: S.UiState.sessionState === "PAUSED" ? "REPRENDRE LE TRAJET" : "TERMINER LE TRAJET"
+                                text: S.UiState.sessionState === "SUSPENDED" ? "EXTINCTION EN COURS" : (S.UiState.sessionState === "PAUSED" ? "REPRENDRE LE TRAJET" : "TERMINER LE TRAJET")
                                 color: "#FFFFFF"
                                 font.pixelSize: 15
                                 font.bold: true
@@ -209,6 +210,7 @@ Item {
                         MouseArea {
                             id: sessionTouch
                             anchors.fill: parent
+                            enabled: S.UiState.sessionState === "RUNNING" || S.UiState.sessionState === "PAUSED"
                             onClicked: {
                                 if (S.UiState.sessionState === "PAUSED") root.actionRequested("resume_trip")
                                 else root.actionRequested("end_trip")

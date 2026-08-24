@@ -21,6 +21,8 @@ class UiCommandRouter:
             "reset_maintenance": self.target.resetMaintenance,
             "end_trip": self.target.endTripSession,
             "resume_trip": self.target.resumeTripSession,
+            "new_trip": lambda: self.target.session_manager.start_new_trip()
+            if self.target.session_manager else False,
             "pause_trip": lambda: self.target.setSessionState("PAUSED"),
             "quit": self.target.quitApplication,
             "restart": self.target.restartApplication,
