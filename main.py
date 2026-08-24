@@ -7,7 +7,7 @@ import socket
 import threading
 import time
 
-PROCESS_STARTED_NS = time.monotonic_ns()
+from src.startup_clock import PROCESS_STARTED_NS
 
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
