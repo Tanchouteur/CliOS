@@ -1,10 +1,12 @@
 import hashlib
 import errno
+import json
 import tarfile
 import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from src.release_manager import ReleaseManager
@@ -113,6 +115,39 @@ class UpdaterServiceTest(unittest.TestCase):
         self.assertIn("permission système", status["detail"])
         self.assertGreater(status["updated_at"], 0)
 
+    def test_error_codes_distinguish_absence_permission_and_subprocess(self):
+        engine = self.engine({})
+        self.assertEqual(engine.error_code(FileNotFoundError(errno.ENOENT, "missing")), "NOT_FOUND")
+        self.assertEqual(engine.error_code(PermissionError(errno.EACCES, "denied")), "PRIVILEGE")
+        failure = engine.manager._run_checked
+        with mock.patch("src.release_manager.subprocess.run") as run:
+            run.return_value = mock.Mock(returncode=7, stderr="pip failed", stdout="")
+            with self.assertRaises(Exception) as raised:
+                failure(["pip", "install"], "installation")
+        self.assertEqual(engine.error_code(raised.exception), "SUBPROCESS_FAILED")
+
+    def test_trace_has_operation_sequence_and_bounded_exception_context(self):
+        engine = self.engine({})
+        engine._active_operation_id = "trace-operation-123"
+        engine._write_status({
+            "state": "DOWNLOADING", "operation": "stage", "operation_id": "trace-operation-123",
+            "phase": "environment", "progress": 80, "indeterminate": True,
+        })
+        error = OSError(errno.EPERM, "Operation not permitted")
+        engine._record_error(error)
+
+        status = engine.status()
+        events = [json.loads(line) for line in engine.trace_path.read_text().splitlines()]
+        self.assertEqual(status["operation_id"], "trace-operation-123")
+        self.assertGreater(status["sequence"], 1)
+        self.assertEqual(events[-1]["exception_type"], "PermissionError")
+        self.assertEqual(events[-1]["errno"], errno.EPERM)
+
+    def test_operation_id_is_validated_by_closed_protocol(self):
+        engine = self.engine({})
+        with self.assertRaises(UpdaterProtocolError):
+            engine.handle({"operation": "stage", "version": "2.0.1", "operation_id": "../bad"})
+
     def test_protocol_rejects_urls_paths_and_extra_fields(self):
         engine = self.engine({})
         for request in (
@@ -139,6 +174,23 @@ class UpdaterServiceTest(unittest.TestCase):
         with self.assertRaises(OSError):
             engine.activate("2.0.1-rc.1")
         self.assertEqual(engine.manager.current_link.resolve().name, "2.0.0")
+
+    def test_manual_rollback_restart_failure_restores_candidate(self):
+        stable = self.make_manifest("2.0.0", "stable")
+        candidate = self.make_manifest("2.0.1-rc.1", "beta")
+        engine = self.engine({"2.0.0": stable, "2.0.1-rc.1": candidate})
+        engine.stage("2.0.0")
+        engine.manager.activate("2.0.0")
+        engine.manager.mark_healthy("2.0.0")
+        engine.stage("2.0.1-rc.1")
+        engine.manager.activate("2.0.1-rc.1")
+        engine.manager.mark_healthy("2.0.1-rc.1")
+
+        engine.restart = mock.Mock(side_effect=OSError("systemd indisponible"))
+        with self.assertRaises(OSError):
+            engine.rollback(False)
+
+        self.assertEqual(engine.manager.current_link.resolve().name, "2.0.1-rc.1")
 
     def test_rc_stage_activate_health_and_failed_first_boot_rollback(self):
         stable = self.make_manifest("2.0.0", "stable")

@@ -84,6 +84,68 @@ class ReleaseManagerTest(unittest.TestCase):
             manager.stage(str(self.make_release("2.1.0")))
         self.assertFalse((self.install / "releases/2.1.0").exists())
 
+    def test_staging_an_already_valid_release_is_idempotent(self):
+        manifest = self.make_release("2.0.0")
+        prepared = self.manager.stage(str(manifest))
+
+        reused = self.manager.stage(str(manifest))
+
+        self.assertEqual(reused, prepared)
+        self.assertFalse(os.path.lexists(self.manager.current_link))
+
+    def test_existing_release_with_changed_manifest_is_rejected(self):
+        manifest = self.make_release("2.0.0")
+        self.manager.stage(str(manifest))
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["archive_sha256"] = "f" * 64
+        manifest.write_text(json.dumps(payload), encoding="utf-8")
+
+        with self.assertRaisesRegex(ReleaseError, "déjà préparée mais invalide"):
+            self.manager.stage(str(manifest))
+
+    def test_manual_rollback_can_reactivate_already_prepared_release(self):
+        stable = self.manager.stage(str(self.make_release("2.0.0")))
+        candidate_manifest = self.make_release("2.1.0", channel="beta")
+        candidate = self.manager.stage(str(candidate_manifest))
+        self.manager.activate("2.0.0")
+        self.manager.mark_healthy("2.0.0")
+        self.manager.activate("2.1.0")
+
+        self.manager.rollback()
+        reused = self.manager.stage(str(candidate_manifest))
+        activated = self.manager.activate("2.1.0")
+
+        self.assertEqual(self.manager.current_link.resolve(), candidate.resolve())
+        self.assertEqual(reused.resolve(), candidate.resolve())
+        self.assertEqual(activated.resolve(), candidate.resolve())
+        self.assertNotEqual(self.manager.current_link.resolve(), stable.resolve())
+
+    def test_default_downloader_publishes_received_bytes_and_intermediate_progress(self):
+        manifest_path = self.make_release("2.0.0")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        source = self.root / "src-2.0.0"
+        (source / "payload.bin").write_bytes(os.urandom(700_000))
+        archive = Path(manifest["archive_url"])
+        with tarfile.open(archive, "w:gz") as bundle:
+            bundle.add(source, arcname="clios-2.0.0")
+        manifest["archive_sha256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+        manifest["archive_url"] = Path(manifest["archive_url"]).as_uri()
+        events = []
+        manager = ReleaseManager(
+            str(self.root / "default/opt/clios"), str(self.root / "default/var/lib/clios"),
+            progress_callback=lambda state, progress, message, **details: events.append(
+                (state, progress, message, details)
+            ),
+        )
+        manager._install_environment = lambda _root, _platform: None
+
+        manager.stage(manifest)
+
+        byte_events = [details for _, _, _, details in events if details.get("bytes_received", 0) > 0]
+        self.assertTrue(byte_events)
+        self.assertTrue(any(details.get("bytes_total", 0) > 0 for details in byte_events))
+        self.assertTrue(any(10 < progress < 60 for _, progress, _, _ in events))
+
     def test_staging_is_traversable_by_the_self_check_group(self):
         observed_modes = []
 
