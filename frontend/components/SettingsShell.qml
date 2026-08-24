@@ -25,6 +25,11 @@ Item {
         vehicle: "../shared_pages/VehiclePage.qml", system: "../shared_pages/SystemPage.qml",
         advanced: "../shared_pages/AdvancedPage.qml"
     })
+    function syncRequestedRoute() {
+        if (pageLoader.item && pageLoader.item.initialRoute !== undefined)
+            pageLoader.item.initialRoute = root.requestedRoute
+    }
+    onRequestedRouteChanged: syncRequestedRoute()
 
     Rectangle { anchors.fill: parent; color: T.StyleManager.background }
     Rectangle {
@@ -68,7 +73,7 @@ Item {
         id: pageLoader
         anchors.left: rail.right; anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         source: root.routeSources[root.route] ? Qt.resolvedUrl(root.routeSources[root.route]) : ""
-        onLoaded: if (item && item.initialRoute !== undefined) item.initialRoute = root.requestedRoute
+        onLoaded: root.syncRequestedRoute()
     }
     Connections {
         target: pageLoader.item; ignoreUnknownSignals: true

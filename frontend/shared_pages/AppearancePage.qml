@@ -5,6 +5,7 @@ import "../style" as T
 
 Item {
     id: root
+    objectName: "appearanceSettingsPage"
     property string initialRoute: "appearance"
     property int tab: initialRoute === "leds" ? 2 : (initialRoute === "accent" ? 1 : 0)
     property real currentHue: Math.max(0, T.StyleManager.rawAccent.hsvHue)
@@ -19,9 +20,9 @@ Item {
         anchors.fill: parent; anchors.margins: 20; spacing: 12
         PageHeader { Layout.fillWidth: true; title: "Apparence"; subtitle: "Identité visuelle du cockpit et éclairages"; showBack: false }
         RowLayout {
-            Layout.fillWidth: true; Layout.preferredHeight: 60; spacing: 10
+            Layout.fillWidth: true; Layout.minimumHeight: 64; Layout.preferredHeight: 64; Layout.maximumHeight: 64; spacing: 10
             Repeater { model: root.tabs
-                Button { Layout.fillWidth: true; Layout.fillHeight: true; text: modelData; primary: root.tab === index; onClicked: root.tab = index }
+                Button { Layout.fillWidth: true; Layout.minimumHeight: 56; Layout.maximumHeight: 64; text: modelData; primary: root.tab === index; onClicked: root.tab = index }
             }
         }
         Item {

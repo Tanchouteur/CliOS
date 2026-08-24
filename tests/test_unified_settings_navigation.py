@@ -54,6 +54,25 @@ class UnifiedSettingsNavigationTest(unittest.TestCase):
         self.assertEqual(self.shell.property("route"), "system")
         self.assertEqual(self.shell.property("requestedRoute"), "maintenance")
 
+    def test_alias_within_same_section_switches_the_visible_tab(self):
+        self.shell.openRoute("appearance")
+        self.app.processEvents()
+        appearance = self.shell.findChild(QObject, "appearanceSettingsPage")
+        self.assertIsNotNone(appearance)
+        self.assertEqual(appearance.property("tab"), 0)
+
+        self.shell.openRoute("accent")
+        self.app.processEvents()
+        self.assertEqual(appearance.property("tab"), 1)
+
+        self.shell.openRoute("system")
+        self.app.processEvents()
+        system = self.shell.findChild(QObject, "systemSettingsPage")
+        self.assertIsNotNone(system)
+        self.shell.openRoute("updates")
+        self.app.processEvents()
+        self.assertEqual(system.property("tab"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

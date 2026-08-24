@@ -46,7 +46,7 @@ réseau et la configuration OverlayFS restent gérés par le système.
 
 ## Vérifications réalisées
 
-- `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q tests` : 222 tests
+- `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q tests` : 224 tests
   et 10 sous-tests réussis ;
 - `QT_QPA_PLATFORM=offscreen .venv/bin/python tools/qml_smoke.py` : 80 vues et
   14 états rendus en 1920×720 ;

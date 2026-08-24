@@ -24,8 +24,8 @@ Item {
     ColumnLayout {
         anchors.fill: parent; anchors.margins: 20; spacing: 12
         PageHeader { Layout.fillWidth: true; title: "Avancé"; subtitle: S.UiState.recoveryMode ? "Mode de récupération · " + S.UiState.recoveryMessage : "Profils, services et outils de diagnostic"; showBack: false }
-        RowLayout { Layout.fillWidth: true; Layout.preferredHeight: 60; spacing: 10
-            Repeater { model: root.tabs; Button { Layout.fillWidth: true; Layout.fillHeight: true; text: modelData; primary: root.tab === index; onClicked: root.tab=index } }
+        RowLayout { Layout.fillWidth: true; Layout.minimumHeight: 64; Layout.preferredHeight: 64; Layout.maximumHeight: 64; spacing: 10
+            Repeater { model: root.tabs; Button { Layout.fillWidth: true; Layout.minimumHeight: 56; Layout.maximumHeight: 64; text: modelData; primary: root.tab === index; onClicked: root.tab=index } }
         }
         Item { Layout.fillWidth: true; Layout.fillHeight: true
             RowLayout { anchors.fill: parent; visible: root.tab === 0; spacing: 14
