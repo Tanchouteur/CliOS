@@ -21,11 +21,12 @@ class LauncherSystemdTest(unittest.TestCase):
             self.assertNotIn("WantedBy=graphical.target", payload)
             self.assertNotIn("After=graphical.target", payload)
 
-    def test_service_reports_ready_only_after_the_first_frame(self):
+    def test_service_does_not_depend_on_cross_process_sd_notify(self):
         service = render_service("clios", 1000)
-        self.assertIn("Type=notify", service)
-        self.assertIn("NotifyAccess=all", service)
-        self.assertIn("TimeoutStartSec=45", service)
+        self.assertIn("Type=simple", service)
+        self.assertNotIn("Type=notify", service)
+        self.assertNotIn("NotifyAccess=all", service)
+        self.assertNotIn("TimeoutStartSec=45", service)
         self.assertIn("After=systemd-user-sessions.service", service)
 
     def test_launcher_reports_the_last_bounded_startup_phase(self):

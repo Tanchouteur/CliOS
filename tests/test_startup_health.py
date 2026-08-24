@@ -9,6 +9,10 @@ import main
 
 
 class StartupHealthTest(unittest.TestCase):
+    def test_first_frame_fallback_finishes_before_launcher_timeout(self):
+        self.assertGreater(main.FIRST_FRAME_FALLBACK_MS, 0)
+        self.assertLess(main.FIRST_FRAME_FALLBACK_MS, 30_000)
+
     def test_health_marker_is_written_atomically(self):
         with tempfile.TemporaryDirectory() as tmp:
             marker = Path(tmp) / "health-test"

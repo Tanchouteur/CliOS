@@ -52,6 +52,9 @@ from src.update_safety import UpdateSafety
 from src.cli_debug import ui_loop
 
 
+FIRST_FRAME_FALLBACK_MS = 1500
+
+
 def _atomic_write(path: str, payload: str) -> None:
     parent = os.path.dirname(path)
     if parent:
@@ -387,14 +390,24 @@ def main():
             from PySide6.QtCore import QTimer
             startup_complete = False
 
-            def complete_startup():
+            def complete_startup(phase="first_frame"):
                 nonlocal startup_complete
                 if startup_complete:
                     return
                 startup_complete = True
-                write_startup_status("first_frame", logger)
+                write_startup_status(phase, logger)
+                if phase != "first_frame":
+                    logger.warning(
+                        "Signal frameSwapped absent; validation après chargement QML",
+                        extra={"error_code": "APP_FIRST_FRAME_FALLBACK"},
+                    )
                 marker_written = write_health_marker(logger)
-                notified = marker_written and notify_systemd_ready("CliOS : premier frame affiché")
+                ready_status = (
+                    "CliOS : premier frame affiché"
+                    if phase == "first_frame"
+                    else "CliOS : interface QML chargée (fallback)"
+                )
+                notified = marker_written and notify_systemd_ready(ready_status)
                 if marker_written and os.environ.get("NOTIFY_SOCKET") and not notified:
                     logger.error(
                         "Notification READY=1 impossible",
@@ -409,7 +422,13 @@ def main():
                 frame_signal.connect(complete_startup)
             else:
                 # Repli pour les plateformes Qt sans QQuickWindow.
-                QTimer.singleShot(0, complete_startup)
+                QTimer.singleShot(0, lambda: complete_startup("qml_ready_no_frame_signal"))
+            # Cage/DRM peut afficher la fenêtre sans relayer frameSwapped à
+            # Python. Le QML déjà chargé reste alors un critère de santé borné.
+            QTimer.singleShot(
+                FIRST_FRAME_FALLBACK_MS,
+                lambda: complete_startup("qml_ready_fallback"),
+            )
 
             # Outils de Mock
             mock_panel = None
