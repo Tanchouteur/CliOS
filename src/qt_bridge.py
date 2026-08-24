@@ -15,6 +15,7 @@ from src.bridge.profile_theme_controller import ProfileThemeController
 from src.bridge.system_controller import SystemController
 from src.bridge.updater_controller import UpdaterController
 from src.bridge.ui_command_router import UiCommandRouter
+from src.bridge.network_controller import NetworkController
 from src.ble.device_catalog import BleDevice, MAX_DEVICES, PREDEFINED_NAMES
 
 
@@ -97,6 +98,7 @@ class DashboardBridge(QObject):
         self._profile_theme_controller = ProfileThemeController(self)
         self._system_controller = SystemController(self)
         self._updater_controller = UpdaterController(self)
+        self._network_controller = NetworkController(self._on_network_state_changed)
         self._command_router = UiCommandRouter(self, self.logger)
 
         self._config_writer_thread = threading.Thread(
@@ -123,6 +125,8 @@ class DashboardBridge(QObject):
         self.timer_updater.start(1000)
 
         self._setup_network_information()
+        self._network_controller.refresh()
+        self._system_controller.refresh_maintenance_state()
 
         self.needs_restart = False
         self.requested_power_action = ""
@@ -177,6 +181,8 @@ class DashboardBridge(QObject):
             "telemetry": telemetry,
             "health": self.orchestrator.get_system_health(),
             "storage": self._read_storage_status(),
+            "network": self._network_controller.state if hasattr(self, "_network_controller") else {},
+            "maintenance": self._system_controller.maintenance_state(),
             "theme_diagnostics": self._theme_diagnostics,
             "recovery": {
                 "active": bool(self.profile_manager and self.profile_manager.recovery_mode),
@@ -198,6 +204,11 @@ class DashboardBridge(QObject):
         if new_quality != self._data_quality:
             self._data_quality = new_quality
             self.dataQualityChanged.emit()
+
+    def _on_network_state_changed(self):
+        """Publish worker results through the existing systemState property."""
+        if not getattr(self, "_closed", False):
+            self._update_health()
 
     def _setup_network_information(self):
         if QNetworkInformation is None:

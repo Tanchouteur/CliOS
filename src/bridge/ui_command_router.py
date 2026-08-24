@@ -30,11 +30,24 @@ class UiCommandRouter:
             "gear_calibration_start": self.target.startGearCalibration,
             "gear_calibration_stop": self.target.stopGearCalibration,
             "toggle_overlayfs": self.target.toggleOverlayFs,
+            "update_activate": lambda: self.target.activateUpdate(speed_kmh),
+            "update_rollback": lambda: self.target.rollbackUpdate(speed_kmh, self.target.getUpdateChannel() == "beta"),
         }
         action = actions.get(command)
         if action is not None:
             action()
             return True
+        if command == "wifi_refresh":
+            return self.target._network_controller.refresh()
+        if command == "wifi_disconnect":
+            return self.target._network_controller.disconnect()
+        if command.startswith("wifi_connect:"):
+            return self.target._network_controller.connect(command.removeprefix("wifi_connect:"))
+        if command.startswith("wifi_radio:"):
+            value = command.removeprefix("wifi_radio:")
+            if value in {"on", "off"}:
+                return self.target._network_controller.set_wifi_enabled(value == "on")
+            return False
         for prefix, setter in {
             "set_fuel_price:": self.target.updateFuelPrice,
             "set_trip_b_fuel:": self.target.updateTripBFuel,
