@@ -1,8 +1,13 @@
 import os
 import sys
 import argparse
+import json
 import platform
+import socket
 import threading
+import time
+
+from src.startup_clock import PROCESS_STARTED_NS
 
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtWidgets import QApplication
@@ -47,6 +52,55 @@ from src.update_safety import UpdateSafety
 from src.cli_debug import ui_loop
 
 
+def _atomic_write(path: str, payload: str) -> None:
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+
+
+def write_startup_status(phase: str, logger=None) -> bool:
+    """Publie la dernière phase atteinte pour le superviseur de release."""
+    status_path = os.environ.get("CLIOS_STARTUP_STATUS")
+    elapsed_ms = (time.monotonic_ns() - PROCESS_STARTED_NS) // 1_000_000
+    if status_path:
+        try:
+            _atomic_write(status_path, json.dumps({"phase": phase, "elapsed_ms": elapsed_ms}))
+        except OSError as exc:
+            if logger is not None:
+                logger.error(
+                    f"Écriture de la phase de démarrage impossible: {exc}",
+                    extra={"error_code": "APP_STARTUP_STATUS_WRITE"},
+                )
+            return False
+    if logger is not None:
+        logger.info(
+            f"Phase de démarrage: {phase} ({elapsed_ms} ms)",
+            extra={"error_code": "APP_STARTUP_PHASE", "phase": phase, "elapsed_ms": elapsed_ms},
+        )
+    return True
+
+
+def notify_systemd_ready(status: str = "CliOS prêt") -> bool:
+    """Envoie READY=1 sans dépendre du module Python systemd."""
+    notify_socket = os.environ.get("NOTIFY_SOCKET")
+    if not notify_socket:
+        return False
+    address = f"\0{notify_socket[1:]}" if notify_socket.startswith("@") else notify_socket
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as notifier:
+            notifier.connect(address)
+            notifier.sendall(f"READY=1\nSTATUS={status}".encode("utf-8"))
+        return True
+    except OSError:
+        return False
+
+
 def ensure_supported_pyside(is_gui: bool, allow_unsupported: bool) -> None:
     """Bloque les versions PySide6 connues instables en mode GUI."""
     if not is_gui:
@@ -86,21 +140,21 @@ def load_system_version(root_dir: str) -> str:
         return "unknown"
 
 
-def write_health_marker() -> None:
+def write_health_marker(logger=None) -> bool:
     """Signale au lanceur qu'initialisation Python et chargement QML ont réussi."""
     marker = os.environ.get("CLIOS_HEALTH_MARKER")
     if not marker:
-        return
+        return True
     try:
-        os.makedirs(os.path.dirname(marker), exist_ok=True)
-        temporary = marker + ".tmp"
-        with open(temporary, "w", encoding="utf-8") as stream:
-            stream.write(os.environ.get("CLIOS_RELEASE_VERSION", "healthy"))
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, marker)
-    except OSError:
-        pass
+        _atomic_write(marker, os.environ.get("CLIOS_RELEASE_VERSION", "healthy"))
+        return True
+    except OSError as exc:
+        if logger is not None:
+            logger.error(
+                f"Écriture du marqueur de santé impossible: {exc}",
+                extra={"error_code": "APP_HEALTH_MARKER_WRITE"},
+            )
+        return False
 
 
 def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config, profile_manager, engine_dir,
@@ -166,6 +220,7 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
 
 
 def main():
+    write_startup_status("imports_loaded")
     # --- 1. Arguments & Environnement ---
     parser = argparse.ArgumentParser()
     parser.add_argument('--ui', choices=['cli', 'gui'], default='gui')
@@ -192,6 +247,7 @@ def main():
     install_crash_hooks(LOG_DIR)
     set_global_context(ui=args.ui, mock=args.mock)
     logger = get_logger("Main")
+    write_startup_status("logging_ready", logger)
     CAN_DIR = os.path.join(STATIC_DATA_DIR, "can")
     STATIC_CONFIG_DIR = os.path.join(STATIC_DATA_DIR, "config")
     CONFIG_DIR = storage_mgr.prepare_config_dir(STATIC_CONFIG_DIR)
@@ -218,6 +274,7 @@ def main():
         }
     else:
         vehicle_config = profile_manager.load_active_config()
+    write_startup_status("profile_loaded", logger)
 
     storage = PersistentStorage(profile_manager.get_save_path())
     runtime = VehicleRuntime(storage)
@@ -309,6 +366,7 @@ def main():
             runtime_targets["bridge"] = bridge
             bridge.storage = storage
             engine.rootContext().setContextProperty("bridge", bridge)
+            write_startup_status("bridge_ready", logger)
 
             # Notifications Système
             notif_service = NotificationService(runtime, bridge.send_notification, storage)
@@ -322,11 +380,36 @@ def main():
             engine.load(os.path.join(BASE_DIR, "frontend", "main.qml"))
             if not engine.rootObjects():
                 sys.exit(-1)
+            write_startup_status("qml_loaded", logger)
 
-            # Démarrage des services d'arrière-plan dès le premier tick d'affichage
+            # Le premier frame est le vrai critère de santé. Les services et
+            # scans non critiques démarrent seulement après son affichage.
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, orchestrator.start_all)
-            QTimer.singleShot(1000, write_health_marker)
+            startup_complete = False
+
+            def complete_startup():
+                nonlocal startup_complete
+                if startup_complete:
+                    return
+                startup_complete = True
+                write_startup_status("first_frame", logger)
+                marker_written = write_health_marker(logger)
+                notified = marker_written and notify_systemd_ready("CliOS : premier frame affiché")
+                if marker_written and os.environ.get("NOTIFY_SOCKET") and not notified:
+                    logger.error(
+                        "Notification READY=1 impossible",
+                        extra={"error_code": "APP_SYSTEMD_NOTIFY"},
+                    )
+                QTimer.singleShot(0, orchestrator.start_all)
+                QTimer.singleShot(0, bridge.start_background_tasks)
+
+            root_window = engine.rootObjects()[0]
+            frame_signal = getattr(root_window, "frameSwapped", None)
+            if frame_signal is not None:
+                frame_signal.connect(complete_startup)
+            else:
+                # Repli pour les plateformes Qt sans QQuickWindow.
+                QTimer.singleShot(0, complete_startup)
 
             # Outils de Mock
             mock_panel = None

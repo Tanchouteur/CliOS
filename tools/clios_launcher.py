@@ -2,6 +2,7 @@
 """Supervise le premier démarrage d'une release et restaure N-1 sans santé."""
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -19,6 +20,17 @@ def application_args(arguments: list[str]) -> list[str]:
     return arguments[1:] if arguments[:1] == ["--"] else list(arguments)
 
 
+def last_startup_phase(status_path: Path) -> str:
+    """Retourne une description bornée de la dernière phase applicative."""
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+        phase = str(payload.get("phase", "inconnue"))[:80]
+        elapsed_ms = int(payload.get("elapsed_ms", 0))
+        return f"{phase} ({elapsed_ms} ms)"
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return "inconnue"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install-root", default="/opt/clios")
@@ -30,8 +42,15 @@ def main() -> int:
     current = manager.current_link.resolve()
     version = (current / "VERSION").read_text(encoding="utf-8").strip()
     marker = manager.state_root / f"health-{version}"
+    startup_status = manager.state_root / f"startup-{version}.json"
     marker.unlink(missing_ok=True)
-    env = dict(os.environ, CLIOS_HEALTH_MARKER=str(marker), CLIOS_RELEASE_VERSION=version)
+    startup_status.unlink(missing_ok=True)
+    env = dict(
+        os.environ,
+        CLIOS_HEALTH_MARKER=str(marker),
+        CLIOS_RELEASE_VERSION=version,
+        CLIOS_STARTUP_STATUS=str(startup_status),
+    )
     python = current / ".venv/bin/python3"
     if not python.exists():
         python = Path(sys.executable)
@@ -49,6 +68,11 @@ def main() -> int:
     if marker.exists():
         manager.mark_healthy(version)
         return process.wait()
+    print(
+        f"CliOS non sain après {opts.health_timeout:.1f} s; "
+        f"dernière phase: {last_startup_phase(startup_status)}",
+        file=sys.stderr,
+    )
     process.terminate()
     try:
         process.wait(timeout=5)

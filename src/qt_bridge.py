@@ -115,6 +115,7 @@ class DashboardBridge(QObject):
         self._last_updater_status_signature = None
         self._network_was_online = False
         self._network_information = None
+        self._background_tasks_started = False
 
         with open(config_path, 'r') as f:
             self._config = json.load(f)
@@ -148,14 +149,19 @@ class DashboardBridge(QObject):
         self.timer_updater.timeout.connect(self._poll_updater_status)
         self.timer_updater.start(1000)
 
-        self._setup_network_information()
-        self._network_controller.refresh()
-        self._system_controller.refresh_maintenance_state()
-
         self.needs_restart = False
         self.requested_power_action = ""
         self.exitRequested.connect(self._quit_qt)
         self._update_health()
+
+    def start_background_tasks(self):
+        """Lance les détections non critiques après le premier frame QML."""
+        if self._closed or self._background_tasks_started:
+            return
+        self._background_tasks_started = True
+        self._setup_network_information()
+        self._network_controller.refresh()
+        self._system_controller.refresh_maintenance_state()
 
     # Boucles de rafraîchissement.
     def _update_fast_data(self):
