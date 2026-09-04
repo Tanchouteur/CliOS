@@ -28,8 +28,11 @@ SUPPORTED_PROTOCOLS: List[str] = [p.identifier for p in _default_registry.runtim
 class BleLedController(BaseService):
     """Gestionnaire BLE pour les controleurs LED confirmes du catalogue."""
 
+    STARTUP_RETRY_DELAYS = (1.0, 2.0)
+
     def __init__(self, storage=None, catalog: Optional[DeviceCatalog] = None,
-                 registry: Optional[ProtocolRegistry] = None):
+                 registry: Optional[ProtocolRegistry] = None,
+                 initial_color: str = "#48B8FF"):
         super().__init__("Leds", storage)
         self._catalog: DeviceCatalog = catalog or DeviceCatalog(storage)
         self._registry: ProtocolRegistry = registry or _default_registry
@@ -45,7 +48,7 @@ class BleLedController(BaseService):
         # Cache de caracteristiques GATT indexe par device_id
         self._char_cache: Dict[str, Tuple[str, bool]] = {}  # device_id -> (char_uuid, write_response)
 
-        self._current_color = "#48B8FF"
+        self._current_color = initial_color
 
         # Etat du scan BLE (expose au bridge via scan_state)
         self._scan_lock = threading.Lock()
@@ -158,6 +161,7 @@ class BleLedController(BaseService):
 
     async def _ble_worker(self) -> None:
         """Consomme la file des mises a jour de couleur et les envoie aux appareils."""
+        initial_dispatch = True
         while self._running:
             hex_color = await self._queue.get()
             if hex_color is None:
@@ -186,6 +190,7 @@ class BleLedController(BaseService):
             devices = self._catalog.list_devices()
 
             tasks = []
+            attempts = 1 + len(self.STARTUP_RETRY_DELAYS) if initial_dispatch else 1
             for device in devices:
                 effective_color = self._catalog.get_effective_color(device, hex_color)
                 device_brightness = self._catalog.get_effective_brightness(device)
@@ -196,11 +201,13 @@ class BleLedController(BaseService):
                 tasks.append(self._send_to_device(
                     device, r, g, b, effective_brightness,
                     power_on=self._catalog.is_effectively_enabled(device),
+                    attempts=attempts,
                 ))
 
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
+            initial_dispatch = False
             self._queue.task_done()
 
         await self._disconnect_all()
@@ -258,14 +265,38 @@ class BleLedController(BaseService):
 
     async def _send_to_device(
         self, device: BleDevice, r: int, g: int, b: int,
+        brightness_pct: float, power_on: bool, attempts: int = 1,
+    ) -> bool:
+        """Envoie une couleur avec des nouvelles tentatives bornees."""
+        attempt_count = max(1, int(attempts))
+        for attempt_index in range(attempt_count):
+            if attempt_index and (
+                not self._running
+                or (self._queue is not None and not self._queue.empty())
+            ):
+                break
+            if await self._send_to_device_once(
+                device, r, g, b, brightness_pct, power_on,
+            ):
+                return True
+            if attempt_index >= attempt_count - 1 or not self._running:
+                break
+            if self._queue is not None and not self._queue.empty():
+                break
+            delay_index = min(attempt_index, len(self.STARTUP_RETRY_DELAYS) - 1)
+            await asyncio.sleep(self.STARTUP_RETRY_DELAYS[delay_index])
+        return False
+
+    async def _send_to_device_once(
+        self, device: BleDevice, r: int, g: int, b: int,
         brightness_pct: float, power_on: bool,
-    ) -> None:
+    ) -> bool:
         """Envoie les trames de couleur a un appareil BLE."""
         if not BleakClient:
             self.set_warning("Bleak non installe")
-            return
+            return False
         if not device.ble_address or not device.ble_address.strip():
-            return
+            return False
 
         client = self._clients.get(device.id)
         if not client or not client.is_connected:
@@ -278,7 +309,7 @@ class BleLedController(BaseService):
             except Exception:
                 self._catalog.update_device_health(device.id, "disconnected")
                 self.set_warning(f"Connexion echouee: {device.name}")
-                return
+                return False
 
         # Determine la caracteristique GATT a utiliser
         char_info = None
@@ -292,7 +323,7 @@ class BleLedController(BaseService):
         if not char_info:
             self._catalog.update_device_health(device.id, "error")
             self.set_error(f"GATT introuvable: {device.name}")
-            return
+            return False
 
         char_uuid, write_response = char_info
         payloads = self._registry.build_payloads(
@@ -307,7 +338,8 @@ class BleLedController(BaseService):
                 self.set_error(f"Echec envoi: {device.name}")
                 self._clients.pop(device.id, None)
                 self._char_cache.pop(device.id, None)
-                break
+                return False
+        return True
 
     # -------------------------------------------------------------------------
     # Scan et test de protocoles (async, appeles depuis le worker asyncio)
