@@ -180,7 +180,12 @@ def setup_services(runtime, storage, orchestrator, can_provider, vehicle_config,
 
     led_catalog = DeviceCatalog(storage)
     led_registry = ProtocolRegistry()
-    led_service = BleLedController(storage, catalog=led_catalog, registry=led_registry)
+    led_service = BleLedController(
+        storage,
+        catalog=led_catalog,
+        registry=led_registry,
+        initial_color=vehicle_config["theme"]["main"],
+    )
     stats_service = TripStatsService(runtime, vehicle_config, storage)
     dynamics_service = DynamicsService(runtime, vehicle_config, storage)
     gear_calib_service = GearCalibrationService(runtime, storage, profile_manager, dynamics_service)

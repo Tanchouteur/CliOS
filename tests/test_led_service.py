@@ -35,10 +35,10 @@ class BleLedControllerTest(unittest.TestCase):
         self.assertEqual(bytes(payloads[0]), bytes.fromhex("7b ff 04 02 ff ff ff ff bf"))
 
     def test_worker_queues_the_initial_color_before_waiting(self):
-        service = BleLedController()
+        service = BleLedController(initial_color="#A1B2C3")
 
         async def stop_after_first_color():
-            self.assertEqual(await service._queue.get(), service._current_color)
+            self.assertEqual(await service._queue.get(), "#A1B2C3")
 
         with mock.patch.object(service, "_ble_worker", side_effect=stop_after_first_color):
             service._run_event_loop()
@@ -58,6 +58,7 @@ class BleLedControllerTest(unittest.TestCase):
             await service._queue.put("#112233")
             async def capture(*args, **kwargs):
                 service._running = False
+                return True
             send = mock.AsyncMock(side_effect=capture)
             with mock.patch.object(service, "_send_to_device", new=send):
                 await service._ble_worker()
@@ -65,6 +66,54 @@ class BleLedControllerTest(unittest.TestCase):
 
         asyncio.run(run_once())
 
+    def test_startup_dispatch_retries_but_later_updates_do_not(self):
+        catalog = DeviceCatalog(None)
+        catalog.add_device(BleDevice(
+            id="dev_test", name="Test", ble_address="AA", protocol="LOTUS_9B",
+            gatt_char_uuid="fff3", write_with_response=False, advertised_name="LED",
+        ))
+        service = BleLedController(catalog=catalog)
+        service._running = True
+
+        async def run_two_colors():
+            service._queue = asyncio.Queue()
+            await service._queue.put("#112233")
+            attempts = []
+
+            async def capture(*args, **kwargs):
+                attempts.append(kwargs["attempts"])
+                if len(attempts) == 1:
+                    await service._queue.put("#445566")
+                else:
+                    service._running = False
+                return True
+
+            with mock.patch.object(service, "_send_to_device", side_effect=capture):
+                await service._ble_worker()
+            self.assertEqual(attempts, [3, 1])
+
+        asyncio.run(run_two_colors())
+
+    def test_startup_send_retries_transient_failures(self):
+        device = BleDevice(
+            id="dev_test", name="Test", ble_address="AA", protocol="LOTUS_9B",
+            gatt_char_uuid="fff3", write_with_response=False, advertised_name="LED",
+        )
+        service = BleLedController()
+        service._running = True
+
+        async def retry_until_success():
+            service._queue = asyncio.Queue()
+            send_once = mock.AsyncMock(side_effect=[False, False, True])
+            with mock.patch.object(service, "STARTUP_RETRY_DELAYS", (0.0, 0.0)), \
+                    mock.patch.object(service, "_send_to_device_once", new=send_once):
+                success = await service._send_to_device(
+                    device, 1, 2, 3, 100.0, True, attempts=3,
+                )
+            self.assertTrue(success)
+            self.assertEqual(send_once.await_count, 3)
+
+        asyncio.run(retry_until_success())
 
 if __name__ == "__main__":
     unittest.main()
