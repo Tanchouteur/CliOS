@@ -149,6 +149,11 @@ class DashboardBridge(QObject):
         self.timer_updater.timeout.connect(self._poll_updater_status)
         self.timer_updater.start(1000)
 
+        # NetworkManager peut démarrer après l'interface ou changer d'état sans
+        # action utilisateur (perte de signal, reconnexion automatique).
+        self.timer_network = QTimer()
+        self.timer_network.timeout.connect(self._network_controller.poll)
+
         self.needs_restart = False
         self.requested_power_action = ""
         self.exitRequested.connect(self._quit_qt)
@@ -161,6 +166,7 @@ class DashboardBridge(QObject):
         self._background_tasks_started = True
         self._setup_network_information()
         self._network_controller.refresh()
+        self.timer_network.start(15000)
         self._system_controller.refresh_maintenance_state()
 
     # Boucles de rafraîchissement.
@@ -639,6 +645,7 @@ class DashboardBridge(QObject):
         self.timer_fast.stop()
         self.timer_slow.stop()
         self.timer_updater.stop()
+        self.timer_network.stop()
         saved = self._write_current_config()
         self._config_writer_stop.set()
         self._config_write_requested.set()

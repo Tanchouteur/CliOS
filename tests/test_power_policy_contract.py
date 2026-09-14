@@ -16,6 +16,16 @@ class PowerPolicyContractTest(unittest.TestCase):
         self.assertNotIn("org.freedesktop.*", rule)
         self.assertIn("49-clios-power.rules", installer)
 
+    def test_network_rule_is_limited_to_networkmanager_wifi_actions(self):
+        rule = (ROOT / "installation/etc/polkit-1/rules.d/49-clios-network.rules.in").read_text(encoding="utf-8")
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertIn('subject.user === "@CLIOS_USER@"', rule)
+        self.assertIn("org.freedesktop.NetworkManager.network-control", rule)
+        self.assertIn("org.freedesktop.NetworkManager.settings.modify.system", rule)
+        self.assertNotIn("org.freedesktop.NetworkManager.*", rule)
+        self.assertNotIn("NOPASSWD", rule)
+        self.assertIn("49-clios-network.rules", installer)
+
 
 if __name__ == "__main__":
     unittest.main()
