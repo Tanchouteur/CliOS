@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from urllib.parse import unquote
 
 
 class UiCommandRouter:
@@ -11,9 +12,12 @@ class UiCommandRouter:
         self.logger = logger
 
     def execute(self, command: str, speed_kmh: float) -> bool:
+        logged_command = "wifi_add:<redacted>" if command.startswith("wifi_add:") else command
         self.logger.warning(
-            "Commande UI '%s' à %.1f km/h", command, speed_kmh,
-            extra={"error_code": "UI_COMMAND", "speed_kmh": speed_kmh, "command": command},
+            "Commande UI '%s' à %.1f km/h",
+            logged_command,
+            speed_kmh,
+            extra={"error_code": "UI_COMMAND", "speed_kmh": speed_kmh, "command": logged_command},
         )
         actions: dict[str, Callable[[], object]] = {
             "reset_a": self.target.resetTripA,
@@ -21,8 +25,7 @@ class UiCommandRouter:
             "reset_maintenance": self.target.resetMaintenance,
             "end_trip": self.target.endTripSession,
             "resume_trip": self.target.resumeTripSession,
-            "new_trip": lambda: self.target.session_manager.start_new_trip()
-            if self.target.session_manager else False,
+            "new_trip": lambda: self.target.session_manager.start_new_trip() if self.target.session_manager else False,
             "pause_trip": lambda: self.target.setSessionState("PAUSED"),
             "quit": self.target.quitApplication,
             "restart": self.target.restartApplication,
@@ -45,6 +48,20 @@ class UiCommandRouter:
             return self.target._network_controller.disconnect()
         if command.startswith("wifi_connect:"):
             return self.target._network_controller.connect(command.removeprefix("wifi_connect:"))
+        if command.startswith("wifi_add:"):
+            values = command.removeprefix("wifi_add:").split(":", 1)
+            if len(values) == 2:
+                return self.target._network_controller.add_network(unquote(values[0]), unquote(values[1]))
+            return False
+        if command.startswith("wifi_forget:"):
+            return self.target._network_controller.forget(command.removeprefix("wifi_forget:"))
+        if command.startswith("wifi_prefer:"):
+            return self.target._network_controller.set_preferred(command.removeprefix("wifi_prefer:"))
+        if command.startswith("wifi_autoconnect:"):
+            values = command.removeprefix("wifi_autoconnect:").split(":", 1)
+            if len(values) == 2 and values[1] in {"on", "off"}:
+                return self.target._network_controller.set_autoconnect(values[0], values[1] == "on")
+            return False
         if command.startswith("wifi_radio:"):
             value = command.removeprefix("wifi_radio:")
             if value in {"on", "off"}:
@@ -57,7 +74,7 @@ class UiCommandRouter:
         }.items():
             if command.startswith(prefix):
                 try:
-                    setter(float(command[len(prefix):]))
+                    setter(float(command[len(prefix) :]))
                     return True
                 except ValueError:
                     break

@@ -376,6 +376,9 @@ do_uninstall() {
         if [[ -f "${POLKIT_RULES_DIR}/49-clios-power.rules" ]]; then
             run_sudo_cmd "Suppression de la règle Polkit CliOS" rm -f "${POLKIT_RULES_DIR}/49-clios-power.rules"
         fi
+        if [[ -f "${POLKIT_RULES_DIR}/49-clios-network.rules" ]]; then
+            run_sudo_cmd "Suppression de la règle réseau CliOS" rm -f "${POLKIT_RULES_DIR}/49-clios-network.rules"
+        fi
 
         safe_systemctl "Rechargement de systemd et udev" daemon-reload
         safe_udevadm "Rechargement des règles udev" control --reload-rules 2>/dev/null || true
@@ -840,6 +843,7 @@ else
         backup_system_file "/etc/clios/updater.json"
         backup_system_file "/etc/clios/release-keys.json"
         backup_system_file "${POLKIT_RULES_DIR}/49-clios-power.rules"
+        backup_system_file "${POLKIT_RULES_DIR}/49-clios-network.rules"
         backup_system_file "${SUDOERS_DIR}/clios-overlayfs"
 
         if [[ $DRY_RUN -eq 1 ]]; then
@@ -865,6 +869,11 @@ else
             run_sudo_cmd "Installation de la règle Polkit CliOS" cp /tmp/49-clios-power.rules "${POLKIT_RULES_DIR}/49-clios-power.rules"
             run_sudo_cmd "Permissions de la règle Polkit CliOS" chmod 0644 "${POLKIT_RULES_DIR}/49-clios-power.rules"
             rm -f /tmp/49-clios-power.rules
+            sed "s/@CLIOS_USER@/${CURRENT_USER}/g" \
+                "${INSTALL_ETC_DIR}/polkit-1/rules.d/49-clios-network.rules.in" > /tmp/49-clios-network.rules
+            run_sudo_cmd "Installation de la règle réseau CliOS" cp /tmp/49-clios-network.rules "${POLKIT_RULES_DIR}/49-clios-network.rules"
+            run_sudo_cmd "Permissions de la règle réseau CliOS" chmod 0644 "${POLKIT_RULES_DIR}/49-clios-network.rules"
+            rm -f /tmp/49-clios-network.rules
             sed "s/@CLIOS_USER@/${CURRENT_USER}/g" \
                 "${INSTALL_ETC_DIR}/sudoers.d/clios-overlayfs.in" > /tmp/clios-overlayfs.sudoers
             run_sudo_cmd "Validation de l'autorisation OverlayFS" visudo -cf /tmp/clios-overlayfs.sudoers

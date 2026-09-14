@@ -103,9 +103,17 @@ class FakeBridge(QObject):
             "health": health,
             "storage": storage,
             "network": {"available": True, "wifi_enabled": True, "busy": False,
-                        "active_ssid": "CliOS-Lab", "ip_address": "192.168.1.42", "error": "",
+                        "active_ssid": "CliOS-Lab", "active_device": "wlan0",
+                        "ip_address": "192.168.1.42", "connectivity": "full", "error": "",
                         "saved_networks": [{"uuid": "smoke-wifi", "name": "CliOS-Lab", "ssid": "CliOS-Lab",
-                                            "available": True, "signal": 82, "active": True}]},
+                                            "available": True, "signal": 82, "active": True,
+                                            "autoconnect": True, "priority": 100}],
+                        "visible_networks": [{"uuid": "smoke-wifi", "ssid": "CliOS-Lab",
+                                              "signal": 82, "security": "WPA2", "secured": True,
+                                              "supported": True, "saved": True, "active": True},
+                                             {"uuid": "", "ssid": "Téléphone", "signal": 67,
+                                              "security": "WPA2", "secured": True,
+                                              "supported": True, "saved": False, "active": False}]},
             "maintenance": {"overlay_current": True, "overlay_configured": True,
                             "overlay_busy": False, "restart_required": False, "overlay_error": ""},
             "updater": {"state": "IDLE", "installed_version": "2.0.0", "available_version": "", "progress": 0},
@@ -414,7 +422,7 @@ def main():
                 failures.append(f"capture impossible: {target}")
 
     updater_states = ["IDLE", "CHECKING", "AVAILABLE", "DOWNLOADING", "STAGED", "ACTIVATING", "UP_TO_DATE", "ERROR"]
-    specials = ["warnings", "paused", "trip-recovery", "missing-data", "confirmation", "services-expanded", "legacy-dashboard", "jdm-motion"] + ["updater-" + value for value in updater_states]
+    specials = ["warnings", "paused", "trip-recovery", "missing-data", "confirmation", "services-expanded", "wifi-password", "legacy-dashboard", "jdm-motion"] + ["updater-" + value for value in updater_states]
     special_index = {"value": 0}
 
     def run_special():
@@ -519,6 +527,28 @@ def main():
                 QTimer.singleShot(100, run_special)
 
             QTimer.singleShot(260, expand_service)
+            return
+
+        if name == "wifi-password":
+            shell = window.findChild(QObject, "appShell")
+            if shell is not None:
+                shell.openRoute("system")
+
+            def open_wifi_password():
+                page = window.findChild(QObject, "systemSettingsPage")
+                if page is None:
+                    failures.append("page système introuvable")
+                else:
+                    page.setProperty("selectedSsid", "Téléphone")
+                    page.setProperty("networkDialogMode", "password")
+                QTimer.singleShot(260, finish_wifi_password)
+
+            def finish_wifi_password():
+                save_frame("state-wifi-password")
+                special_index["value"] += 1
+                QTimer.singleShot(100, run_special)
+
+            QTimer.singleShot(260, open_wifi_password)
             return
 
         dashboard = window.findChild(QObject, "dashboardRoot")
