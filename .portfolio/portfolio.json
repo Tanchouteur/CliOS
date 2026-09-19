@@ -17,8 +17,17 @@
   ],
   "featured": true,
   "order": 1,
+  "presentation": {
+    "type": "interface",
+    "accent": "#68B8FF",
+    "background": "#07131F",
+    "captions": {
+      "cover.jpg": "Interface principale de CliOS dans l'habitacle",
+      "apex-3.jpg": "Vue de télémétrie et conduite",
+      "atelier_luxe.jpg": "Prototype d'interface automobile"
+    }
+  },
   "links": {
     "github": "https://github.com/Tanchouteur/CliOS"
   }
 }
-
